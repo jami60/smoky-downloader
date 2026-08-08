@@ -109,7 +109,20 @@ function hasCommand(cmd) {
   return false;
 }
 
-const YTDLP_OK = hasCommand('yt-dlp');
+// Resolve the newest yt-dlp: prefer the pip-installed `py -m yt_dlp` (usually
+// much newer than a standalone yt-dlp.exe on PATH, which gets HTTP 403 from
+// YouTube when outdated), then fall back to the PATH command.
+function resolveYtdlp() {
+  try {
+    require('node:child_process').execFileSync('py', ['-m', 'yt_dlp', '--version'], { stdio: 'ignore', windowsHide: true });
+    return { cmd: 'py', args: ['-m', 'yt_dlp'] };
+  } catch {}
+  if (hasCommand('yt-dlp')) return { cmd: 'yt-dlp', args: [] };
+  return null;
+}
+
+const ytdlp = resolveYtdlp();
+const YTDLP_OK = !!ytdlp;
 const SPOTDL_OK = hasCommand('spotdl');
 const FFMPEG_OK = hasCommand('ffmpeg');
 const FFPROBE_OK = hasCommand('ffprobe');
@@ -215,8 +228,9 @@ function pump() {
       return;
     }
     const fmt = FORMATS[item.formatKey] || FORMATS['mp4-1080'];
-    cmd = 'yt-dlp';
+    cmd = ytdlp.cmd;
     args = [
+      ...ytdlp.args,
       '--newline', '--no-warnings', '--no-playlist',
       '-o', outTpl,
       ...fmt.args(item.quality),
