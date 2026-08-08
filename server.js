@@ -121,9 +121,20 @@ function resolveYtdlp() {
   return null;
 }
 
+// Same idea for spotDL: prefer the pip-installed `py -m spotdl`, fall back to PATH.
+function resolveSpotdl() {
+  try {
+    require('node:child_process').execFileSync('py', ['-m', 'spotdl', '--version'], { stdio: 'ignore', windowsHide: true });
+    return { cmd: 'py', args: ['-m', 'spotdl'] };
+  } catch {}
+  if (hasCommand('spotdl')) return { cmd: 'spotdl', args: [] };
+  return null;
+}
+
 const ytdlp = resolveYtdlp();
+const spotdl = resolveSpotdl();
 const YTDLP_OK = !!ytdlp;
-const SPOTDL_OK = hasCommand('spotdl');
+const SPOTDL_OK = !!spotdl;
 const FFMPEG_OK = hasCommand('ffmpeg');
 const FFPROBE_OK = hasCommand('ffprobe');
 
@@ -218,8 +229,8 @@ function pump() {
       finish(item);
       return;
     }
-    cmd = 'spotdl';
-    args = [item.url, '--output', folder, '--format', 'mp3', '--overwrite', 'skip'];
+    cmd = spotdl.cmd;
+    args = [...spotdl.args, item.url, '--output', folder, '--format', 'mp3', '--overwrite', 'skip'];
   } else {
     if (!YTDLP_OK) {
       item.status = 'failed';
