@@ -51,22 +51,43 @@ history = loadJson(HISTORY_FILE, []);
 settings = { ...settings, ...loadJson(SETTINGS_FILE, {}) };
 
 // ------------------------------------------------------- format mapping ----
-const FORMATS = {
-  'mp4-1080': { label: 'MP4 Video · 1080p', kind: 'video', ext: 'mp4',
-    args: (q) => ['-f', 'bestvideo[height<=1080]+bestaudio/best[height<=1080]', '--merge-output-format', 'mp4'] },
-  'mp4-4k':   { label: 'MP4 Video · 4K', kind: 'video', ext: 'mp4',
-    args: (q) => ['-f', 'bestvideo[height<=2160]+bestaudio/best[height<=2160]', '--merge-output-format', 'mp4'] },
-  'mp4-best': { label: 'MP4 Video · Best', kind: 'video', ext: 'mp4',
-    args: (q) => ['-f', 'bestvideo+bestaudio/best', '--merge-output-format', 'mp4'] },
-  'mkv-4k':   { label: 'WebM / MKV · 4K', kind: 'video', ext: 'mkv',
-    args: (q) => ['-f', 'bestvideo+bestaudio/best', '--merge-output-format', 'mkv'] },
-  'mp3':   { label: 'MP3 Audio', kind: 'audio', ext: 'mp3', args: () => ['-x', '--audio-format', 'mp3', '--audio-quality', '0'] },
-  'm4a':   { label: 'M4A Audio', kind: 'audio', ext: 'm4a', args: () => ['-x', '--audio-format', 'm4a'] },
-  'flac':  { label: 'FLAC · Lossless', kind: 'audio', ext: 'flac', args: () => ['-x', '--audio-format', 'flac'] },
-  'wav':   { label: 'WAV · Lossless', kind: 'audio', ext: 'wav', args: () => ['-x', '--audio-format', 'wav'] },
-  'opus':  { label: 'OPUS Audio', kind: 'audio', ext: 'opus', args: () => ['-x', '--audio-format', 'opus'] },
-  'aac':   { label: 'AAC Audio', kind: 'audio', ext: 'aac', args: () => ['-x', '--audio-format', 'aac'] },
+const HEIGHTS = { 360: 360, 480: 480, 720: 720, 1080: 1080, 1440: 1440, 2160: 2160 };
+
+function videoArgs(quality, ext) {
+  const h = HEIGHTS[String(quality).trim()] || 1080;
+  const sel = h >= 9999 ? 'bestvideo+bestaudio/best' : `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]`;
+  return ['-f', sel, '--merge-output-format', ext];
+}
+
+const AUDIO_ARGS = {
+  mp3:  ['-x', '--audio-format', 'mp3', '--audio-quality', '0'],
+  m4a:  ['-x', '--audio-format', 'm4a'],
+  flac: ['-x', '--audio-format', 'flac'],
+  wav:  ['-x', '--audio-format', 'wav'],
+  ogg:  ['-x', '--audio-format', 'ogg'],
+  opus: ['-x', '--audio-format', 'opus'],
+  aac:  ['-x', '--audio-format', 'aac'],
 };
+
+const FORMATS = {};
+for (const ext of ['mp4', 'webm', 'mkv', 'mov']) {
+  FORMATS[ext] = { label: `${ext.toUpperCase()} Video`, kind: 'video', ext, args: (q) => videoArgs(q, ext) };
+}
+for (const ext of Object.keys(AUDIO_ARGS)) {
+  FORMATS[ext] = { label: `${ext.toUpperCase()} Audio`, kind: 'audio', ext, args: () => AUDIO_ARGS[ext] };
+}
+// legacy aliases from the earlier UI
+FORMATS['mp4-1080'] = { ...FORMATS.mp4, label: 'MP4 Video · 1080p' };
+FORMATS['mp4-4k'] = { ...FORMATS.mp4, label: 'MP4 Video · 4K', args: () => videoArgs(2160, 'mp4') };
+FORMATS['mp4-best'] = { ...FORMATS.mp4, label: 'MP4 Video · Best', args: () => videoArgs(9999, 'mp4') };
+FORMATS['mkv-4k'] = { ...FORMATS.mkv, label: 'WebM / MKV · 4K', args: () => videoArgs(9999, 'mkv') };
+
+function browserFlag(name) {
+  const map = { 'opera-gx': 'opera' };
+  const browser = map[name] || name;
+  if (!browser || browser === 'none' || browser === 'Disabled') return [];
+  return ['--cookies-from-browser', browser];
+}
 
 // ------------------------------------------------------------- utilities ---
 function now() { return Date.now(); }
@@ -135,7 +156,7 @@ function parseProgress(line, item) {
   return false;
 }
 
-function enqueue(url, formatKey, quality, folder, ambientSnow) {
+function enqueue(url, formatKey, quality, folder, browserName) {
   const item = {
     id: crypto.randomBytes(4).toString('hex'),
     url,
@@ -143,6 +164,7 @@ function enqueue(url, formatKey, quality, folder, ambientSnow) {
     formatKey: FORMATS[formatKey] ? formatKey : 'mp4-1080',
     quality,
     folder,
+    browserName: browserName || 'none',
     title: isSpotify(url) ? 'Spotify track…' : 'Resolving link…',
     status: 'queued',
     percent: 0,
@@ -152,7 +174,6 @@ function enqueue(url, formatKey, quality, folder, ambientSnow) {
     error: null,
     startedAt: null,
     finishedAt: null,
-    ambientSnow,
   };
   queue.push(item);
   pump();
@@ -197,6 +218,7 @@ function pump() {
       '--newline', '--no-warnings', '--no-playlist',
       '-o', outTpl,
       ...fmt.args(item.quality),
+      ...browserFlag(item.browserName),
       item.url,
     ];
   }
@@ -224,7 +246,7 @@ function pump() {
   });
 
   child.on('close', (code) => {
-    if (item.status === 'failed') { finish(item); return; }
+    if (item.status === 'failed' || item.status === 'cancelled') { finish(item); return; }
     if (code === 0) {
       item.status = 'finished';
       item.percent = 100;
@@ -389,6 +411,7 @@ function readBody(req) {
 
 function serveStatic(res, pathname) {
   let file = pathname === '/' ? '/index.html' : pathname;
+  try { file = decodeURIComponent(file); } catch {}
   const full = path.normalize(path.join(PUBLIC, file));
   if (!full.startsWith(PUBLIC)) { sendJson(res, 403, { error: 'forbidden' }); return; }
   fs.readFile(full, (err, buf) => {
@@ -420,16 +443,28 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'POST' && p === '/api/download') {
       const body = await readBody(req);
-      if (!body.url || !/^https?:\/\//i.test(body.url)) return sendJson(res, 400, { error: 'Bitte eine gültige URL einfügen.' });
-      const folder = body.folder || settings.folder;
+      if (!body.url || !/^https?:\/\//i.test(body.url)) return sendJson(res, 400, { error: 'Please paste a valid link.' });
+      const folder = body.outputDir || body.folder || settings.folder;
       settings.folder = folder;
       settings.format = body.format || settings.format;
       settings.quality = body.quality || settings.quality;
-      if (typeof body.ambientSnow === 'boolean') settings.ambientSnow = body.ambientSnow;
       saveJson(SETTINGS_FILE, settings);
-      const item = enqueue(body.url, settings.format, settings.quality, folder, settings.ambientSnow);
+      const item = enqueue(body.url, body.format || 'mp4', body.quality || '1080', folder, body.browserName || 'none');
       const { child, ...safe } = item;
       return sendJson(res, 200, { item: safe });
+    }
+
+    if (req.method === 'POST' && p === '/api/cancel') {
+      const body = await readBody(req);
+      const q = queue.find((x) => x.id === body.id);
+      if (q) {
+        q.status = 'cancelled';
+        q.error = null;
+        if (q.child && q.child.kill) { try { q.child.kill(); } catch {} }
+        if (current && current.id === q.id) current = null;
+        setTimeout(pump, 300);
+      }
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && p === '/api/delete-finished') {
@@ -437,9 +472,35 @@ const server = http.createServer(async (req, res) => {
       const ids = new Set(body.ids || []);
       for (let i = queue.length - 1; i >= 0; i--) {
         const q = queue[i];
-        if ((q.status === 'finished' || q.status === 'failed') && (ids.size === 0 || ids.has(q.id))) queue.splice(i, 1);
+        if (['finished', 'failed', 'cancelled'].includes(q.status) && (ids.size === 0 || ids.has(q.id))) queue.splice(i, 1);
       }
       return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && p === '/api/delete-file') {
+      const body = await readBody(req);
+      if (!body.path) return sendJson(res, 400, { error: 'missing path' });
+      try {
+        const st = fs.statSync(body.path);
+        if (!st.isFile()) return sendJson(res, 400, { error: 'not a file' });
+        fs.unlinkSync(body.path);
+        return sendJson(res, 200, { ok: true });
+      } catch (e) {
+        return sendJson(res, 404, { error: 'file not found' });
+      }
+    }
+
+    if (req.method === 'POST' && p === '/api/open-folder') {
+      const body = await readBody(req);
+      const dir = body.path || settings.folder;
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        const { spawn: openSpawn } = require('node:child_process');
+        openSpawn(process.platform === 'win32' ? 'explorer' : 'xdg-open', [dir], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        return sendJson(res, 200, { ok: true });
+      } catch (e) {
+        return sendJson(res, 500, { error: String(e.message || e) });
+      }
     }
 
     if (req.method === 'POST' && p === '/api/settings') {
@@ -450,17 +511,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { settings });
     }
 
-    if (req.method === 'POST' && p === '/api/convert') {
-      const format = (req.headers['x-format'] || 'mp3').toLowerCase();
+    if (req.method === 'POST' && p === '/api/upload') {
       const name = decodeURIComponent(req.headers['x-file-name'] || 'file');
-      if (!FFMPEG_OK || !FFPROBE_OK) return sendJson(res, 400, { error: 'ffmpeg is not installed — install it first (choco install ffmpeg or winget install ffmpeg).' });
-      if (!AUDIO_TARGETS[format] && format !== 'mp4') return sendJson(res, 400, { error: 'unsupported target format' });
+      const size = parseInt(req.headers['content-length'] || '0', 10);
+      if (size > 500 * 1024 * 1024) return sendJson(res, 413, { error: 'file too large (max 500 MB)' });
       const id = crypto.randomBytes(4).toString('hex');
       const inDir = path.join(DATA_DIR, 'convert-in');
       fs.mkdirSync(inDir, { recursive: true });
       const srcPath = path.join(inDir, `${id}-${safeName(name)}`);
-      const size = parseInt(req.headers['content-length'] || '0', 10);
-      if (size > 500 * 1024 * 1024) return sendJson(res, 413, { error: 'file too large (max 500 MB)' });
       const ws = fs.createWriteStream(srcPath);
       req.pipe(ws);
       await new Promise((resolve, reject) => {
@@ -468,7 +526,20 @@ const server = http.createServer(async (req, res) => {
         ws.on('error', reject);
         req.on('error', reject);
       });
-      const item = convertFile(id, srcPath, name, format);
+      return sendJson(res, 200, { id, path: srcPath });
+    }
+
+    if (req.method === 'POST' && p === '/api/convert') {
+      const body = await readBody(req);
+      const format = String(body.format || 'mp3').toLowerCase();
+      if (!FFMPEG_OK || !FFPROBE_OK) return sendJson(res, 400, { error: 'ffmpeg is not installed — install it first (choco install ffmpeg or winget install ffmpeg).' });
+      if (!AUDIO_TARGETS[format] && format !== 'mp4') return sendJson(res, 400, { error: 'unsupported target format' });
+      const inDir = path.join(DATA_DIR, 'convert-in');
+      const srcPath = path.normalize(String(body.path || ''));
+      if (!srcPath.startsWith(inDir)) return sendJson(res, 400, { error: 'source must be an uploaded file' });
+      if (!fs.existsSync(srcPath)) return sendJson(res, 404, { error: 'source file not found' });
+      const id = crypto.randomBytes(4).toString('hex');
+      const item = convertFile(id, srcPath, path.basename(srcPath).replace(/^[0-9a-f]+-/, ''), format);
       return sendJson(res, 200, { item });
     }
 
@@ -479,6 +550,12 @@ const server = http.createServer(async (req, res) => {
         const c = conversions[i];
         if ((c.status === 'finished' || c.status === 'failed') && (ids.size === 0 || ids.has(c.id))) conversions.splice(i, 1);
       }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && p === '/api/history-clear') {
+      history = [];
+      saveJson(HISTORY_FILE, history);
       return sendJson(res, 200, { ok: true });
     }
 

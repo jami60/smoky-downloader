@@ -1,479 +1,373 @@
-<!DOCTYPE html>
-<html lang="de">
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Smoky — Multi Media Downloader</title>
-<link rel="stylesheet" href="styles.css" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2327c276'/%3E%3Ctext x='16' y='23' font-family='Arial' font-size='19' font-weight='800' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e111a" />
+  <meta name="description" content="Smoky — a calm, polished local media app for desktop." />
+  <title>Smoky</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+    :root {
+      --bg: #090b11;
+      --surface: #10131d;
+      --surface-2: #151925;
+      --surface-3: #1b2030;
+      --border: rgba(255,255,255,.08);
+      --border-bright: rgba(255,255,255,.13);
+      --text: #f6f7fb;
+      --muted: #8890a5;
+      --muted-2: #5e667a;
+      --accent: #8b7cff;
+      --accent-2: #b0a7ff;
+      --accent-soft: rgba(139,124,255,.15);
+      --mint: #72e2c0;
+      --warning: #f9bd6b;
+      --danger: #ff7e93;
+      --scroll-track: #0d1018;
+      --scroll-thumb: #8b7cff;
+      --scroll-thumb-hover: #b0a7ff;
+      --shadow: 0 24px 70px rgba(0,0,0,.27);
+      --radius: 18px;
+      --sidebar: 248px;
+    }
+    [data-theme="aurora"] { --accent:#4ddcc0; --accent-2:#b4fff0; --accent-soft:rgba(77,220,192,.14); --mint:#a7f0dc; --scroll-track:#0b1718; --scroll-thumb:#4ddcc0; --scroll-thumb-hover:#a7f0dc; }
+    [data-theme="ember"] { --accent:#ff846b; --accent-2:#ffc0a7; --accent-soft:rgba(255,132,107,.14); --mint:#ffcf9f; --scroll-track:#1b1113; --scroll-thumb:#ff846b; --scroll-thumb-hover:#ffcf9f; }
+    [data-theme="ocean"] { --bg:#07151d; --surface:#0d202b; --surface-2:#102936; --surface-3:#163545; --border:rgba(137,224,255,.12); --border-bright:rgba(137,224,255,.22); --text:#edfaff; --muted:#83a8b8; --muted-2:#527383; --accent:#3bbce8; --accent-2:#a6eaff; --accent-soft:rgba(59,188,232,.16); --mint:#67d5c4; --scroll-track:#091b24; --scroll-thumb:#3bbce8; --scroll-thumb-hover:#a6eaff; }
+    [data-theme="rose"] { --bg:#180d16; --surface:#251321; --surface-2:#2d1728; --surface-3:#3b1d31; --border:rgba(255,176,211,.12); --border-bright:rgba(255,176,211,.22); --text:#fff2f8; --muted:#b98da5; --muted-2:#80566f; --accent:#ef6fae; --accent-2:#ffc0dc; --accent-soft:rgba(239,111,174,.16); --mint:#dca3ff; --scroll-track:#21101c; --scroll-thumb:#ef6fae; --scroll-thumb-hover:#ffc0dc; }
+    [data-theme="cyber"] { --bg:#080b18; --surface:#10142a; --surface-2:#151b35; --surface-3:#1d2445; --border:rgba(160,142,255,.14); --border-bright:rgba(255,59,212,.25); --text:#f5f3ff; --muted:#9295c2; --muted-2:#62668f; --accent:#ff3bd4; --accent-2:#ffb4f0; --accent-soft:rgba(255,59,212,.14); --mint:#5df5ff; --scroll-track:#0e1226; --scroll-thumb:#ff3bd4; --scroll-thumb-hover:#5df5ff; }
+    [data-theme="forest"] { --bg:#091610; --surface:#102119; --surface-2:#152b20; --surface-3:#1b3829; --border:rgba(153,239,173,.12); --border-bright:rgba(153,239,173,.22); --text:#effff2; --muted:#91b89b; --muted-2:#5d8068; --accent:#45cf78; --accent-2:#b1f7bf; --accent-soft:rgba(69,207,120,.15); --mint:#9be6aa; --scroll-track:#0c1d14; --scroll-thumb:#45cf78; --scroll-thumb-hover:#b1f7bf; }
+    [data-theme="slate"] { --bg:#11151c; --surface:#191f29; --surface-2:#202936; --surface-3:#2a3444; --border:rgba(184,206,255,.12); --border-bright:rgba(184,206,255,.22); --text:#f3f7ff; --muted:#9ba9bc; --muted-2:#68778c; --accent:#6e9cff; --accent-2:#b8ceff; --accent-soft:rgba(110,156,255,.15); --mint:#7fe4d1; --scroll-track:#151b24; --scroll-thumb:#6e9cff; --scroll-thumb-hover:#b8ceff; }
+    [data-theme="solar"] { --bg:#1a1208; --surface:#271b0c; --surface-2:#33230f; --surface-3:#443014; --border:rgba(255,220,155,.13); --border-bright:rgba(255,220,155,.23); --text:#fff8e9; --muted:#c4a979; --muted-2:#8d7147; --accent:#f6b84b; --accent-2:#ffe0a0; --accent-soft:rgba(246,184,75,.16); --mint:#9dd7a2; --scroll-track:#211608; --scroll-thumb:#f6b84b; --scroll-thumb-hover:#ffe0a0; }
+    [data-theme="rain"] { --bg:#07131a; --surface:#0d2028; --surface-2:#102b35; --surface-3:#163b47; --border:rgba(155,224,243,.12); --border-bright:rgba(155,224,243,.24); --text:#eafaff; --muted:#84aab6; --muted-2:#527683; --accent:#54c7f4; --accent-2:#b5efff; --accent-soft:rgba(84,199,244,.16); --mint:#76e1cf; --scroll-track:#081b23; --scroll-thumb:#54c7f4; --scroll-thumb-hover:#b5efff; --shadow:0 24px 70px rgba(0,16,24,.38); }
+    [data-theme="horror"] { --bg:#10070a; --surface:#1a0b10; --surface-2:#241018; --surface-3:#32141f; --border:rgba(255,103,121,.13); --border-bright:rgba(255,103,121,.28); --text:#fff1f2; --muted:#b98a91; --muted-2:#79545e; --accent:#c62243; --accent-2:#ff7183; --accent-soft:rgba(198,34,67,.17); --mint:#d9a1a8; --warning:#ffb061; --danger:#ff4d69; --scroll-track:#18090e; --scroll-thumb:#c62243; --scroll-thumb-hover:#ff7183; --shadow:0 24px 70px rgba(43,0,8,.42); }
+    [data-theme="light"] { --bg:#f2f4f9; --surface:#ffffff; --surface-2:#f8f9fc; --surface-3:#e9edf5; --border:rgba(24,31,53,.10); --border-bright:rgba(24,31,53,.16); --text:#171b2a; --muted:#68738b; --muted-2:#929caf; --accent:#6558e8; --accent-2:#5749d0; --accent-soft:rgba(101,88,232,.12); --mint:#299f83; --scroll-track:#e7eaf2; --scroll-thumb:#6558e8; --scroll-thumb-hover:#8b7cff; --shadow:0 24px 70px rgba(54,65,100,.16); }
+    [data-theme="light"] .sidebar { background:rgba(249,250,253,.88); }
+    [data-theme="light"] #snow { opacity:.62; }
+    [data-theme="light"] .glow { opacity:.12; }
+    [data-theme="rain"] #snow { opacity:.82; }
+    [data-theme="horror"] #snow { opacity:.72; }
+    [data-theme="horror"] .glow { background:#a31332; opacity:.15; }
+    [data-theme="horror"] .app-shell::after { content:''; position:fixed; inset:0; z-index:3; pointer-events:none; opacity:.055; mix-blend-mode:screen; background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,80,99,.18) 4px,transparent 5px),linear-gradient(90deg,transparent 0 48%,rgba(255,25,61,.24) 49%,transparent 51%); animation:horrorFlicker 7s steps(2,end) infinite; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scrollbar-color:var(--scroll-thumb) var(--scroll-track); scrollbar-width:thin; }
+    *::-webkit-scrollbar { width:10px; height:10px; }
+    *::-webkit-scrollbar-track { background:var(--scroll-track); border-left:1px solid var(--border); }
+    *::-webkit-scrollbar-thumb { min-height:46px; border:2px solid var(--scroll-track); border-radius:999px; background:var(--scroll-thumb); box-shadow:0 0 12px color-mix(in srgb,var(--scroll-thumb) 38%,transparent); }
+    *::-webkit-scrollbar-thumb:hover { background:var(--scroll-thumb-hover); box-shadow:0 0 16px color-mix(in srgb,var(--scroll-thumb-hover) 52%,transparent); }
+    *::-webkit-scrollbar-corner { background:var(--scroll-track); }
+    body { margin:0; min-width:1080px; min-height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px; line-height:1.4; overflow-x:hidden; transition:background .6s ease,color .4s ease; }
+    .titlebar { height:32px; flex:0 0 32px; display:flex; align-items:center; justify-content:space-between; padding-left:13px; background:rgba(9,11,17,.94); border-bottom:1px solid var(--border); color:var(--muted); -webkit-app-region:drag; user-select:none; z-index:20; }
+    .titlebar-brand { display:flex; align-items:center; gap:8px; font:600 11px 'Space Grotesk'; letter-spacing:-.01em; }.titlebar-brand i{width:15px;height:15px;display:grid;place-items:center;border-radius:5px;background:var(--accent);color:#fff;font:700 9px 'Space Grotesk';font-style:normal}
+    .window-actions { display:flex; height:100%; -webkit-app-region:no-drag; }.window-action { width:46px; height:100%; display:grid; place-items:center; background:transparent; color:var(--muted); transition:background .2s,color .2s; }.window-action:hover{background:rgba(255,255,255,.08);color:var(--text)}.window-action.close:hover{background:#e74c5a;color:#fff}.window-action svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.6}
+    [data-theme="light"] .titlebar { background:rgba(249,250,253,.95); }
+    button, input, select { font:inherit; }
+    code { padding:2px 5px; border-radius:5px; background:var(--accent-soft); color:var(--accent-2); font:500 11px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    button { border:0; color:inherit; cursor:pointer; }
+    .app-shell { min-height:0; flex:1; display:flex; position:relative; overflow:hidden; }
+    #snow { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; opacity:.58; z-index:0; transition:opacity .5s ease; } #snow.hidden{opacity:0}
+    .glow { position:fixed; width:520px; height:520px; right:-210px; top:-220px; border-radius:50%; background:var(--accent); opacity:.08; filter:blur(75px); pointer-events:none; transition:background .6s ease; }
+    .horror-blood { display:none; position:fixed; top:32px; right:18%; width:150px; height:58px; z-index:3; pointer-events:none; opacity:.18; background:radial-gradient(ellipse at 12% 0,#d62b4b 0 14%,transparent 15%),radial-gradient(ellipse at 42% 0,#9e1532 0 19%,transparent 20%),radial-gradient(ellipse at 73% 0,#d62b4b 0 12%,transparent 13%),linear-gradient(180deg,#a51735 0 14%,transparent 15%); clip-path:polygon(0 0,100% 0,100% 17%,88% 18%,85% 73%,80% 74%,77% 18%,59% 18%,56% 54%,51% 56%,48% 18%,28% 18%,24% 92%,18% 94%,16% 18%,0 17%); filter:blur(.3px); }
+    [data-theme="horror"] .horror-blood { display:block; animation:horrorDrip 5s ease-in-out infinite; }
+    .sidebar { width:var(--sidebar); flex:0 0 var(--sidebar); border-right:1px solid var(--border); padding:26px 16px 18px; background:rgba(10,12,18,.85); backdrop-filter:blur(24px); position:relative; z-index:2; display:flex; flex-direction:column; }
+    .brand { display:flex; align-items:center; gap:11px; padding:0 13px 40px; }
+    .brand-mark { width:32px; height:32px; display:grid; place-items:center; border-radius:10px; color:#fff; background:linear-gradient(135deg,var(--accent),#5d53c9); box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 25%,transparent); font-family:'Space Grotesk'; font-weight:700; font-size:16px; transition:background .6s ease; }
+    [data-theme="light"] .brand-mark { color:#fff; }
+    .brand-name { font:700 20px 'Space Grotesk'; letter-spacing:-.05em; }
+    .brand-tag { color:var(--muted-2); font-size:8px; letter-spacing:.12em; font-weight:700; margin-top:2px; }
+    .nav-label { padding:0 13px 15px; font-size:10px; color:var(--muted-2); font-weight:700; text-transform:uppercase; letter-spacing:.14em; }
+    .nav { flex:1; display:flex; flex-direction:column; justify-content:space-evenly; gap:0; min-height:0; }
+    .nav-item { position:relative; display:flex; align-items:center; gap:13px; min-height:44px; padding:10px 14px; color:var(--muted); border-radius:12px; background:transparent; text-align:left; font-size:13px; transition:all .25s ease; }
+    .nav-item svg { width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:1.7; }
+    .nav-item:hover { color:var(--text); background:rgba(255,255,255,.045); transform:translateX(2px); }
+    .nav-item.active { color:var(--text); background:var(--accent-soft); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 28%,transparent); }
+    .nav-item.active::before { content:''; position:absolute; left:-16px; width:3px; height:22px; border-radius:0 4px 4px 0; background:var(--accent); box-shadow:0 0 16px var(--accent); }
+    .nav-badge { margin-left:auto; min-width:21px; padding:4px 7px; font-size:10px; line-height:1.1; text-align:center; color:var(--accent-2); background:var(--accent-soft); border-radius:99px; }
+    .side-bottom { margin-top:auto; }
+    .local-note { display:flex; align-items:center; gap:9px; margin:14px 4px 0; padding-top:15px; border-top:1px solid var(--border); color:var(--muted-2); font-size:10px; line-height:1.45; }
+    .local-note svg { width:16px; height:16px; flex:none; stroke:var(--mint); fill:none; stroke-width:1.6; }
+    .storage-card { padding:14px; border:1px solid var(--border); border-radius:14px; background:rgba(255,255,255,.025); margin-bottom:13px; }
+    .storage-top { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-bottom:10px; }
+    .storage-top strong { color:var(--text); font-weight:600; }
+    .meter { height:5px; border-radius:99px; background:var(--surface-3); overflow:hidden; }
+    .meter i { display:block; height:100%; width:34%; border-radius:inherit; background:linear-gradient(90deg,var(--accent),var(--mint)); }
+    .storage-meta { display:flex; justify-content:space-between; margin-top:9px; color:var(--muted-2); font-size:10px; }
+    main { flex:1; min-width:0; position:relative; z-index:1; padding:28px 42px 42px; max-width:1480px; margin:0 auto; width:100%; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:37px; }
+    .breadcrumb { color:var(--muted); font-size:12px; }.breadcrumb b{color:var(--text);font-weight:500}.breadcrumb span{margin:0 9px;color:var(--muted-2)}
+    .top-actions { display:flex; align-items:center; gap:13px; }
+    .music-control { display:flex; align-items:center; gap:5px; padding:3px 7px 3px 3px; border:1px solid var(--border); border-radius:11px; background:var(--surface); }
+    .music-control .icon-btn { width:30px; height:30px; border:0; background:transparent; }
+    .music-control .icon-btn:hover { background:var(--accent-soft); }
+    .music-control input[type="range"] { width:76px; height:4px; accent-color:var(--accent); cursor:pointer; }
+    .music-control output { min-width:27px; color:var(--muted-2); font-size:10px; text-align:right; }
+    .icon-btn { width:34px;height:34px;border-radius:10px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted);transition:all .25s ease; }.icon-btn:hover{color:var(--text);border-color:var(--border-bright);transform:translateY(-2px)}.icon-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7}
+    .theme-switch { display:flex; gap:4px; padding:4px; border-radius:11px; border:1px solid var(--border); background:var(--surface); }
+    .theme-dot { width:25px;height:25px;border-radius:7px;background:transparent;display:grid;place-items:center;transition:all .25s; }.theme-dot.active{background:var(--surface-3);box-shadow:0 2px 7px #0004}.theme-dot i{width:10px;height:10px;border-radius:50%;display:block}.theme-dot[data-set="midnight"] i{background:#8b7cff}.theme-dot[data-set="aurora"] i{background:#4ddcc0}.theme-dot[data-set="ember"] i{background:#ff846b}.theme-dot[data-set="ocean"] i{background:#3bbce8}.theme-dot[data-set="rose"] i{background:#ef6fae}.theme-dot[data-set="cyber"] i{background:#ff3bd4}.theme-dot[data-set="forest"] i{background:#45cf78}.theme-dot[data-set="slate"] i{background:#6e9cff}.theme-dot[data-set="solar"] i{background:#f6b84b}.theme-dot[data-set="rain"] i{background:#54c7f4}.theme-dot[data-set="horror"] i{background:#c62243}.theme-dot[data-set="light"] i{background:#f6f7fb;border:2px solid #6558e8}
+    .hero { display:grid; grid-template-columns:1fr 290px; gap:28px; align-items:end; margin-bottom:28px; }
+    .eyebrow { display:flex; align-items:center; gap:8px; color:var(--accent-2); font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; margin-bottom:13px; }.eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 13px var(--mint)}
+    h1,h2,h3,p{margin:0} h1{font:600 38px/1.08 'Space Grotesk';letter-spacing:-.05em;max-width:570px} h1 em{font-style:normal;color:var(--accent-2);transition:color .5s}    .hero-copy{color:var(--muted);font-size:13px;line-height:1.65;margin-top:14px;max-width:560px}
+    .quick-stats { display:flex; gap:10px; justify-content:flex-end; }.stat{padding:14px 15px;border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:14px;min-width:102px}.stat strong{display:block;font:600 20px 'Space Grotesk';letter-spacing:-.04em}.stat span{display:block;color:var(--muted-2);font-size:10px;margin-top:3px}
+    .download-panel { padding:7px; border:1px solid var(--border-bright); border-radius:17px; background:linear-gradient(135deg,rgba(255,255,255,.065),rgba(255,255,255,.018)); box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.04); margin-bottom:36px; }
+    .url-row { display:flex; align-items:center; gap:9px; padding:7px; border-radius:12px; background:var(--surface); }
+    .url-icon { width:39px;height:39px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-2);flex:none; }.url-icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7}
+    .url-row input { flex:1; min-width:0; background:transparent; border:0; outline:none; color:var(--text); font-size:13px; padding:0 7px; }.url-row input::placeholder{color:var(--muted-2)}
+    .paste-btn { background:transparent; color:var(--muted); padding:10px 9px; font-size:12px; transition:color .2s; }.paste-btn:hover{color:var(--text)}
+    .primary-btn { display:flex; align-items:center; justify-content:center; gap:9px; border-radius:10px; padding:12px 19px; color:#fff; font-weight:600; background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 62%,#5250ae)); box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 24%,transparent); transition:transform .25s,box-shadow .25s,filter .25s; white-space:nowrap; }.primary-btn:hover{transform:translateY(-2px);filter:brightness(1.09);box-shadow:0 12px 26px color-mix(in srgb,var(--accent) 36%,transparent)}.primary-btn:active{transform:translateY(0)}.primary-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}
+    .download-options { display:flex; align-items:center; gap:10px; padding:10px 13px 2px; border-top:1px solid var(--border); margin-top:7px; }
+    .option-label { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11px; }
+    .option-label b { color:var(--text); font-weight:500; }
+    .format-select { color:var(--text); border:1px solid var(--border); background:var(--surface-3); border-radius:8px; padding:7px 26px 7px 9px; outline:none; font-size:11px; cursor:pointer; }
+    .folder-control { display:flex; align-items:center; gap:8px; margin-left:auto; color:var(--muted-2); font-size:10px; min-width:0; }
+    .folder-control span { max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .folder-btn { padding:7px 9px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:11px; transition:all .2s; }.folder-btn:hover{color:var(--text);border-color:var(--border-bright)}
+    .snow-toggle { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:11px; cursor:pointer; }.snow-toggle input{accent-color:var(--accent);}
+    .platform-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:11px 13px 5px; }.platform-label{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.1em;margin-right:3px}.platform{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;padding:4px 7px 4px 5px;border-radius:8px;transition:all .2s}.platform:hover{color:var(--text);background:rgba(255,255,255,.05);transform:translateY(-1px)}.platform-logo{width:18px;height:18px;display:grid;place-items:center;border-radius:6px;color:var(--p);background:color-mix(in srgb,var(--p) 13%,transparent);}.platform-logo svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.platform-logo .logo-fill{fill:currentColor;stroke:none}.platform-more{color:var(--accent-2);font-size:11px;margin-left:auto}
+    .section-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }.section-heading h2{font:600 16px 'Space Grotesk';letter-spacing:-.02em}.section-heading span{color:var(--muted-2);font-size:11px}.section-link{color:var(--accent-2);font-size:11px;background:none}.section-link:hover{text-decoration:underline}
+    .content-grid { display:grid; grid-template-columns:minmax(0,1.58fr) minmax(285px,.9fr); gap:25px; }
+    .queue-card,.side-card { border:1px solid var(--border); background:rgba(255,255,255,.025); border-radius:var(--radius); overflow:hidden; }.queue-card{min-height:250px}.queue-list{padding:0 16px}.queue-item{display:flex;align-items:center;gap:13px;padding:14px 0;border-bottom:1px solid var(--border);animation:rise .45s both}.queue-item:last-child{border:0}.thumb{width:74px;height:48px;border-radius:8px;overflow:hidden;flex:none;position:relative;background:var(--surface-3)}.thumb img{width:100%;height:100%;object-fit:cover;opacity:.72}.thumb::after{content:'▶';position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:12px;background:#0004}    .item-details{min-width:0;flex:1}.item-details strong{font-size:13px;font-weight:500;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.item-details span{display:block;color:var(--muted-2);font-size:11px;margin-top:6px}.download-progress{height:3px;margin-top:8px;border-radius:99px;background:var(--surface-3);overflow:hidden}.download-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--mint));transition:width .35s ease}.item-actions{display:flex;align-items:center;gap:12px}.status{font-size:10px;white-space:nowrap}.status.done{color:var(--mint)}.status.progress{color:var(--accent-2)}.status.queued{color:var(--muted)}.status.error{color:var(--danger)}.download-mini{width:29px;height:29px;border:1px solid var(--border);background:var(--surface);border-radius:8px;display:grid;place-items:center;color:var(--muted);transition:all .2s}    .download-mini:hover{color:var(--accent-2);border-color:var(--accent)}.download-mini.danger:hover{color:var(--danger);border-color:var(--danger)}.download-mini svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8}    .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;color:var(--muted-2);gap:12px}.side-card .empty-state{min-height:165px}.empty-icon{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-2)}.empty-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.5}.empty-state span{font-size:12px}
+    .side-stack{display:flex;flex-direction:column;gap:25px}.side-card{padding:19px}.side-card h3{font:600 14px 'Space Grotesk';letter-spacing:-.02em;margin-bottom:17px}.format-list{display:flex;flex-direction:column;gap:11px}.format-row{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:11px}.format-row b{font-weight:500;color:var(--text)}.format-dot{width:8px;height:8px;border-radius:3px;margin-right:8px;display:inline-block}.format-size{color:var(--muted-2)!important}.recent-row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)}.recent-row:last-child{border:0;padding-bottom:0}.recent-avatar{width:26px;height:26px;border-radius:7px;background:var(--accent-soft);display:grid;place-items:center;font-size:10px;color:var(--accent-2)}.recent-copy{min-width:0;flex:1}.recent-copy b{font-size:11px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}.recent-copy span{font-size:9px;color:var(--muted-2);display:block;margin-top:3px}.recent-row > span{font-size:10px;color:var(--mint)}
+    .page-view { display:none; animation:rise .35s both; }.page-view.active { display:block; }
+    .view-header { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin:6px 0 25px; }.view-header h2{font:600 28px 'Space Grotesk';letter-spacing:-.045em}.view-header p{margin-top:8px;color:var(--muted);line-height:1.6;max-width:620px}.view-kicker{font-size:10px;color:var(--accent-2);letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:9px}
+    .workspace-card { border:1px solid var(--border); border-radius:var(--radius); background:rgba(255,255,255,.025); padding:22px; margin-bottom:20px; }.workspace-card h3{font:600 15px 'Space Grotesk';margin-bottom:7px}.workspace-card > p{color:var(--muted);font-size:12px;line-height:1.6}.workspace-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}.workspace-stat{padding:15px;border-radius:12px;background:var(--surface);border:1px solid var(--border)}.workspace-stat strong{display:block;font:600 21px 'Space Grotesk'}.workspace-stat span{display:block;color:var(--muted-2);font-size:10px;margin-top:4px}
+    .credits-card{display:grid;grid-template-columns:250px 1fr;gap:28px;align-items:stretch;overflow:hidden;padding:0;background:linear-gradient(135deg,var(--surface-2),var(--surface));}.credits-photo{min-height:360px;overflow:hidden;background:linear-gradient(145deg,var(--accent-soft),var(--surface-3));}.credits-photo img{width:100%;height:100%;min-height:360px;display:block;object-fit:cover;object-position:center top;filter:saturate(.82) contrast(1.05)}.credits-content{display:flex;flex-direction:column;justify-content:center;padding:30px 30px 30px 0}.credits-eyebrow{color:var(--accent-2);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}.credits-content h3{font:600 31px 'Space Grotesk';letter-spacing:-.05em;margin:0 0 9px}.credits-role{color:var(--mint);font-size:12px;font-weight:600;margin-bottom:14px}.credits-bio{max-width:510px;color:var(--muted);font-size:13px;line-height:1.7}.credits-link{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;margin-top:22px;padding:11px 15px;border-radius:10px;color:#fff;background:var(--accent);font-size:12px;font-weight:600;box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 24%,transparent);transition:all .2s}.credits-link:hover{transform:translateY(-2px);filter:brightness(1.08)}.credits-link svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8}
+    .format-groups{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:17px}.format-group{padding:15px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.format-group h4{font:600 12px 'Space Grotesk';margin:0 0 11px}.format-chips{display:flex;flex-wrap:wrap;gap:7px}.format-chip{padding:6px 9px;border-radius:7px;background:var(--accent-soft);color:var(--accent-2);font-size:10px}
+    .converter-row{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}.file-pick{flex:1;min-width:240px;padding:13px 14px;border:1px dashed var(--border-bright);border-radius:11px;background:var(--surface);color:var(--muted);font-size:12px;cursor:pointer;transition:all .2s}.file-pick:hover{color:var(--text);border-color:var(--accent)}.convert-btn{padding:12px 17px;border-radius:10px;background:var(--accent);color:#fff;font-weight:600;transition:all .2s}.convert-btn:hover{transform:translateY(-2px);filter:brightness(1.08)}.convert-status{width:100%;font-size:11px;color:var(--muted-2);min-height:17px}.settings-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid var(--border)}.settings-row:last-child{border:0}.settings-row strong{font-size:12px;font-weight:500}.settings-row p{color:var(--muted-2);font-size:10px;margin-top:4px}    .theme-choices{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px;max-width:590px}.theme-choice{padding:8px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:10px;color:var(--muted);transition:all .2s}.theme-choice.active,.theme-choice:hover{color:var(--text);border-color:var(--accent);background:var(--accent-soft)}
+
+    .guide-overlay { position:fixed; inset:0; z-index:40; display:none; place-items:center; padding:24px; background:rgba(3,5,10,.72); backdrop-filter:blur(16px); }
+    .guide-overlay.is-open { display:grid; animation:guideFade .3s ease both; }
+    .guide-modal { position:relative; width:min(880px,100%); max-height:min(700px,calc(100vh - 48px)); overflow:auto; border:1px solid var(--border-bright); border-radius:24px; background:linear-gradient(145deg,var(--surface-2),var(--surface)); box-shadow:0 30px 100px rgba(0,0,0,.42),0 0 0 1px color-mix(in srgb,var(--accent) 12%,transparent); }
+    .guide-close { position:absolute; top:16px; right:16px; z-index:2; width:34px; height:34px; display:grid; place-items:center; border:1px solid var(--border); border-radius:10px; color:var(--muted); background:var(--surface); font-size:21px; line-height:1; transition:all .2s; }.guide-close:hover{color:var(--text);border-color:var(--accent);background:var(--accent-soft)}
+    .guide-step { display:none; grid-template-columns:minmax(260px,.85fr) minmax(0,1.15fr); min-height:500px; }.guide-step.active{display:grid;animation:guideRise .35s ease both}
+    .guide-visual { position:relative; display:flex; align-items:center; justify-content:center; padding:42px; overflow:hidden; background:radial-gradient(circle at 50% 38%,var(--accent-soft),transparent 58%); border-right:1px solid var(--border); }.guide-visual::before,.guide-visual::after{content:'';position:absolute;border:1px solid color-mix(in srgb,var(--accent) 20%,transparent);border-radius:50%;pointer-events:none}.guide-visual::before{width:300px;height:300px}.guide-visual::after{width:420px;height:420px;opacity:.5}.guide-character-visual{align-items:flex-end;padding:18px 22px 0}.guide-character-card{position:relative;z-index:1;width:100%;height:100%;min-height:500px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;border:1px solid var(--border-bright);border-bottom:0;border-radius:20px 20px 0 0;background:linear-gradient(145deg,var(--surface-3),var(--surface));box-shadow:0 18px 50px rgba(0,0,0,.25)}.guide-character-card img{width:100%;height:100%;max-height:540px;object-fit:contain;object-position:center bottom;display:block}.guide-character-card span{position:absolute;left:14px;bottom:14px;padding:5px 8px;border-radius:7px;background:rgba(5,7,12,.7);color:var(--accent-2);font-size:9px;letter-spacing:.08em;text-transform:uppercase}
+    .guide-art { position:relative; z-index:1; width:210px; min-height:190px; padding:16px; border:1px solid var(--border-bright); border-radius:18px; background:color-mix(in srgb,var(--surface) 88%,transparent); box-shadow:0 18px 50px rgba(0,0,0,.25); }.guide-art-top{display:flex;align-items:center;gap:6px;margin-bottom:18px}.guide-art-top i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}.guide-art-top span{width:68px;height:5px;border-radius:99px;background:var(--surface-3)}.guide-art-line{height:7px;border-radius:99px;background:var(--surface-3);margin:10px 0}.guide-art-line.short{width:60%}.guide-art-line.accent{width:82%;background:linear-gradient(90deg,var(--accent),var(--mint))}.guide-art-thumb{height:66px;border-radius:10px;margin:13px 0;background:linear-gradient(135deg,var(--accent),var(--surface-3));display:grid;place-items:center;color:#fff;font:600 22px 'Space Grotesk';box-shadow:0 10px 24px color-mix(in srgb,var(--accent) 20%,transparent)}.guide-art-check{width:58px;height:58px;margin:16px auto;display:grid;place-items:center;border-radius:50%;color:var(--mint);border:2px solid var(--mint);font-size:28px;box-shadow:0 0 28px color-mix(in srgb,var(--mint) 30%,transparent)}.guide-art-alert{padding:12px;border-radius:10px;color:var(--warning);background:color-mix(in srgb,var(--warning) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning) 30%,transparent);font-size:11px;line-height:1.45}.guide-art-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}.guide-art-pills span{padding:6px 8px;border-radius:7px;color:var(--accent-2);background:var(--accent-soft);font-size:9px}.guide-content{display:flex;flex-direction:column;justify-content:center;padding:52px 58px 42px}.guide-kicker{color:var(--accent-2);font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:12px}.guide-content h2{font:600 31px/1.08 'Space Grotesk';letter-spacing:-.045em;margin:0 0 13px}.guide-content p{max-width:440px;color:var(--muted);font-size:13px;line-height:1.7}.guide-list{display:grid;gap:9px;margin:22px 0 0;padding:0;list-style:none}.guide-list li{display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:12px;line-height:1.45}.guide-list li::before{content:'✓';flex:none;width:17px;height:17px;display:grid;place-items:center;border-radius:50%;color:var(--mint);background:var(--accent-soft);font-size:10px}.guide-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:30px}.guide-progress{display:flex;align-items:center;gap:6px}.guide-progress i{width:7px;height:7px;border-radius:50%;background:var(--surface-3);transition:all .2s}.guide-progress i.active{width:22px;border-radius:99px;background:var(--accent)}.guide-actions{display:flex;align-items:center;gap:9px}.guide-skip{padding:10px 9px;color:var(--muted);background:none;font-size:11px}.guide-skip:hover{color:var(--text)}.guide-next{padding:11px 16px;border-radius:10px;color:#fff;background:var(--accent);font-weight:600;box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 26%,transparent);transition:all .2s}.guide-next:hover{transform:translateY(-2px);filter:brightness(1.08)}
+    body.guide-open { overflow:hidden; }
+    @keyframes horrorFlicker{0%,92%,100%{transform:none;filter:none}93%{transform:translateX(-1px) skewX(.15deg);filter:saturate(1.35)}95%{transform:translateX(1px);filter:contrast(1.15)}} @keyframes horrorDrip{0%,100%{transform:translateY(0);opacity:.16}50%{transform:translateY(3px);opacity:.24}}
+    @keyframes guideFade{from{opacity:0}to{opacity:1}} @keyframes guideRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+    @media(max-width:720px){.guide-step{grid-template-columns:1fr}.guide-visual{display:none}.guide-content{padding:48px 28px 30px}.guide-content h2{font-size:26px}.credits-card{grid-template-columns:1fr}.credits-photo{min-height:260px}.credits-photo img{min-height:260px}.credits-content{padding:28px}}
+    .toast { position:fixed; right:25px; bottom:25px; z-index:10; padding:13px 16px; border-radius:11px; background:var(--surface-3); border:1px solid var(--border-bright); box-shadow:var(--shadow); transform:translateY(100px); opacity:0; transition:all .4s cubic-bezier(.22,1,.36,1); font-size:12px }.toast.show{transform:translateY(0);opacity:1}.toast b{color:var(--accent-2)}
+    @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}} @keyframes pulse{50%{opacity:.45}} .is-loading{animation:pulse 1.2s infinite}
+    @media(max-width:1180px){main{padding-left:30px;padding-right:30px}.hero{grid-template-columns:1fr}.quick-stats{justify-content:flex-start}.content-grid{grid-template-columns:1fr 290px}.workspace-grid{grid-template-columns:1fr 1fr}.format-groups{grid-template-columns:1fr}}
+  </style>
 </head>
-<body>
-
-<div class="stars"></div>
-<div id="snow-layer"></div>
-
-<div class="app">
-
-  <!-- ======================================================= SIDEBAR ==== -->
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">S</div>
-      <div class="brand-name">Smoky</div>
-    </div>
-
-    <div class="nav-label">Workspace</div>
-
-    <nav class="nav">
-      <button class="nav-item active" data-page="home"><i data-icon="home"></i><span>Home</span></button>
-      <button class="nav-item" data-page="downloader"><i data-icon="download"></i><span>Downloader</span></button>
-      <button class="nav-item" data-page="queue"><i data-icon="list"></i><span>Queue</span><span class="nav-badge" id="queue-badge">0</span></button>
-      <button class="nav-item" data-page="converter"><i data-icon="refresh"></i><span>Converter</span></button>
-      <button class="nav-item" data-page="history"><i data-icon="clock"></i><span>History</span></button>
-      <button class="nav-item" data-page="credits"><i data-icon="star"></i><span>Credits</span></button>
-      <button class="nav-item" data-page="settings"><i data-icon="gear"></i><span>Settings</span></button>
-    </nav>
-
-    <div class="sidebar-bottom">
-      <div class="storage-card">
-        <div class="storage-head">
-          <span class="storage-title">Local storage</span>
-          <span class="storage-status">Ready</span>
-        </div>
-        <div class="track"><div class="fill" id="storage-fill" style="width:34%"></div></div>
-        <div class="storage-foot">
-          <span>Saved on this device</span>
-          <b id="storage-pct">34%</b>
-        </div>
-      </div>
-      <div class="privacy-note">
-        Private by default.<br />
-        Nothing leaves your device.
-      </div>
-    </div>
-  </aside>
-
-  <!-- ========================================================= MAIN ====== -->
-  <main class="main">
-    <header class="topbar">
-      <div class="crumbs" id="crumbs">Home <span class="sep">/</span> <b>Workspace</b></div>
-      <div class="topbar-right">
-        <div class="dot-row">
-          <span class="dot pink"></span><span class="dot orange"></span><span class="dot yellow"></span>
-          <span class="dot green"></span><span class="dot cyan"></span><span class="dot blue"></span>
-          <span class="dot purple"></span><span class="dot magenta"></span><span class="dot teal"></span>
-          <span class="dot lime"></span>
-        </div>
-        <button class="tb-btn" id="tb-pause" title="Pause"><i data-icon="pause"></i></button>
-        <div class="wave-cluster">
-          <div class="wave" id="tb-wave"><i></i><i></i><i></i><i></i><i></i></div>
-          <span class="wave-pct">68%</span>
-        </div>
-        <button class="tb-btn" title="Notifications"><i data-icon="bell"></i></button>
-        <button class="tb-btn help" title="Help"><i data-icon="help"></i></button>
-      </div>
-    </header>
-
-    <div class="content">
-
-      <!-- ================================================== HOME ========= -->
-      <section class="page active" id="page-home">
-        <div class="hero">
-          <div>
-            <div class="eyebrow"><span class="dot"></span>Your media, your way</div>
-            <h1>Download anything.<br />Keep it smoky.</h1>
-            <p>One calm, powerful place for every video, audio track, and playlist you want to keep close.</p>
-          </div>
-          <div class="hero-stats">
-            <div class="stat-card"><div class="num">1,200+</div><div class="sub">platforms ready</div></div>
-            <div class="stat-card"><div class="num">Local</div><div class="sub">saved on device</div></div>
-          </div>
-        </div>
-
-        <!-- download bar -->
-        <div class="dl-card">
-          <div class="dl-row">
-            <div class="dl-input-wrap">
-              <i data-icon="link"></i>
-              <input type="text" class="dl-url" placeholder="Paste a video or audio link here..." spellcheck="false" />
-            </div>
-            <button class="btn dl-paste"><i data-icon="clipboard"></i>Paste</button>
-            <button class="btn btn-primary dl-submit"><i data-icon="arrow-down"></i>Download</button>
-          </div>
-          <div class="dl-controls">
-            <div class="field">
-              <label>Format</label>
-              <select class="dl-format">
-                <option value="mp4-1080">MP4 Video · 1080p</option>
-                <option value="mp4-4k">MP4 Video · 4K</option>
-                <option value="mp4-best">MP4 Video · Best</option>
-                <option value="mkv-4k">WebM / MKV · 4K</option>
-                <option value="mp3">MP3 Audio</option>
-                <option value="m4a">M4A Audio</option>
-                <option value="flac">FLAC · Lossless</option>
-                <option value="wav">WAV · Lossless</option>
-                <option value="opus">OPUS Audio</option>
-                <option value="aac">AAC Audio</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Quality</label>
-              <select class="dl-quality">
-                <option value="best">Up to 1080p</option>
-                <option value="4k">Up to 4K</option>
-                <option value="source">Best available</option>
-              </select>
-            </div>
-            <label class="check">
-              <input type="checkbox" class="dl-snow" checked />
-              <span class="box"><i data-icon="check"></i></span>
-              <span>Ambient snow</span>
-            </label>
-            <div class="dl-folder">
-              <span class="folder-path" id="folder-label">Downloads\Smoky</span>
-              <button class="btn btn-sm dl-folder-btn">Choose folder</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- works with -->
-        <div class="works-row">
-          <span class="works-label">Works with</span>
-          <span class="platform-pill"><i data-icon="yt"></i>YouTube</span>
-          <span class="platform-pill"><i data-icon="tiktok"></i>TikTok</span>
-          <span class="platform-pill"><i data-icon="ig"></i>Instagram</span>
-          <span class="platform-pill"><i data-icon="vimeo"></i>Vimeo</span>
-          <span class="platform-pill"><i data-icon="soundcloud"></i>SoundCloud</span>
-          <span class="platform-pill"><i data-icon="spotify"></i>Spotify</span>
-          <span class="platform-pill more">+ 1,200 more ↗</span>
-        </div>
-
-        <!-- main grid -->
-        <div class="grid-main">
-          <div class="card">
-            <div class="card-head">
-              <span class="card-title">Active downloads</span>
-              <span style="display:flex;align-items:center;gap:14px">
-                <span class="sub" style="font-size:12px;color:var(--muted-2)" id="active-count">No active downloads</span>
-                <button class="card-link danger" id="delete-finished">Delete finished</button>
-              </span>
-            </div>
-            <div id="active-list"></div>
-          </div>
-
-          <div class="grid-right">
-            <div class="card">
-              <div class="card-head">
-                <span class="card-title">Output formats</span>
-                <button class="card-link" data-go="settings">Customize</button>
-              </div>
-              <div class="format-list">
-                <div class="format-row"><span class="f-dot" style="background:#27c276"></span><span class="f-name">MP4 Video</span><span class="f-desc">1080p · H.264</span></div>
-                <div class="format-row"><span class="f-dot" style="background:#29d9d5"></span><span class="f-name">WebM / MKV</span><span class="f-desc">4K · VP9</span></div>
-                <div class="format-row"><span class="f-dot" style="background:#ffd93d"></span><span class="f-name">MP3 / M4A</span><span class="f-desc">Best available</span></div>
-                <div class="format-row"><span class="f-dot" style="background:#a55eea"></span><span class="f-name">FLAC / WAV</span><span class="f-desc">Lossless</span></div>
-                <div class="format-row"><span class="f-dot" style="background:#ff9f43"></span><span class="f-name">OGG / OPUS / AAC</span><span class="f-desc">Efficient</span></div>
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="card-head">
-                <span class="card-title">Recently saved</span>
-                <button class="card-link" data-go="history">View all</button>
-              </div>
-              <div id="recent-list"></div>
-            </div>
-          </div>
-        </div>
+<body data-theme="midnight" data-view="Home">
+  <div class="titlebar"><div class="titlebar-brand"><i>S</i> Smoky</div><div class="window-actions"><button class="window-action" id="windowMinimize" aria-label="Minimize"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button><button class="window-action" id="windowMaximize" aria-label="Maximize"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></button><button class="window-action close" id="windowClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
+  <canvas id="snow" aria-hidden="true"></canvas><div class="glow"></div><div class="horror-blood" aria-hidden="true"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">S</div><div><div class="brand-name">Smoky</div></div></div>
+      <div class="nav-label">Workspace</div>
+      <nav class="nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="Home"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-6h6v6"/></svg>Home</button>
+        <button class="nav-item" data-view="Downloader"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>Downloader</button>
+        <button class="nav-item" data-view="Queue"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Queue <span class="nav-badge" id="queueBadge">0</span></button>
+        <button class="nav-item" data-view="Converter"><svg viewBox="0 0 24 24"><path d="M4 7h11M4 12h7m-7 5h15M17 4l3 3-3 3m-3 7 3-3-3-3"/></svg>Converter</button>
+        <button class="nav-item" data-view="History"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5m4-1v5l3 2"/></svg>History</button>
+        <button class="nav-item" data-view="Credits"><svg viewBox="0 0 24 24"><path d="M12 3 14.8 8.7 21 9.6l-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>Credits</button>
+        <button class="nav-item" data-view="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</button>
+      </nav>
+      <div class="side-bottom"><div class="storage-card"><div class="storage-top"><span>Local storage</span><strong>Ready</strong></div><div class="meter"><i></i></div><div class="storage-meta"><span>Saved on this device</span><span>34%</span></div></div><div class="local-note"><svg viewBox="0 0 24 24"><path d="M6 11V8a6 6 0 0 1 12 0v3"/><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M12 15v3"/></svg><span>Private by default.<br>Nothing leaves your device.</span></div></div>
+    </aside>
+    <main>
+      <header class="topbar"><div class="breadcrumb"><b id="crumb">Home</b><span>/</span><span>Workspace</span></div><div class="top-actions"><div class="theme-switch" aria-label="Choose theme"><button class="theme-dot active" data-set="midnight" title="Midnight"><i></i></button><button class="theme-dot" data-set="aurora" title="Aurora"><i></i></button><button class="theme-dot" data-set="ember" title="Ember"><i></i></button><button class="theme-dot" data-set="ocean" title="Ocean"><i></i></button><button class="theme-dot" data-set="rose" title="Rose"><i></i></button><button class="theme-dot" data-set="cyber" title="Cyber"><i></i></button><button class="theme-dot" data-set="forest" title="Forest"><i></i></button><button class="theme-dot" data-set="slate" title="Slate"><i></i></button><button class="theme-dot" data-set="solar" title="Solar"><i></i></button><button class="theme-dot" data-set="rain" title="Rain"><i></i></button><button class="theme-dot" data-set="horror" title="Horror"><i></i></button><button class="theme-dot" data-set="light" title="Light"><i></i></button></div><div class="music-control" aria-label="Background music"><button class="icon-btn" id="musicToggle" type="button" title="Play background music" aria-label="Play background music" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg></button><input id="musicVolume" type="range" min="0" max="100" value="22" aria-label="Background music volume"><output id="musicVolumeValue">22%</output></div><button class="icon-btn" title="Notifications"><svg viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button><button class="icon-btn" title="Help"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 3.9 1.9c-1 .8-1.6 1.1-1.6 2.6M12 17.1h.01"/></svg></button></div></header>
+      <section class="hero home-section" id="homeHero"><div><div class="eyebrow"><i></i> Your media, your way</div><h1>Download anything.<br><em>Keep it smoky.</em></h1><p class="hero-copy">One calm, powerful place for every video, audio track, and playlist you want to keep close.</p></div><div class="quick-stats"><div class="stat"><strong>1,200+</strong><span>platforms ready</span></div><div class="stat"><strong>Local</strong><span>saved on device</span></div></div></section>
+      <section class="download-panel shared-download-panel" id="downloadPanel"><div class="url-row"><div class="url-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 7 20l1.1-1.1"/></svg></div><input id="urlInput" type="url" placeholder="Paste a video or audio link here..." aria-label="Media URL"/><button class="paste-btn" id="pasteBtn">Paste</button><button class="primary-btn" id="downloadBtn"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>Download</button></div><div class="download-options"><label class="option-label"><span>Format</span><select class="format-select" id="formatSelect" aria-label="Output format"><optgroup label="Video"><option value="mp4">MP4 Video · 1080p</option><option value="webm">WebM Video · 4K</option><option value="mkv">MKV Video · source</option><option value="mov">MOV Video · H.264</option></optgroup><optgroup label="Audio"><option value="mp3">MP3 Audio · best available</option><option value="m4a">M4A Audio · AAC</option><option value="flac">FLAC Audio · lossless</option><option value="wav">WAV Audio · lossless</option><option value="ogg">OGG Audio · Vorbis</option><option value="opus">OPUS Audio · efficient</option><option value="aac">AAC Audio · 320 kbps</option></optgroup></select></label><label class="option-label"><span>Quality</span><select class="format-select" id="qualitySelect" aria-label="Video quality"><option value="1080" selected>Up to 1080p</option><option value="2160">Up to 4K</option><option value="1440">Up to 1440p</option><option value="720">Up to 720p</option><option value="480">Up to 480p</option><option value="360">Up to 360p</option></select></label><label class="snow-toggle"><input id="snowToggle" type="checkbox" checked> <span id="ambientLabel">Ambient snow</span></label><div class="folder-control"><span id="folderLabel">Downloads folder</span><button class="folder-btn" id="folderBtn">Choose folder</button></div></div><div class="platform-row"><span class="platform-label">Works with</span><span class="platform" style="--p:#ff5050"><span class="platform-logo"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3"/><path class="logo-fill" d="m10 9 5 3-5 3z"/></svg></span>YouTube</span><span class="platform" style="--p:#ed3b65"><span class="platform-logo"><svg viewBox="0 0 24 24"><path d="M14 4v10.4a3.6 3.6 0 1 1-2-3.2V4h6v3h-4"/></svg></span>TikTok</span><span class="platform" style="--p:#e83b84"><span class="platform-logo"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="5"/><circle cx="12" cy="12" r="3.5"/><circle class="logo-fill" cx="17.2" cy="6.8" r="1"/></svg></span>Instagram</span><span class="platform" style="--p:#27a7e8"><span class="platform-logo"><svg viewBox="0 0 24 24"><path d="M4 8c2-1.6 3.5-.7 4.2 1.5l1.7 5.3c.4 1.3 1.1 1.3 1.8.2l3-4.8c.8-1.3.3-2.2-.8-1.4l-1.3.9"/></svg></span>Vimeo</span><span class="platform" style="--p:#ff974b"><span class="platform-logo"><svg viewBox="0 0 24 24"><path d="M4 15.5c.2-2.1 1.6-3.4 3.5-3.4.4-2 2-3.3 4-3.3 1.7 0 3.1 1 3.7 2.5.3-.1.7-.2 1.1-.2 2 0 3.7 1.5 3.8 3.5H4Z"/><path d="M6 17h12"/></svg></span>SoundCloud</span><span class="platform" style="--p:#1ed760"><span class="platform-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8 10.2c2.8-1.4 5.7-1.4 8.4.1M8 13c2.2-1 4.7-1 7 .1M9 15.5c1.7-.6 3.4-.5 5 .2"/></svg></span>Spotify</span><span class="platform-more">+ 1,200 more ↗</span></div></section>
+      <div class="content-grid home-section" id="homeGrid"><section><div class="section-heading"><h2>Active downloads</h2><div style="display:flex;align-items:center;gap:14px"><span id="queueCount">No active downloads</span><button class="section-link" id="deleteFinished">Delete finished</button></div></div><div class="queue-card"><div class="queue-list" id="queueList"><div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg></div><span>Your queue is clear. Paste a link above to begin.</span></div></div></div></section><div class="side-stack"><section><div class="section-heading"><h2>Output formats</h2><button class="section-link">Customize</button></div><div class="side-card"><div class="format-list"><div class="format-row"><span><i class="format-dot" style="background:#ff7b91"></i><b>MP4 Video</b></span><span class="format-size">1080p · H.264</span></div><div class="format-row"><span><i class="format-dot" style="background:#72e2c0"></i><b>WebM / MKV</b></span><span class="format-size">4K · VP9</span></div><div class="format-row"><span><i class="format-dot" style="background:#8b7cff"></i><b>MP3 / M4A</b></span><span class="format-size">Best available</span></div><div class="format-row"><span><i class="format-dot" style="background:#f9bd6b"></i><b>FLAC / WAV</b></span><span class="format-size">Lossless</span></div><div class="format-row"><span><i class="format-dot" style="background:#d49cff"></i><b>OGG / OPUS / AAC</b></span><span class="format-size">Efficient</span></div></div></div></section><section><div class="section-heading"><h2>Recently saved</h2><button class="section-link">View all</button></div><div class="side-card"><div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><span>No local downloads yet.</span></div></div></section></div></div>
+      <section class="page-view" id="downloaderView">
+        <div class="view-header"><div><div class="view-kicker">Downloader</div><h2>Everything in one calm flow.</h2><p>Paste a link above, pick a format, choose a local folder, and let Smoky handle the rest. Video platforms use yt-dlp; Spotify links use spotDL to prepare audio locally.</p></div></div>
+        <div class="workspace-card"><h3>Supported platforms</h3><p>Smoky uses yt-dlp for broad platform support. Spotify links use spotDL; install it once with <code>py -m pip install -U spotdl</code> before downloading Spotify audio.</p><div class="workspace-grid"><div class="workspace-stat"><strong>1,200+</strong><span>video & audio sites</span></div><div class="workspace-stat"><strong>Local</strong><span>private file storage</span></div><div class="workspace-stat"><strong>Live</strong><span>progress updates</span></div></div></div>
+        <div class="workspace-card"><h3>Formats at a glance</h3><div class="format-groups"><div class="format-group"><h4>Video</h4><div class="format-chips"><span class="format-chip">MP4</span><span class="format-chip">WebM</span><span class="format-chip">MKV</span><span class="format-chip">MOV</span></div></div><div class="format-group"><h4>Audio</h4><div class="format-chips"><span class="format-chip">MP3</span><span class="format-chip">M4A</span><span class="format-chip">FLAC</span><span class="format-chip">WAV</span><span class="format-chip">OGG</span><span class="format-chip">OPUS</span><span class="format-chip">AAC</span></div></div></div></div></div>
       </section>
-
-      <!-- ============================================== DOWNLOADER ======= -->
-      <section class="page" id="page-downloader">
-        <!-- download card -->
-        <div class="dl-card">
-          <div class="dl-row">
-            <div class="dl-input-wrap">
-              <i data-icon="link"></i>
-              <input type="text" class="dl-url" placeholder="Paste a video or audio link here..." spellcheck="false" />
-            </div>
-            <button class="btn dl-paste"><i data-icon="clipboard"></i>Paste</button>
-            <button class="btn btn-primary dl-submit"><i data-icon="arrow-down"></i>Download</button>
-          </div>
-          <div class="dl-controls">
-            <div class="field">
-              <label>Format</label>
-              <select class="dl-format">
-                <option value="mp4-1080">MP4 Video · 1080p</option>
-                <option value="mp4-4k">MP4 Video · 4K</option>
-                <option value="mp4-best">MP4 Video · Best</option>
-                <option value="mkv-4k">WebM / MKV · 4K</option>
-                <option value="mp3">MP3 Audio</option>
-                <option value="m4a">M4A Audio</option>
-                <option value="flac">FLAC · Lossless</option>
-                <option value="wav">WAV · Lossless</option>
-                <option value="opus">OPUS Audio</option>
-                <option value="aac">AAC Audio</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Quality</label>
-              <select class="dl-quality">
-                <option value="best">Up to 1080p</option>
-                <option value="4k">Up to 4K</option>
-                <option value="source">Best available</option>
-              </select>
-            </div>
-            <label class="check">
-              <input type="checkbox" class="dl-snow" checked />
-              <span class="box"><i data-icon="check"></i></span>
-              <span>Ambient snow</span>
-            </label>
-            <div class="dl-folder">
-              <span class="folder-path" id="folder-label-2">Downloads\Smoky</span>
-              <button class="btn btn-sm dl-folder-btn">Choose folder</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- works with -->
-        <div class="works-row">
-          <span class="works-label">Works with</span>
-          <span class="platform-pill"><i data-icon="yt"></i>YouTube</span>
-          <span class="platform-pill"><i data-icon="tiktok"></i>TikTok</span>
-          <span class="platform-pill"><i data-icon="ig"></i>Instagram</span>
-          <span class="platform-pill"><i data-icon="vimeo"></i>Vimeo</span>
-          <span class="platform-pill"><i data-icon="soundcloud"></i>SoundCloud</span>
-          <span class="platform-pill"><i data-icon="spotify"></i>Spotify</span>
-          <span class="platform-pill more">+ 1,200 more ↗</span>
-        </div>
-
-        <div class="dl-hero">
-          <div class="eyebrow"><span class="dot"></span>Downloader</div>
-          <h2>Everything in one calm flow.</h2>
-          <p>Paste a link above, pick a format, choose a local folder, and let Smoky handle the rest. Video platforms use <code>yt-dlp</code>; Spotify links use <code>spotDL</code> to prepare audio locally.</p>
-        </div>
-
-        <div class="card platforms-card">
-          <div class="card-head"><span class="card-title">Supported platforms</span></div>
-          <div class="pc-head">
-            <p>Smoky uses <span class="inline-code">yt-dlp</span> for broad platform support. Spotify links use <span class="inline-code">spotDL</span>; install it once with <span class="inline-code">py -m pip install -U spotdl</span> before downloading Spotify audio.</p>
-          </div>
-          <div class="platforms-grid">
-            <div class="mini-card"><div class="num">1,200+</div><div class="sub">video &amp; audio sites</div></div>
-            <div class="mini-card"><div class="num">Local</div><div class="sub">private file storage</div></div>
-            <div class="mini-card"><div class="num">Live</div><div class="sub">progress updates</div></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-head"><span class="card-title">Formats at a glance</span></div>
-          <div class="formats-grid">
-            <div class="fmt-box">
-              <h4>Video</h4>
-              <div class="fmt-pills">
-                <span class="fmt-pill">MP4</span><span class="fmt-pill">WebM</span><span class="fmt-pill">MKV</span><span class="fmt-pill">MOV</span>
-              </div>
-            </div>
-            <div class="fmt-box">
-              <h4>Audio</h4>
-              <div class="fmt-pills">
-                <span class="fmt-pill">MP3</span><span class="fmt-pill">M4A</span><span class="fmt-pill">FLAC</span><span class="fmt-pill">WAV</span><span class="fmt-pill">OGG</span><span class="fmt-pill">OPUS</span><span class="fmt-pill">AAC</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <section class="page-view" id="queueView">
+        <div class="view-header"><div><div class="view-kicker">Queue</div><h2>Your downloads, in order.</h2><p>Watch progress, cancel a running job, or open the folder when a download is complete.</p></div><span class="status progress">Native queue</span></div>
+        <div class="queue-card" id="queueDock"><div class="queue-list" id="queueViewList"></div></div>
       </section>
-
-      <!-- ==================================================== QUEUE ======= -->
-      <section class="page" id="page-queue">
-        <div class="page-head">
-          <div>
-            <h2>Queue</h2>
-            <div class="sub" id="queue-sub">Nothing in the queue right now.</div>
-          </div>
-          <button class="btn btn-sm" id="queue-delete-finished">Delete finished</button>
-        </div>
-        <div id="queue-list"></div>
+      <section class="page-view" id="converterView">
+        <div class="view-header"><div><div class="view-kicker">Converter</div><h2>Shape your media.</h2><p>Convert a local video or audio file with FFmpeg while keeping everything on this device.</p></div></div>
+        <div class="workspace-card"><h3>Local media converter</h3><p>Choose a source file, select the output container, and start a native conversion.</p><div class="converter-row"><button class="file-pick" id="filePick">Choose a media file…</button><select class="format-select" id="convertFormat" aria-label="Conversion format"><optgroup label="Video"><option value="mp4">MP4</option><option value="webm">WebM</option><option value="mkv">MKV</option><option value="mov">MOV</option></optgroup><optgroup label="Audio"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="flac">FLAC</option><option value="wav">WAV</option><option value="ogg">OGG</option><option value="opus">OPUS</option><option value="aac">AAC</option></optgroup></select><button class="convert-btn" id="convertBtn">Convert</button><span class="convert-status" id="convertStatus"></span></div></div>
       </section>
-
-      <!-- ================================================= CONVERTER ====== -->
-      <section class="page" id="page-converter">
-        <div class="page-head">
-          <div>
-            <h2>Converter</h2>
-            <div class="sub" id="cvt-sub">Turn local files into any format — powered by ffmpeg.</div>
-          </div>
-          <button class="btn btn-sm" id="cvt-clear">Clear finished</button>
-        </div>
-
-        <div class="card" style="margin-bottom:18px">
-          <div class="card-head"><span class="card-title">Convert a file</span></div>
-          <div class="drop-zone" id="drop-zone" tabindex="0">
-            <div class="icon-circle"><i data-icon="upload"></i></div>
-            <p id="dz-text"><b>Drop a file here</b> or click to browse</p>
-            <small id="dz-file">Video and audio files — MP4, MKV, WebM, MP3, FLAC, WAV, M4A, OGG, OPUS and more.</small>
-          </div>
-          <input type="file" id="file-input" hidden />
-          <div class="cvt-controls">
-            <div class="field"><label>Output</label></div>
-            <div class="cvt-pills" id="cvt-pills">
-              <span class="cvt-pill active" data-format="mp3">MP3</span>
-              <span class="cvt-pill" data-format="m4a">M4A</span>
-              <span class="cvt-pill" data-format="flac">FLAC</span>
-              <span class="cvt-pill" data-format="wav">WAV</span>
-              <span class="cvt-pill" data-format="ogg">OGG</span>
-              <span class="cvt-pill" data-format="opus">OPUS</span>
-              <span class="cvt-pill" data-format="aac">AAC</span>
-              <span class="cvt-pill" data-format="mp4">MP4</span>
-            </div>
-            <button class="btn btn-primary" id="cvt-go" disabled><i data-icon="refresh"></i>Convert</button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-head">
-            <span class="card-title">Conversions</span>
-            <span class="sub" id="cvt-count" style="font-size:12px;color:var(--muted-2)">No conversions yet.</span>
-          </div>
-          <div id="cvt-list"></div>
-        </div>
+      <section class="page-view" id="historyView">
+        <div class="view-header"><div><div class="view-kicker">History</div><h2>Your local library.</h2><p>Recently saved files stay on this device. No account or remote history is created.</p></div><button class="section-link" id="clearHistory">Clear history</button></div>
+        <div class="workspace-card"><div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div><span>Your local history will appear here after the first download.</span></div></div>
       </section>
-
-      <!-- =================================================== HISTORY ======= -->
-      <section class="page" id="page-history">
-        <div class="page-head">
-          <div>
-            <h2>History</h2>
-            <div class="sub" id="history-sub">Everything you saved with Smoky.</div>
-          </div>
-        </div>
-        <div class="card">
-          <div id="history-list"></div>
-        </div>
+      <section class="page-view" id="creditsView">
+        <div class="view-header"><div><div class="view-kicker">Credits</div><h2>Made with rhythm.</h2><p>Smoky is built with care by the person behind the beats.</p></div></div>
+        <div class="workspace-card credits-card"><div class="credits-photo"><img src="assets/credits-photo.png" alt="6scjami" /></div><div class="credits-content"><div class="credits-eyebrow">Creator · Producer · Beatmaker</div><h3>6scjami</h3><div class="credits-role">The sound behind the atmosphere.</div><p class="credits-bio">6scjami creates beats, moods and late-night sounds. This is the creative space behind Smoky — built for people who keep their media close and their ideas moving.</p><a class="credits-link" href="https://www.youtube.com/@prod6scjami" target="_blank" rel="noopener noreferrer">Visit my YouTube channel <svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a></div></div>
       </section>
-
-      <!-- =================================================== CREDITS ====== -->
-      <section class="page" id="page-credits">
-        <div class="page-head">
-          <div>
-            <h2>Credits</h2>
-            <div class="sub">Smoky stands on the shoulders of open source.</div>
-          </div>
-        </div>
-        <div class="grid-main" style="grid-template-columns:1fr 1fr">
-          <div class="card">
-            <div class="card-head"><span class="card-title">yt-dlp</span></div>
-            <p style="color:var(--muted);font-size:13px;margin-bottom:10px">The engine behind 1,200+ video &amp; audio platforms — YouTube, TikTok, Instagram, Vimeo, SoundCloud and countless more.</p>
-            <div class="tool-status"><span class="dot green"></span><span id="yt-status" class="ok">Installed</span></div>
-          </div>
-          <div class="card">
-            <div class="card-head"><span class="card-title">spotDL</span></div>
-            <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Downloads Spotify tracks as high-quality MP3, prepared locally on your device.</p>
-            <div class="tool-status"><span class="dot" id="spot-dot"></span><span id="spot-status">Checking…</span></div>
-            <p style="margin-top:10px;font-size:12px;color:var(--muted-2)">Install with <span class="inline-code">py -m pip install -U spotdl</span></p>
-          </div>
-        </div>
-        <div class="card" style="margin-top:20px">
-          <div class="card-head"><span class="card-title">Private by default</span></div>
-          <p style="color:var(--muted);font-size:13px">Smoky downloads straight to your own device. No accounts, no cloud, no tracking. Nothing leaves your machine — everything stays smoky.</p>
-        </div>
+      <section class="page-view" id="settingsView">
+        <div class="view-header"><div><div class="view-kicker">Settings</div><h2>Make Smoky yours.</h2><p>Everything here is saved locally in the app. There are no profiles or accounts to manage.</p></div></div>
+        <div class="workspace-card"><div class="settings-row"><div><strong>Theme</strong><p>Switch the accent without leaving the page.</p></div><div class="theme-choices"><button class="theme-choice active" data-set="midnight">Midnight</button><button class="theme-choice" data-set="aurora">Aurora</button><button class="theme-choice" data-set="ember">Ember</button><button class="theme-choice" data-set="ocean">Ocean</button><button class="theme-choice" data-set="rose">Rose</button><button class="theme-choice" data-set="cyber">Cyber</button><button class="theme-choice" data-set="forest">Forest</button><button class="theme-choice" data-set="slate">Slate</button><button class="theme-choice" data-set="solar">Solar</button><button class="theme-choice" data-set="rain">Rain</button><button class="theme-choice" data-set="horror">Horror</button><button class="theme-choice" data-set="light">Light</button></div></div><div class="settings-row"><div><strong id="ambientTitle">Ambient snow</strong><p id="ambientDescription">Keep the quiet animated snowfall in the background.</p></div><input id="snowToggleSettings" type="checkbox" checked></div><div class="settings-row"><div><strong>Browser session</strong><p>Choose which local browser may provide cookies for protected videos.</p></div><select class="format-select" id="browserSelect" aria-label="Browser session"><option value="none">Disabled</option><option value="chrome">Chrome</option><option value="edge">Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option><option value="vivaldi">Vivaldi</option><option value="opera">Opera</option><option value="opera-gx">Opera GX</option></select></div><div class="settings-row"><div><strong>Guide</strong><p>Open the Smoky walkthrough again whenever you need it.</p></div><button class="folder-btn" id="openGuide">Open guide</button></div><div class="settings-row"><div><strong>Download location</strong><p>Choose a folder from the Downloader panel before starting a job.</p></div><span class="status done">Local only</span></div></div>
       </section>
-
-      <!-- ================================================== SETTINGS ====== -->
-      <section class="page" id="page-settings">
-        <div class="page-head">
-          <div>
-            <h2>Settings</h2>
-            <div class="sub">Tune Smoky to your taste.</div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-head"><span class="card-title">Appearance</span></div>
-          <div class="theme-swatches" id="theme-swatches">
-            <button class="theme-swatch active" data-theme="smoky"><span class="swatch-dot" style="background:linear-gradient(145deg,#2fd18a,#1d9e60)"><i data-icon="check"></i></span><span class="swatch-name">Smoky</span></button>
-            <button class="theme-swatch" data-theme="midnight"><span class="swatch-dot" style="background:linear-gradient(145deg,#5a9bff,#3f74e0)"><i data-icon="check"></i></span><span class="swatch-name">Midnight</span></button>
-            <button class="theme-swatch" data-theme="amethyst"><span class="swatch-dot" style="background:linear-gradient(145deg,#b16ef0,#8d48d8)"><i data-icon="check"></i></span><span class="swatch-name">Amethyst</span></button>
-            <button class="theme-swatch" data-theme="ember"><span class="swatch-dot" style="background:linear-gradient(145deg,#ff9a52,#f07a2e)"><i data-icon="check"></i></span><span class="swatch-name">Ember</span></button>
-            <button class="theme-swatch" data-theme="paper"><span class="swatch-dot" style="background:linear-gradient(145deg,#ffffff,#dfe7e1);border-color:rgba(0,0,0,.15)"><i data-icon="check"></i></span><span class="swatch-name">Paper</span></button>
-          </div>
-        </div>
-
-        <div class="settings-grid">
-          <div class="card">
-            <div class="card-head"><span class="card-title">Downloads</span></div>
-            <div class="set-row">
-              <div><div class="lbl">Downloads folder</div><div class="hint">Where Smoky saves everything</div></div>
-              <div class="ctl"><input type="text" class="text-input" id="set-folder" /><button class="btn btn-sm" id="set-folder-save">Save</button></div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">Default format</div><div class="hint">Used for new downloads</div></div>
-              <div class="ctl">
-                <select id="set-format">
-                  <option value="mp4-1080">MP4 Video · 1080p</option>
-                  <option value="mp4-4k">MP4 Video · 4K</option>
-                  <option value="mp4-best">MP4 Video · Best</option>
-                  <option value="mkv-4k">WebM / MKV · 4K</option>
-                  <option value="mp3">MP3 Audio</option>
-                  <option value="m4a">M4A Audio</option>
-                  <option value="flac">FLAC · Lossless</option>
-                  <option value="wav">WAV · Lossless</option>
-                  <option value="opus">OPUS Audio</option>
-                  <option value="aac">AAC Audio</option>
-                </select>
-              </div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">Default quality</div><div class="hint">Upper limit for video streams</div></div>
-              <div class="ctl">
-                <select id="set-quality">
-                  <option value="best">Up to 1080p</option>
-                  <option value="4k">Up to 4K</option>
-                  <option value="source">Best available</option>
-                </select>
-              </div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">Ambient snow</div><div class="hint">Calm floating particles in the UI</div></div>
-              <label class="check">
-                <input type="checkbox" id="set-snow" checked />
-                <span class="box"><i data-icon="check"></i></span>
-                <span>On</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-head"><span class="card-title">Tools</span></div>
-            <div class="set-row">
-              <div><div class="lbl">yt-dlp</div><div class="hint">Engine for 1,200+ platforms</div></div>
-              <div class="ctl"><div class="tool-status" id="yt-row"><span class="dot green"></span><span class="ok">Installed</span></div></div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">spotDL</div><div class="hint">Engine for Spotify audio</div></div>
-              <div class="ctl"><div class="tool-status" id="spot-row"><span class="dot"></span><span>Checking…</span></div></div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">ffmpeg</div><div class="hint">Engine for the converter</div></div>
-              <div class="ctl"><div class="tool-status" id="ff-row"><span class="dot"></span><span>Checking…</span></div></div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">Install command</div><div class="hint">Run in your terminal</div></div>
-              <div class="ctl"><span class="inline-code">py -m pip install -U spotdl</span></div>
-            </div>
-            <div class="set-row">
-              <div><div class="lbl">Smoky</div><div class="hint">Version 1.0.0 · local only</div></div>
-              <div class="ctl"><span class="tool-status"><span class="dot green"></span><span class="ok">Ready</span></span></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-    </div>
-  </main>
-</div>
-
-<div id="toasts"></div>
-
-<script src="app.js"></script>
+    </main>
+  </div>
+  <div class="guide-overlay" id="guideOverlay" aria-hidden="true">
+    <section class="guide-modal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+      <button class="guide-close" id="guideClose" aria-label="Close guide">×</button>
+      <article class="guide-step active" data-guide-step="0">
+        <div class="guide-visual guide-character-visual"><div class="guide-character-card"><img src="assets/WELCOME.png" alt="Mita begrüßt dich" /><span>Mita · Welcome</span></div></div>
+        <div class="guide-content"><div class="guide-kicker">Mita · Welcome to Smoky</div><h2 id="guideTitle">Mita zeigt dir Smoky.</h2><p>Mita führt dich durch die wichtigsten Bereiche, damit dein erster Download direkt klappt.</p><ul class="guide-list"><li>Lokale Downloads ohne Account oder Cloud</li><li>Video, Audio und lokale Konvertierung in einer App</li><li>Queue, Themes und Einstellungen an einem Ort</li></ul><div class="guide-footer"><div class="guide-progress"></div><div class="guide-actions"><button class="guide-skip">Überspringen</button><button class="guide-next">Los geht’s</button></div></div></div>
+      </article>
+      <article class="guide-step" data-guide-step="1">
+        <div class="guide-visual guide-character-visual"><div class="guide-character-card"><img src="assets/EXPLAINING.png" alt="Mita erklärt den Download" /><span>Mita · Guide</span></div></div>
+        <div class="guide-content"><div class="guide-kicker">01 · Link einfügen</div><h2>Link rein, Vorschau raus.</h2><p>Füge eine öffentliche Video- oder Audio-URL im Downloader ein. Smoky erkennt die Plattform und zeigt, wenn verfügbar, sofort ein Thumbnail.</p><ul class="guide-list"><li>URL einfügen oder auf „Paste“ klicken</li><li>Thumbnail und Titel werden automatisch übernommen</li><li>Watch-Links werden als einzelnes Video behandelt</li></ul><div class="guide-footer"><div class="guide-progress"></div><div class="guide-actions"><button class="guide-skip">Überspringen</button><button class="guide-next">Weiter</button></div></div></div>
+      </article>
+      <article class="guide-step" data-guide-step="2">
+        <div class="guide-visual guide-character-visual"><div class="guide-character-card"><img src="assets/EXPLAINING%202.png" alt="Mita erklärt Formate und Qualität" /><span>Mita · Formats</span></div></div>
+        <div class="guide-content"><div class="guide-kicker">02 · Qualität & Format</div><h2>Du entscheidest, was gespeichert wird.</h2><p>Wähle Video oder Audio und passe die Qualität an. „Up to 1080p“ nimmt die beste verfügbare Auflösung bis 1080p — ohne künstliches Hochskalieren.</p><ul class="guide-list"><li>MP4, WebM, MKV, MOV sowie mehrere Audioformate</li><li>Qualität von 360p bis 4K, sofern die Quelle es anbietet</li><li>Für getrennte Video- und Audiospuren wird FFmpeg verwendet</li></ul><div class="guide-footer"><div class="guide-progress"></div><div class="guide-actions"><button class="guide-skip">Überspringen</button><button class="guide-next">Weiter</button></div></div></div>
+      </article>
+      <article class="guide-step" data-guide-step="3">
+        <div class="guide-visual guide-character-visual"><div class="guide-character-card"><img src="assets/EXPLAINING.png" alt="Mita zeigt die Queue" /><span>Mita · Queue</span></div></div>
+        <div class="guide-content"><div class="guide-kicker">03 · Queue & Speicherort</div><h2>Mehrere Jobs. Ein klarer Überblick.</h2><p>Wähle deinen Zielordner und starte weitere Links, ohne auf den vorherigen Download zu warten. Jeder Job bleibt unabhängig.</p><ul class="guide-list"><li>„Choose folder“ legt den lokalen Zielordner fest</li><li>Die Queue zeigt Fortschritt, Geschwindigkeit und ETA</li><li>Fertige Dateien öffnen oder direkt löschen</li></ul><div class="guide-footer"><div class="guide-progress"></div><div class="guide-actions"><button class="guide-skip">Überspringen</button><button class="guide-next">Weiter</button></div></div></div>
+      </article>
+      <article class="guide-step" data-guide-step="4">
+        <div class="guide-visual guide-character-visual"><div class="guide-character-card"><img src="assets/SUCESS.png" alt="Mita freut sich über den erfolgreichen Download" /><span>Mita · Success</span></div></div>
+        <div class="guide-content"><div class="guide-kicker">04 · Converter</div><h2>Lokale Dateien umwandeln.</h2><p>Im Converter kannst du eine Datei von deinem Gerät auswählen und mit FFmpeg in ein anderes Video- oder Audioformat bringen.</p><ul class="guide-list"><li>Quelle auswählen und Zielformat wählen</li><li>Konvertierung bleibt vollständig lokal</li><li>Funktioniert unabhängig von Downloads</li></ul><div class="guide-footer"><div class="guide-progress"></div><div class="guide-actions"><button class="guide-skip">Überspringen</button><button class="guide-next">Weiter</button></div></div></div>
+      </article>
+      <article class="guide-step" data-guide-step="5">
+        <div class="guide-visual guide-character-visual"><div class="guide-character-card"><img src="assets/ERROR.png" alt="Mita erklärt einen Download-Fehler" /><span>Mita · Help</span></div></div>
+        <div class="guide-content"><div class="guide-kicker">05 · Wenn etwas schiefgeht</div><h2>Fehler bleiben verständlich.</h2><p>Bei Problemen erscheint der Grund direkt am Queue-Eintrag. Nutze Retry, statt den Link neu einzufügen.</p><ul class="guide-list"><li>yt-dlp ist für Plattform-Unterstützung erforderlich</li><li>FFmpeg wird für Zusammenführen und Audio benötigt</li><li>Deno kann bei aktuellen YouTube-Links erforderlich sein</li></ul><div class="guide-footer"><div class="guide-progress"></div><div class="guide-actions"><button class="guide-skip">Später</button><button class="guide-next">Smoky starten</button></div></div></div>
+      </article>
+    </section>
+  </div>
+  <div class="toast" id="toast"></div>
+  <audio id="bgAudio" loop preload="metadata" src="assets/bg-music.wav"></audio>
+  <script src="desktop-shim.js"></script>
+  <script>
+    const root = document.body;
+    const desktop = window.smokyDesktop;
+    document.getElementById('windowMinimize').addEventListener('click', () => desktop?.minimizeWindow());
+    document.getElementById('windowMaximize').addEventListener('click', () => desktop?.toggleMaximize());
+    document.getElementById('windowClose').addEventListener('click', () => desktop?.closeWindow());
+    const canvas = document.getElementById('snow');
+    const ctx = canvas.getContext('2d');
+    let flakes = [];
+    const resize = () => { canvas.width = innerWidth * devicePixelRatio; canvas.height = innerHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); flakes = Array.from({length: Math.min(95, Math.floor(innerWidth / 14))}, (_, index) => ({ x:Math.random()*innerWidth, y:Math.random()*innerHeight, r:Math.random()*2.2+.55, speed:Math.random()*.45+.18, drift:Math.random()*.32-.16, phase:Math.random()*Math.PI*2, opacity:Math.random()*.45+.18, note:['♪','♫','♩','♬'][index % 4], rotation:Math.random()*.45-.225 })); };
+    const drawSnow = (time=0) => { const isRain=root.dataset.theme==='rain'; const isLight=root.dataset.theme==='light'; const isHorror=root.dataset.theme==='horror'; const isCredits=root.dataset.view==='Credits'; const noteColor=getComputedStyle(root).getPropertyValue('--accent-2').trim() || '#b0a7ff'; ctx.clearRect(0,0,innerWidth,innerHeight); flakes.forEach(f => { if(isCredits){ f.y -= f.speed*1.8; f.x += f.drift + Math.sin(time/1000+f.phase)*.24; if(f.y < -28){f.y=innerHeight+22;f.x=Math.random()*innerWidth} if(f.x>innerWidth+28)f.x=-28;if(f.x<-28)f.x=innerWidth+28; ctx.save(); ctx.translate(f.x,f.y); ctx.rotate(f.rotation + Math.sin(time/1500+f.phase)*.08); ctx.globalAlpha=Math.min(.62,f.opacity+.18); ctx.fillStyle=noteColor; ctx.font=`${Math.round(16+f.r*7)}px 'Space Grotesk', sans-serif`; ctx.fillText(f.note,0,0); ctx.restore(); return; } const speed=isRain ? f.speed*4.2 : f.speed; f.y += speed; f.x += (isRain ? f.drift*.35 : f.drift) + Math.sin(time/1300+f.phase)*.16; if(f.y>innerHeight+14){f.y=-12;f.x=Math.random()*innerWidth} if(f.x>innerWidth+4)f.x=-4;if(f.x<-4)f.x=innerWidth+4; if(isRain){ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.lineTo(f.x-1.5,f.y+7+f.r*2.5);ctx.strokeStyle=`rgba(151,222,244,${Math.min(.78,f.opacity+.18)})`;ctx.lineWidth=Math.max(.7,f.r*.7);ctx.stroke();} else {ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fillStyle=isLight ? `rgba(31,38,54,${Math.min(.78,f.opacity+.2)})` : isHorror ? `rgba(220,66,82,${Math.min(.72,f.opacity+.12)})` : `rgba(219,224,255,${f.opacity})`;ctx.fill();} }); requestAnimationFrame(drawSnow); };
+    resize(); addEventListener('resize', resize); requestAnimationFrame(drawSnow);
+    const toast = (message) => { const el=document.getElementById('toast'); el.innerHTML=message; el.classList.add('show'); clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.classList.remove('show'),3200); };
+    const bgAudio = document.getElementById('bgAudio');
+    const musicToggle = document.getElementById('musicToggle');
+    const musicVolume = document.getElementById('musicVolume');
+    const musicVolumeValue = document.getElementById('musicVolumeValue');
+    const savedMusicVolume = Number(localStorage.getItem('smoky-music-volume'));
+    const initialMusicVolume = Number.isFinite(savedMusicVolume) && savedMusicVolume >= 0 && savedMusicVolume <= 100 ? savedMusicVolume : 22;
+    bgAudio.loop = true;
+    bgAudio.volume = initialMusicVolume / 100;
+    musicVolume.value = initialMusicVolume;
+    musicVolumeValue.textContent = `${initialMusicVolume}%`;
+    const updateMusicButton = (isPlaying) => {
+      musicToggle.innerHTML = isPlaying ? '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>' : '<svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>';
+      musicToggle.title = isPlaying ? 'Pause background music' : 'Play background music';
+      musicToggle.setAttribute('aria-label', musicToggle.title);
+      musicToggle.setAttribute('aria-pressed', String(isPlaying));
+    };
+    musicToggle.addEventListener('click', async () => {
+      if (bgAudio.paused) {
+        try { await bgAudio.play(); updateMusicButton(true); }
+        catch { toast('<b>Background music:</b> bg music zwei.wav could not be opened. Keep the file in your Downloads folder.'); }
+      } else { bgAudio.pause(); updateMusicButton(false); }
+    });
+    musicVolume.addEventListener('input', () => { const value=Number(musicVolume.value); bgAudio.volume=value / 100; musicVolumeValue.textContent=`${value}%`; localStorage.setItem('smoky-music-volume', String(value)); });
+    let musicUnavailable = false;
+    bgAudio.addEventListener('error', () => { musicUnavailable=true; musicToggle.disabled=true; musicToggle.title='Background music file unavailable'; });
+    bgAudio.addEventListener('pause', () => updateMusicButton(false));
+    bgAudio.addEventListener('play', () => updateMusicButton(true));
+    const startBackgroundMusic = async () => {
+      if (musicUnavailable || !bgAudio.paused) return;
+      try { await bgAudio.play(); updateMusicButton(true); document.removeEventListener('pointerdown', retryBackgroundMusic); }
+      catch { /* Chromium may still require the first interaction; retryBackgroundMusic handles that. */ }
+    };
+    const retryBackgroundMusic = () => { startBackgroundMusic(); };
+    document.addEventListener('pointerdown', retryBackgroundMusic);
+    setTimeout(startBackgroundMusic, 120);
+    const guideOverlay = document.getElementById('guideOverlay');
+    const guideSteps = [...document.querySelectorAll('.guide-step')];
+    const guideProgress = [...document.querySelectorAll('.guide-progress')];
+    let guideIndex = 0;
+    const cleanMitaImage = image => {
+      if(!image || image.dataset.cleaned) return;
+      try {
+        const canvas=document.createElement('canvas');
+        canvas.width=image.naturalWidth; canvas.height=image.naturalHeight;
+        const imageContext=canvas.getContext('2d');
+        imageContext.drawImage(image,0,0);
+        const pixels=imageContext.getImageData(0,0,canvas.width,canvas.height);
+        for(let index=0; index<pixels.data.length; index+=4){
+          const red=pixels.data[index], green=pixels.data[index+1], blue=pixels.data[index+2];
+          if(Math.max(red,green,blue)-Math.min(red,green,blue)<9 && red>205) pixels.data[index+3]=0;
+        }
+        imageContext.putImageData(pixels,0,0);
+        image.src=canvas.toDataURL('image/png');
+        image.dataset.cleaned='yes';
+      } catch { /* Keep the original image if the local file cannot be read by canvas. */ }
+    };
+    const renderGuide = () => {
+      guideSteps.forEach((step, index) => step.classList.toggle('active', index === guideIndex));
+      const activeImage=guideSteps[guideIndex]?.querySelector('.guide-character-card img');
+      if(activeImage){ if(activeImage.complete) cleanMitaImage(activeImage); else activeImage.addEventListener('load',()=>cleanMitaImage(activeImage),{once:true}); }
+      guideProgress.forEach(progress => { progress.innerHTML = guideSteps.map((_, index) => `<i class="${index === guideIndex ? 'active' : ''}"></i>`).join(''); });
+      const activeStep = guideSteps[guideIndex];
+      const next = activeStep?.querySelector('.guide-next');
+      if (next) next.textContent = guideIndex === guideSteps.length - 1 ? 'Smoky starten' : (guideIndex === 0 ? 'Los geht’s' : 'Weiter');
+    };
+    const openGuide = () => { guideIndex=0; renderGuide(); guideOverlay.classList.add('is-open'); guideOverlay.setAttribute('aria-hidden','false'); document.body.classList.add('guide-open'); };
+    const GUIDE_VERSION = 'mita-v1';
+    const closeGuide = () => { guideOverlay.classList.remove('is-open'); guideOverlay.setAttribute('aria-hidden','true'); document.body.classList.remove('guide-open'); localStorage.setItem('smoky-guide-seen',GUIDE_VERSION); };
+    guideOverlay.addEventListener('click', event => { if(event.target === guideOverlay) closeGuide(); });
+    guideOverlay.querySelector('.guide-close').addEventListener('click', closeGuide);
+    guideOverlay.querySelectorAll('.guide-skip').forEach(button => button.addEventListener('click', closeGuide));
+    guideOverlay.querySelectorAll('.guide-next').forEach(button => button.addEventListener('click', () => { if(guideIndex >= guideSteps.length - 1) closeGuide(); else { guideIndex += 1; renderGuide(); } }));
+    document.addEventListener('keydown', event => { if(!guideOverlay.classList.contains('is-open')) return; if(event.key === 'Escape') closeGuide(); if(event.key === 'ArrowRight' && guideIndex < guideSteps.length - 1) { guideIndex += 1; renderGuide(); } if(event.key === 'ArrowLeft' && guideIndex > 0) { guideIndex -= 1; renderGuide(); } });
+    document.getElementById('openGuide').addEventListener('click', openGuide);
+    renderGuide();
+    if(localStorage.getItem('smoky-guide-seen') !== GUIDE_VERSION) setTimeout(openGuide, 350);
+    const savedTheme = localStorage.getItem('smoky-theme');
+    if (savedTheme && document.querySelector(`.theme-dot[data-set="${savedTheme}"]`)) { root.dataset.theme=savedTheme; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===savedTheme)); }
+    const applyTheme = (theme) => { root.dataset.theme=theme; localStorage.setItem('smoky-theme',theme); const isRain=theme==='rain'; document.getElementById('ambientLabel').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientTitle').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientDescription').textContent=isRain ? 'Switch on animated rain drops in the background.' : 'Keep the quiet animated snowfall in the background.'; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); document.querySelectorAll('.theme-choice').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); };
+    document.querySelectorAll('.theme-dot, .theme-choice').forEach(btn => btn.addEventListener('click', () => { applyTheme(btn.dataset.set); toast(`<b>${btn.dataset.set}</b> theme applied`); }));
+    if (savedTheme) applyTheme(savedTheme);
+    const snowToggle = document.getElementById('snowToggle');
+    snowToggle.checked = localStorage.getItem('smoky-snow') !== 'off';
+    canvas.classList.toggle('hidden', !snowToggle.checked);
+    const snowSettings = document.getElementById('snowToggleSettings');
+    snowToggle.checked = localStorage.getItem('smoky-snow') !== 'off';
+    snowSettings.checked = snowToggle.checked;
+    const setSnow = (enabled) => { snowToggle.checked=enabled; snowSettings.checked=enabled; canvas.classList.toggle('hidden', !enabled); localStorage.setItem('smoky-snow', enabled ? 'on' : 'off'); };
+    snowToggle.addEventListener('change', () => setSnow(snowToggle.checked));
+    snowSettings.addEventListener('change', () => setSnow(snowSettings.checked));
+    const browserSelect = document.getElementById('browserSelect');
+    const storedBrowser = localStorage.getItem('smoky-browser') || 'none';
+    browserSelect.value = storedBrowser === 'opera' ? 'opera-gx' : storedBrowser;
+    browserSelect.addEventListener('change', () => localStorage.setItem('smoky-browser', browserSelect.value));
+    const homeSections = document.querySelectorAll('.home-section');
+    const downloadPanel = document.getElementById('downloadPanel');
+    const pageViews = document.querySelectorAll('.page-view');
+    let queueListHost;
+    const queueViewList = document.getElementById('queueViewList');
+    const showView = (view) => { const isHome=view==='Home'; root.dataset.view=view; homeSections.forEach(section=>section.style.display=isHome ? '' : 'none'); downloadPanel.style.display=(isHome || view==='Downloader') ? '' : 'none'; pageViews.forEach(section=>section.classList.toggle('active',section.id===`${view.toLowerCase()}View`)); if(view==='Queue' && queueList.parentElement!==queueViewList) queueViewList.appendChild(queueList); if(view!=='Queue' && queueList.parentElement!==queueListHost) queueListHost.appendChild(queueList); document.getElementById('crumb').textContent=view; };
+    document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => { document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active')); item.classList.add('active'); showView(item.dataset.view); }));
+    let selectedFolder = null;
+    document.getElementById('pasteBtn').addEventListener('click', async () => { try { const text=await navigator.clipboard.readText(); document.getElementById('urlInput').value=text; toast('Link pasted from clipboard'); } catch { document.getElementById('urlInput').focus(); toast('Paste your link into the field'); } });
+    document.getElementById('folderBtn').addEventListener('click', async () => { if (!desktop) return toast('Folder selection is available in the desktop app'); const folder=await desktop.chooseFolder(); if(folder){ selectedFolder=folder; document.getElementById('folderLabel').textContent=folder; toast('Download folder updated'); } });
+    const platformFor = url => { if(/spotify\.com/i.test(url)) return 'Spotify'; if(/tiktok/i.test(url)) return 'TikTok'; if(/instagram/i.test(url)) return 'Instagram'; if(/vimeo/i.test(url)) return 'Vimeo'; if(/soundcloud/i.test(url)) return 'SoundCloud'; if(/twitch/i.test(url)) return 'Twitch'; if(/twitter|x\.com/i.test(url)) return 'X'; if(/facebook/i.test(url)) return 'Facebook'; try { return new URL(url).hostname.replace(/^www\./,''); } catch { return 'Media'; } };
+    const escapeHtml = value => value.replace(/[&<>]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[char]));
+    const youtubeThumbnailFor = (url) => { try { const parsed=new URL(url); const id=parsed.hostname.includes('youtu.be') ? parsed.pathname.slice(1).split('/')[0] : parsed.searchParams.get('v'); return id && /^[\w-]{6,}$/.test(id) ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null; } catch { return null; } };
+    const queueList = document.getElementById('queueList');
+    const queueCount = document.getElementById('queueCount');
+    queueListHost = queueList.parentElement;
+    const addQueueItem = (id, url, host, format, quality) => { const thumbnail=youtubeThumbnailFor(url); const thumbnailMarkup=thumbnail ? `<img src="${thumbnail}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div style="height:100%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent-soft),var(--surface-3));font-size:11px;color:var(--accent-2)">${escapeHtml(host)}</div>`; const item=document.createElement('div'); item.className='queue-item'; item.dataset.downloadId=id; item.dataset.url=url; item.dataset.format=format; item.dataset.quality=quality; item.dataset.browserName=browserSelect.value; item.innerHTML=`<div class="thumb">${thumbnailMarkup}</div><div class="item-details"><strong>${escapeHtml(url.replace(/^https?:\/\//,'').slice(0,44))}</strong><span>${format.toUpperCase()} · Preparing native download…</span><div class="download-progress"><i style="width:0%"></i></div></div><div class="item-actions"><span class="status progress is-loading">Starting</span><button class="download-mini" data-action="cancel" title="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`; queueList.querySelector('.empty-state')?.remove(); queueList.prepend(item); const activeCount=queueList.querySelectorAll('.queue-item').length; queueCount.textContent=activeCount ? `${activeCount} item${activeCount===1 ? '' : 's'} in queue` : 'No active downloads'; document.getElementById('queueBadge').textContent=activeCount; return item; };
+    document.getElementById('downloadBtn').addEventListener('click', async () => { const input=document.getElementById('urlInput'); const url=input.value.trim(); if(!url){ input.focus(); toast('Paste a link to start downloading'); return; } if(!desktop){ toast('Open Smoky as a desktop app to download files'); return; } const selectedFormat=document.getElementById('formatSelect').value; const quality=document.getElementById('qualitySelect').value; const host=platformFor(url); const spotifyUrl=/spotify\.com/i.test(url); const format=spotifyUrl && !['mp3','m4a','flac','wav','ogg','opus','aac'].includes(selectedFormat) ? 'mp3' : selectedFormat; try { const result=await desktop.startDownload({url,format,quality,outputDir:selectedFolder,browserName:browserSelect.value}); addQueueItem(result.id,url,host,format,quality); input.value=''; toast(`<b>${host}</b> added to the download queue`); } catch(error) { toast(`<b>Could not start:</b> ${escapeHtml(error.message)}`); } });
+    desktop?.onDownloadUpdate((update) => { const item=document.querySelector(`[data-download-id="${update.id}"]`); if(!item) return; const status=item.querySelector('.status'); const progress=item.querySelector('.download-progress i'); if(update.state==='metadata'){if(update.title) item.querySelector('.item-details strong').textContent=update.title; if(update.thumbnail && !/^(NA|None)$/i.test(update.thumbnail)){const image=document.createElement('img'); image.src=update.thumbnail; image.alt=''; image.loading='lazy'; image.referrerPolicy='no-referrer'; item.querySelector('.thumb').replaceChildren(image);}} if(update.state==='starting'){status.textContent='Starting';} if(update.state==='resolving'){status.classList.remove('is-loading'); status.textContent='Resolving link'; item.querySelector('.item-details span').textContent=update.message || 'Fetching media information…';} if(update.state==='downloading'){status.classList.remove('is-loading'); status.textContent=`Downloading ${Math.round(update.percent || 0)}%`; progress.style.width=`${Math.max(0,Math.min(100,update.percent || 0))}%`; item.querySelector('.item-details span').textContent=`Download · ${update.speed || 'calculating speed'} · ETA ${update.eta || '—'}`;} if(update.state==='complete'){status.className='status done'; status.textContent='Complete'; progress.style.width='100%'; item.querySelector('.item-details span').textContent=`${(item.dataset.format || 'Media').toUpperCase()} · Saved locally`; item.dataset.outputDir=update.outputDir || ''; item.dataset.filePath=update.filePath || ''; item.querySelector('.download-mini').innerHTML='<svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>'; item.querySelector('.download-mini').dataset.action='open'; item.querySelector('.download-mini').title='Open folder'; item.querySelector('.download-mini').insertAdjacentHTML('afterend','<button class="download-mini danger" data-action="delete" title="Delete file"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6m4-6v6M9 7V4h6v3m-9 0 1 13h10l1-13"/></svg></button>'); toast('<b>Download complete.</b> Saved locally.');} if(update.state==='cancelled'){status.className='status queued'; status.textContent='Cancelled'; progress.style.width='0%'; item.querySelectorAll('.download-mini').forEach(button=>button.remove()); item.querySelector('.item-actions').insertAdjacentHTML('beforeend','<button class="download-mini" data-action="retry" title="Retry"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.8-4M4 5v4h4M4 13a8 8 0 0 0 14.8 4M20 19v-4h-4"/></svg></button><button class="download-mini danger" data-action="remove" title="Remove"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>');} if(update.state==='error'){status.className='status error'; status.textContent='Failed'; item.querySelectorAll('.download-mini').forEach(button=>button.remove()); item.querySelector('.item-actions').insertAdjacentHTML('beforeend','<button class="download-mini" data-action="retry" title="Retry"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.8-4M4 5v4h4M4 13a8 8 0 0 0 14.8 4M20 19v-4h-4"/></svg></button><button class="download-mini danger" data-action="remove" title="Remove"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>'); const message=update.message || 'Try again.'; item.querySelector('.item-details span').textContent=`Download failed · ${message}`; if(/DPAPI|decrypt|cookie database/i.test(message)){toast(`<b>Browser session:</b> ${escapeHtml(message)}`);} else { toast(`<b>Download failed:</b> ${escapeHtml(message)}`);}} });
+    const refreshQueueCount = () => { const activeCount=queueList.querySelectorAll('.queue-item').length; queueCount.textContent=activeCount ? `${activeCount} item${activeCount===1 ? '' : 's'} in queue` : 'No active downloads'; document.getElementById('queueBadge').textContent=activeCount; if(!activeCount && !queueList.querySelector('.empty-state')) queueList.innerHTML='<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg></div><span>Your queue is clear. Paste a link above to begin.</span></div>'; };
+    queueList.addEventListener('click', async (event) => { const button=event.target.closest('.download-mini'); if(!button) return; const item=button.closest('.queue-item'); const id=item?.dataset.downloadId; const action=button.dataset.action; if(action==='cancel'){ await desktop?.cancelDownload(id); return; } if(action==='open'){ await desktop?.openFolder(item.dataset.outputDir || selectedFolder); return; } if(action==='delete'){ try { await desktop?.deleteFile(item.dataset.filePath); item.remove(); refreshQueueCount(); toast('<b>Download deleted.</b>'); } catch(error) { toast(`<b>Could not delete:</b> ${escapeHtml(error.message)}`); } return; } if(action==='retry'){ if(!desktop) return; const status=item.querySelector('.status'); const progress=item.querySelector('.download-progress i'); status.className='status progress is-loading'; status.textContent='Starting'; progress.style.width='0%'; item.querySelector('.item-details span').textContent='Preparing native download…'; item.querySelectorAll('.download-mini').forEach(button=>button.remove()); item.querySelector('.item-actions').insertAdjacentHTML('beforeend','<button class="download-mini" data-action="cancel" title="Cancel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>'); try { const result=await desktop.startDownload({url:item.dataset.url,format:item.dataset.format,quality:item.dataset.quality || '1080',outputDir:item.dataset.outputDir || selectedFolder,browserName:item.dataset.browserName || browserSelect.value}); item.dataset.downloadId=result.id; toast('<b>Retry started.</b>'); } catch(error) { status.className='status error'; status.textContent='Failed'; toast(`<b>Retry failed:</b> ${escapeHtml(error.message)}`); } return; } if(action==='remove'){ item.remove(); refreshQueueCount(); toast('Queue item removed'); return; } });
+    document.getElementById('deleteFinished').addEventListener('click', async () => { const items=[...queueList.querySelectorAll('.queue-item[data-file-path]')]; if(!items.length) return toast('No finished downloads to delete'); for(const item of items){ try { await desktop?.deleteFile(item.dataset.filePath); item.remove(); } catch(error) { toast(`<b>Could not delete:</b> ${escapeHtml(error.message)}`); } } refreshQueueCount(); toast('<b>Finished downloads deleted.</b>'); });
+    let selectedFile = null;
+    const filePick = document.getElementById('filePick');
+    const convertStatus = document.getElementById('convertStatus');
+    filePick.addEventListener('click', async () => { if(!desktop) return toast('File conversion is available in the desktop app'); const file=await desktop.chooseFile(); if(file){ selectedFile=file; filePick.textContent=file; convertStatus.textContent='Ready to convert'; } });
+    document.getElementById('convertBtn').addEventListener('click', async () => { if(!selectedFile) return toast('Choose a media file first'); const format=document.getElementById('convertFormat').value; convertStatus.textContent='Converting locally…'; try { await desktop.startConvert({inputPath:selectedFile,format}); } catch(error) { convertStatus.textContent='Conversion could not start'; toast(`<b>Converter:</b> ${escapeHtml(error.message)}`); } });
+    desktop?.onConvertUpdate((update) => { if(update.state==='starting') convertStatus.textContent='Converting locally…'; if(update.state==='complete'){convertStatus.textContent=`Saved as ${update.outputPath}`;toast('<b>Conversion complete.</b> Saved locally.');} if(update.state==='error'){convertStatus.textContent='Conversion failed';toast(`<b>Converter:</b> ${escapeHtml(update.message || 'Try again.')}`);} });
+    document.getElementById('clearHistory').addEventListener('click', (event) => { event.currentTarget.closest('.view-header').nextElementSibling.innerHTML='<p style="color:var(--muted-2);font-size:12px">Local history cleared. Your files are still safe in their folders.</p>'; toast('Local history cleared'); });
+  </script>
 </body>
 </html>
