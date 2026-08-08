@@ -251,8 +251,8 @@
     const musicVolumeValue = document.getElementById('musicVolumeValue');
     const storedMusicVolume = (() => { try { const v = localStorage.getItem('smoky-music-volume'); return v === null || v === '' ? null : Number(v); } catch { return null; } })();
     const initialMusicVolume = storedMusicVolume !== null && Number.isFinite(storedMusicVolume) && storedMusicVolume >= 0 && storedMusicVolume <= 100 ? storedMusicVolume : 22;
-    // Zwei Hintergrund-Tracks, die sich beim Abspielen abwechseln (1 → 2 → 1 → …)
-    const bgTracks = ['assets/bg-music.wav', 'assets/bg-2.wav'];
+    // Hintergrund-Tracks, die sich beim Abspielen abwechseln (1 → 2 → 3 → 1 → …)
+    const bgTracks = ['assets/bg-music.wav', 'assets/bg-2.wav', 'assets/bg-3.wav'];
     let bgTrack = Math.floor(Math.random() * bgTracks.length);
     bgAudio.loop = false;
     bgAudio.src = bgTracks[bgTrack];
