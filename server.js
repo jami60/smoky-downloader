@@ -29,13 +29,14 @@ const MIME = {
 // ---------------------------------------------------------------- state ----
 const queue = [];            // active + waiting items (in memory)
 let history = [];            // persisted finished items
-const THEMES = ['smoky', 'midnight', 'amethyst', 'ember', 'paper'];
+const THEMES = ['smoky', 'midnight', 'aurora', 'ember', 'ocean', 'rose', 'cyber', 'forest', 'slate', 'solar', 'rain', 'horror', 'light'];
 let settings = {
   folder: path.join(process.env.USERPROFILE || process.env.HOME || '.', 'Downloads', 'Smoky'),
   format: 'mp4-1080',
   quality: 'best',
   ambientSnow: true,
-  theme: 'smoky',
+  theme: 'midnight',
+  musicVolume: 22,
   guideSeen: false,
 };
 let current = null;          // the download currently running

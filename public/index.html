@@ -249,12 +249,13 @@
     const musicToggle = document.getElementById('musicToggle');
     const musicVolume = document.getElementById('musicVolume');
     const musicVolumeValue = document.getElementById('musicVolumeValue');
-    const savedMusicVolume = Number(localStorage.getItem('smoky-music-volume'));
-    const initialMusicVolume = Number.isFinite(savedMusicVolume) && savedMusicVolume >= 0 && savedMusicVolume <= 100 ? savedMusicVolume : 22;
+    const storedMusicVolume = (() => { try { const v = localStorage.getItem('smoky-music-volume'); return v === null || v === '' ? null : Number(v); } catch { return null; } })();
+    const initialMusicVolume = storedMusicVolume !== null && Number.isFinite(storedMusicVolume) && storedMusicVolume >= 0 && storedMusicVolume <= 100 ? storedMusicVolume : 22;
     bgAudio.loop = true;
     bgAudio.volume = initialMusicVolume / 100;
     musicVolume.value = initialMusicVolume;
     musicVolumeValue.textContent = `${initialMusicVolume}%`;
+    if (storedMusicVolume === null) { (async () => { try { const s = await fetch('/api/status').then(r => r.json()); const v = s.settings && Number(s.settings.musicVolume); if (Number.isFinite(v) && v >= 0 && v <= 100) { bgAudio.volume = v / 100; musicVolume.value = v; musicVolumeValue.textContent = `${v}%`; } } catch {} })(); }
     const updateMusicButton = (isPlaying) => {
       musicToggle.innerHTML = isPlaying ? '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>' : '<svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg>';
       musicToggle.title = isPlaying ? 'Pause background music' : 'Play background music';
@@ -267,7 +268,7 @@
         catch { toast('<b>Background music:</b> bg music zwei.wav could not be opened. Keep the file in your Downloads folder.'); }
       } else { bgAudio.pause(); updateMusicButton(false); }
     });
-    musicVolume.addEventListener('input', () => { const value=Number(musicVolume.value); bgAudio.volume=value / 100; musicVolumeValue.textContent=`${value}%`; localStorage.setItem('smoky-music-volume', String(value)); });
+    musicVolume.addEventListener('input', () => { const value=Number(musicVolume.value); bgAudio.volume=value / 100; musicVolumeValue.textContent=`${value}%`; try { localStorage.setItem('smoky-music-volume', String(value)); } catch {}; try { fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ musicVolume: value }) }).catch(() => {}); } catch {}; });
     let musicUnavailable = false;
     bgAudio.addEventListener('error', () => { musicUnavailable=true; musicToggle.disabled=true; musicToggle.title='Background music file unavailable'; });
     bgAudio.addEventListener('pause', () => updateMusicButton(false));
@@ -335,11 +336,12 @@
       }
       if (!guideSeen) setTimeout(openGuide, 350);
     })();
-    const savedTheme = localStorage.getItem('smoky-theme');
+    const savedTheme = (() => { try { return localStorage.getItem('smoky-theme'); } catch { return null; } })();
     if (savedTheme && document.querySelector(`.theme-dot[data-set="${savedTheme}"]`)) { root.dataset.theme=savedTheme; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===savedTheme)); }
-    const applyTheme = (theme) => { root.dataset.theme=theme; localStorage.setItem('smoky-theme',theme); const isRain=theme==='rain'; document.getElementById('ambientLabel').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientTitle').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientDescription').textContent=isRain ? 'Switch on animated rain drops in the background.' : 'Keep the quiet animated snowfall in the background.'; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); document.querySelectorAll('.theme-choice').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); };
+    const applyTheme = (theme) => { root.dataset.theme=theme; try { localStorage.setItem('smoky-theme',theme); } catch {}; try { fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme }) }).catch(() => {}); } catch {}; const isRain=theme==='rain'; document.getElementById('ambientLabel').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientTitle').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientDescription').textContent=isRain ? 'Switch on animated rain drops in the background.' : 'Keep the quiet animated snowfall in the background.'; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); document.querySelectorAll('.theme-choice').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); };
     document.querySelectorAll('.theme-dot, .theme-choice').forEach(btn => btn.addEventListener('click', () => { applyTheme(btn.dataset.set); toast(`<b>${btn.dataset.set}</b> theme applied`); }));
     if (savedTheme) applyTheme(savedTheme);
+    if (!savedTheme) { (async () => { try { const s = await fetch('/api/status').then(r => r.json()); const t = s.settings && s.settings.theme; if (t && document.querySelector(`.theme-dot[data-set="${t}"]`)) applyTheme(t); } catch {} })(); }
     const snowToggle = document.getElementById('snowToggle');
     snowToggle.checked = localStorage.getItem('smoky-snow') !== 'off';
     canvas.classList.toggle('hidden', !snowToggle.checked);
