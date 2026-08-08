@@ -9,7 +9,13 @@ const SMOKE = process.argv.includes('--smoke');
 let win = null;
 
 app.whenReady().then(async () => {
-  const port = await startServer(0, true); // 0 → free local port
+  // Stable port so localStorage (theme, music, guide flag) persists across launches.
+  // Fall back to the next candidate if one is taken, then to a random free port.
+  let port = null;
+  for (const candidate of [4290, 4291, 4292, 4293, 4294]) {
+    try { port = await startServer(candidate, true); break; } catch { /* try next */ }
+  }
+  if (!port) port = await startServer(0, true); // random free local port
 
   win = new BrowserWindow({
     width: 1440,

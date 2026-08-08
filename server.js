@@ -36,6 +36,7 @@ let settings = {
   quality: 'best',
   ambientSnow: true,
   theme: 'smoky',
+  guideSeen: false,
 };
 let current = null;          // the download currently running
 let conversions = [];        // ffmpeg conversions (in memory)

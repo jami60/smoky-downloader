@@ -312,7 +312,14 @@
     };
     const openGuide = () => { guideIndex=0; renderGuide(); guideOverlay.classList.add('is-open'); guideOverlay.setAttribute('aria-hidden','false'); document.body.classList.add('guide-open'); };
     const GUIDE_VERSION = 'mita-v1';
-    const closeGuide = () => { guideOverlay.classList.remove('is-open'); guideOverlay.setAttribute('aria-hidden','true'); document.body.classList.remove('guide-open'); localStorage.setItem('smoky-guide-seen',GUIDE_VERSION); };
+    // Remember that the guide was seen — in localStorage AND on the server,
+    // so it survives every restart (the Electron app uses a different port each
+    // launch, which resets localStorage; the server flag is port-independent).
+    const storeGuideSeen = () => {
+      try { localStorage.setItem('smoky-guide-seen', GUIDE_VERSION); } catch {}
+      try { fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guideSeen: true }) }).catch(() => {}); } catch {}
+    };
+    const closeGuide = () => { guideOverlay.classList.remove('is-open'); guideOverlay.setAttribute('aria-hidden','true'); document.body.classList.remove('guide-open'); storeGuideSeen(); };
     guideOverlay.addEventListener('click', event => { if(event.target === guideOverlay) closeGuide(); });
     guideOverlay.querySelector('.guide-close').addEventListener('click', closeGuide);
     guideOverlay.querySelectorAll('.guide-skip').forEach(button => button.addEventListener('click', closeGuide));
@@ -320,7 +327,14 @@
     document.addEventListener('keydown', event => { if(!guideOverlay.classList.contains('is-open')) return; if(event.key === 'Escape') closeGuide(); if(event.key === 'ArrowRight' && guideIndex < guideSteps.length - 1) { guideIndex += 1; renderGuide(); } if(event.key === 'ArrowLeft' && guideIndex > 0) { guideIndex -= 1; renderGuide(); } });
     document.getElementById('openGuide').addEventListener('click', openGuide);
     renderGuide();
-    if(localStorage.getItem('smoky-guide-seen') !== GUIDE_VERSION) setTimeout(openGuide, 350);
+    (async () => {
+      let guideSeen = false;
+      try { if (localStorage.getItem('smoky-guide-seen') === GUIDE_VERSION) guideSeen = true; } catch {}
+      if (!guideSeen) {
+        try { const s = await fetch('/api/status').then(r => r.json()); guideSeen = !!(s.settings && s.settings.guideSeen); } catch {}
+      }
+      if (!guideSeen) setTimeout(openGuide, 350);
+    })();
     const savedTheme = localStorage.getItem('smoky-theme');
     if (savedTheme && document.querySelector(`.theme-dot[data-set="${savedTheme}"]`)) { root.dataset.theme=savedTheme; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===savedTheme)); }
     const applyTheme = (theme) => { root.dataset.theme=theme; localStorage.setItem('smoky-theme',theme); const isRain=theme==='rain'; document.getElementById('ambientLabel').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientTitle').textContent=isRain ? 'Ambient rain' : 'Ambient snow'; document.getElementById('ambientDescription').textContent=isRain ? 'Switch on animated rain drops in the background.' : 'Keep the quiet animated snowfall in the background.'; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); document.querySelectorAll('.theme-choice').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); };
