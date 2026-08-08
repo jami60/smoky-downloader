@@ -7,10 +7,42 @@
     "start": "node server.js",
     "app": "electron .",
     "app:smoke": "electron . --smoke",
-    "icon": "node scripts/make-icon.js"
+    "icon": "node scripts/make-icon.js",
+    "dist": "electron-builder --win zip dir",
+    "dist:build": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^43.3.0"
+    "electron": "^43.3.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "de.smoky.app",
+    "productName": "Smoky",
+    "electronDist": "node_modules/electron/dist",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "server.js",
+      "public/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "tools",
+        "to": "tools"
+      }
+    ],
+    "win": {
+      "icon": "electron/icon.ico",
+      "signExecutable": false,
+      "target": [
+        { "target": "zip" },
+        { "target": "dir" }
+      ]
+    }
   },
   "engines": {
     "node": ">=18"

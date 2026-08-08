@@ -10,7 +10,12 @@ const { spawn } = require('node:child_process');
 const PORT = process.env.PORT || 4173;
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
-const DATA_DIR = path.join(ROOT, 'data');
+// In the packaged app the code lives inside the read-only app.asar, so
+// persistent state must live outside it (Windows: %APPDATA%\Smoky). In dev
+// and standalone runs we keep the data/ folder next to server.js.
+const DATA_DIR = __dirname.includes('app.asar')
+  ? path.join(process.env.APPDATA || process.env.HOME || process.cwd(), 'Smoky')
+  : path.join(ROOT, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const VAULT_QUOTA = 10 * 1024 * 1024 * 1024; // 10 GB "local vault"
@@ -109,10 +114,37 @@ function hasCommand(cmd) {
   return false;
 }
 
-// Resolve the newest yt-dlp: prefer the pip-installed `py -m yt_dlp` (usually
-// much newer than a standalone yt-dlp.exe on PATH, which gets HTTP 403 from
-// YouTube when outdated), then fall back to the PATH command.
+// Bundled tools ship inside the app — the packaged build keeps them in
+// resources/tools (electron-builder extraResources), dev/standalone keeps
+// them in ./tools next to server.js. Bundled tools win over system tools so
+// friends don't need to install anything.
+function bundledPath(name) {
+  const dirs = [
+    typeof process.resourcesPath === 'string' ? path.join(process.resourcesPath, 'tools') : null,
+    path.join(__dirname, 'tools'),
+  ].filter(Boolean);
+  for (const dir of dirs) {
+    const p = path.join(dir, name);
+    try { if (fs.statSync(p).isFile()) return p; } catch {}
+  }
+  return null;
+}
+
+function bundledCmd(name) {
+  const p = bundledPath(name);
+  if (!p) return null;
+  try {
+    require('node:child_process').execFileSync(p, ['-version'], { stdio: 'ignore', windowsHide: true });
+    return { cmd: p, args: [] };
+  } catch { return null; }
+}
+
+// Resolve the best yt-dlp: bundled exe first (ships with the app), then the
+// pip-installed `py -m yt_dlp` (usually much newer than a standalone exe on
+// PATH, which gets HTTP 403 from YouTube when outdated), then PATH.
 function resolveYtdlp() {
+  const bundled = bundledCmd('yt-dlp.exe');
+  if (bundled) return bundled;
   try {
     require('node:child_process').execFileSync('py', ['-m', 'yt_dlp', '--version'], { stdio: 'ignore', windowsHide: true });
     return { cmd: 'py', args: ['-m', 'yt_dlp'] };
@@ -133,10 +165,12 @@ function resolveSpotdl() {
 
 const ytdlp = resolveYtdlp();
 const spotdl = resolveSpotdl();
+const ffmpegCmd = bundledCmd('ffmpeg.exe') || (hasCommand('ffmpeg') ? { cmd: 'ffmpeg', args: [] } : null);
+const ffprobeCmd = bundledCmd('ffprobe.exe') || (hasCommand('ffprobe') ? { cmd: 'ffprobe', args: [] } : null);
 const YTDLP_OK = !!ytdlp;
 const SPOTDL_OK = !!spotdl;
-const FFMPEG_OK = hasCommand('ffmpeg');
-const FFPROBE_OK = hasCommand('ffprobe');
+const FFMPEG_OK = !!ffmpegCmd;
+const FFPROBE_OK = !!ffprobeCmd;
 
 async function dirSize(dir) {
   let total = 0;
@@ -350,7 +384,7 @@ const AUDIO_TARGETS = {
 function ffprobe(args) {
   return new Promise((resolve) => {
     let out = '';
-    const p = spawn('ffprobe', args, { windowsHide: true });
+    const p = spawn(ffprobeCmd.cmd, args, { windowsHide: true });
     p.stdout.on('data', (d) => { out += d; });
     p.on('close', () => resolve(out.trim()));
     p.on('error', () => resolve(''));
@@ -414,7 +448,7 @@ function convertFile(id, srcPath, origName, format) {
         args = ['-y', '-i', srcPath, '-vn', ...(AUDIO_TARGETS[format] || AUDIO_TARGETS.mp3), outPath];
       }
 
-      const child = spawn('ffmpeg', ['-nostdin', '-progress', 'pipe:1', '-nostats', ...args], { windowsHide: true });
+      const child = spawn(ffmpegCmd.cmd, ['-nostdin', '-progress', 'pipe:1', '-nostats', ...args], { windowsHide: true });
       let errTail = '';
       child.stdout.on('data', (d) => {
         const text = d.toString();

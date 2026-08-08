@@ -39,7 +39,24 @@ The UI (originally written for an Electron bridge) runs in any browser via
 against the local Node backend in `server.js` (zero npm dependencies).
 Local files (guide art, credits photo, music) live in `public/assets/`.
 
-## Requirements
+## Sharing with friends 🎁
+
+The packaged build ships **everything built-in**: the app, yt-dlp, ffmpeg and
+ffprobe — your friends install nothing, they just unzip and double-click
+`Smoky.exe`.
+
+1. Build it: `npm run dist` → creates `dist/Smoky-1.0.0-win.zip` (~330 MB)
+2. Send that zip (USB stick / cloud link)
+3. Friend unzips → starts `Smoky.exe` → done
+
+State (theme, volume, guide flag, history) is stored per-user under
+`%APPDATA%\Smoky`, so it survives updates and doesn't touch the install
+folder. One note: **Spotify needs spotDL** — friends who want Spotify links
+install it once with `py -m pip install spotdl` (everything else works out of
+the box). The app still detects the newest system yt-dlp/ffmpeg if ever
+installed — bundled tools are used first.
+
+## Requirements (dev only — not needed for the packaged app)
 
 - Node.js 18+
 - `yt-dlp` — `py -m pip install -U yt-dlp`

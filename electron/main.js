@@ -8,15 +8,24 @@ const { startServer } = require('../server.js');
 const SMOKE = process.argv.includes('--smoke');
 let win = null;
 
+// Crash diagnostics: GUI apps show no console, so log to a file in userData.
+let logPath = '';
+try { logPath = path.join(app.getPath('userData'), 'smoky.log'); } catch {}
+function log(...args) {
+  try { fs.appendFileSync(logPath, new Date().toISOString() + ' ' + args.join(' ') + '\n'); } catch {}
+}
+process.on('uncaughtException', (err) => log('UNCAUGHT:', err && err.stack || err));
+process.on('unhandledRejection', (err) => log('UNHANDLED:', err && err.stack || err));
+
 app.whenReady().then(async () => {
   // Stable port so localStorage (theme, music, guide flag) persists across launches.
   // Fall back to the next candidate if one is taken, then to a random free port.
   let port = null;
   for (const candidate of [4290, 4291, 4292, 4293, 4294]) {
-    try { port = await startServer(candidate, true); break; } catch { /* try next */ }
+    try { port = await startServer(candidate, true); break; } catch (e) { log('port ' + candidate + ' failed:', e && e.message || e); }
   }
   if (!port) port = await startServer(0, true); // random free local port
-
+  log('server on port', port);
   win = new BrowserWindow({
     width: 1440,
     height: 900,
