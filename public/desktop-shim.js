@@ -4,6 +4,7 @@
    expected, wiring every tab to the local Node backend.
    ============================================================ */
 window.smokyDesktop = (() => {
+  const native = window.smokyDesktopNative || null; // Electron preload
   const downloadListeners = [];
   const convertListeners = [];
   const seenTitles = new Map();       // id -> last emitted title
@@ -23,12 +24,15 @@ window.smokyDesktop = (() => {
 
   // ------------------------------------------------------------- API ----
   const desktop = {
-    // window chrome (no-ops in the browser preview)
-    minimizeWindow() {},
-    toggleMaximize() {},
-    closeWindow() {},
+    // window chrome — native in Electron, no-op in the browser preview
+    minimizeWindow() { return native && native.minimizeWindow(); },
+    toggleMaximize() { return native && native.toggleMaximize(); },
+    closeWindow() { return native && native.closeWindow(); },
 
     async chooseFolder() {
+      if (native && native.chooseFolder) {
+        return native.chooseFolder();
+      }
       const label = document.getElementById('folderLabel');
       const current = (label && label.textContent && label.textContent !== 'Downloads folder') ? label.textContent : '';
       const value = window.prompt('Downloads folder (full path):', current || '');
@@ -36,6 +40,9 @@ window.smokyDesktop = (() => {
     },
 
     async chooseFile() {
+      if (native && native.chooseFile) {
+        return native.chooseFile(); // real local path from the native dialog
+      }
       const input = document.createElement('input');
       input.type = 'file';
       const file = await new Promise((resolve) => {
@@ -70,11 +77,17 @@ window.smokyDesktop = (() => {
     },
 
     async openFolder(dir) {
+      if (native && native.openFolder) {
+        return native.openFolder(dir || null);
+      }
       await api('/api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: dir || null }) });
     },
 
-    async deleteFile(path) {
-      await api('/api/delete-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+    async deleteFile(filePath) {
+      if (native && native.deleteFile) {
+        return native.deleteFile(filePath);
+      }
+      await api('/api/delete-file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: filePath }) });
     },
 
     async startConvert({ inputPath, format }) {

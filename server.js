@@ -331,6 +331,14 @@ function convertFile(id, srcPath, origName, format) {
   };
   conversions.unshift(item);
 
+  // only delete sources that were uploaded as temp files — never the user's originals
+  const inDir = path.join(DATA_DIR, 'convert-in');
+  const cleanupSource = () => {
+    try {
+      if (path.normalize(srcPath).startsWith(inDir)) fs.unlinkSync(srcPath);
+    } catch {}
+  };
+
   (async () => {
     try {
       const { duration, hasVideo } = await probeMedia(srcPath);
@@ -374,19 +382,19 @@ function convertFile(id, srcPath, origName, format) {
           item.status = 'failed';
           item.error = (errTail.split(/\r?\n/).filter(Boolean).slice(-2).join(' | ')) || `ffmpeg exited with code ${code}`;
         }
-        try { fs.unlinkSync(srcPath); } catch {}
+        cleanupSource();
       });
       child.on('error', (err) => {
         item.status = 'failed';
         item.error = String(err.message || err);
         item.finishedAt = now();
-        try { fs.unlinkSync(srcPath); } catch {}
+        cleanupSource();
       });
     } catch (err) {
       item.status = 'failed';
       item.error = String(err.message || err);
       item.finishedAt = now();
-      try { fs.unlinkSync(srcPath); } catch {}
+      cleanupSource();
     }
   })();
 
@@ -534,10 +542,10 @@ const server = http.createServer(async (req, res) => {
       const format = String(body.format || 'mp3').toLowerCase();
       if (!FFMPEG_OK || !FFPROBE_OK) return sendJson(res, 400, { error: 'ffmpeg is not installed — install it first (choco install ffmpeg or winget install ffmpeg).' });
       if (!AUDIO_TARGETS[format] && format !== 'mp4') return sendJson(res, 400, { error: 'unsupported target format' });
-      const inDir = path.join(DATA_DIR, 'convert-in');
       const srcPath = path.normalize(String(body.path || ''));
-      if (!srcPath.startsWith(inDir)) return sendJson(res, 400, { error: 'source must be an uploaded file' });
-      if (!fs.existsSync(srcPath)) return sendJson(res, 404, { error: 'source file not found' });
+      let st;
+      try { st = fs.statSync(srcPath); } catch {}
+      if (!st || !st.isFile()) return sendJson(res, 404, { error: 'source file not found' });
       const id = crypto.randomBytes(4).toString('hex');
       const item = convertFile(id, srcPath, path.basename(srcPath).replace(/^[0-9a-f]+-/, ''), format);
       return sendJson(res, 200, { item });
@@ -573,13 +581,27 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log('');
-  console.log('  ┌───────────────────────────────────────┐');
-  console.log('  │   🚬 Smoky — multi media downloader   │');
-  console.log('  └───────────────────────────────────────┘');
-  console.log(`  →  http://127.0.0.1:${PORT}`);
-  console.log(`  →  yt-dlp: ${YTDLP_OK ? '✓ ready' : '✗ missing'}   spotDL: ${SPOTDL_OK ? '✓ ready' : '✗ missing (Spotify)'}   ffmpeg: ${FFMPEG_OK ? '✓ ready' : '✗ missing (converter)'}`);
-  console.log(`  →  Downloads folder: ${settings.folder}`);
-  console.log('');
-});
+function startServer(port = PORT, silent = false) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      if (!silent) {
+        console.log('');
+        console.log('  ┌───────────────────────────────────────┐');
+        console.log('  │   🚬 Smoky — multi media downloader   │');
+        console.log('  └───────────────────────────────────────┘');
+        console.log(`  →  http://127.0.0.1:${port}`);
+        console.log(`  →  yt-dlp: ${YTDLP_OK ? '✓ ready' : '✗ missing'}   spotDL: ${SPOTDL_OK ? '✓ ready' : '✗ missing (Spotify)'}   ffmpeg: ${FFMPEG_OK ? '✓ ready' : '✗ missing (converter)'}`);
+        console.log(`  →  Downloads folder: ${settings.folder}`);
+        console.log('');
+      }
+      resolve(server.address().port);
+    });
+  });
+}
+
+module.exports = { startServer, settings, queue, history, conversions };
+
+if (require.main === module) {
+  startServer();
+}

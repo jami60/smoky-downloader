@@ -6,12 +6,15 @@ audio straight to your machine.
 
 ## Start
 
-```bash
-npm start          # or double-click start.bat
-```
+**Desktop app (recommended)** — double-click `Smoky App.bat` (or the
+**Smoky** shortcut on your desktop). A frameless app window opens with the
+native folder/file dialogs. First run installs Electron automatically.
 
-Then open **http://127.0.0.1:4173** (this machine: `PORT=4280 node server.js`
-if 4173 is taken). Everything runs locally.
+**In the browser** — `npm start`, then open http://127.0.0.1:4173
+(this machine: `PORT=4280 node server.js` if 4173 is taken).
+
+Everything runs locally either way. `npm run app:smoke` starts the app,
+verifies the UI + bridge, and quits.
 
 ## What's inside
 
@@ -47,9 +50,19 @@ Local files (guide art, credits photo, music) live in `public/assets/`.
 ## Files
 
 ```
-server.js            Node backend: API, yt-dlp/spotDL runners, ffmpeg converter
-public/index.html    The Smoky UI (self-contained, original design)
-public/desktop-shim.js   Browser bridge (window.smokyDesktop) → local API
-public/assets/       Guide art, credits photo, background music
-data/                Settings + history (created at runtime, stays local)
+server.js               Node backend: API, yt-dlp/spotDL runners, ffmpeg converter
+public/index.html       The Smoky UI (self-contained, original design)
+public/desktop-shim.js  Bridge (window.smokyDesktop) → local API / native IPC
+public/assets/          Guide art, credits photo, background music
+electron/               Electron main + preload (frameless window, native dialogs)
+electron/icon.ico       App icon
+scripts/make-icon.js    Regenerates the icon (npm run icon)
+data/                   Settings + history (created at runtime, stays local)
 ```
+
+## Dev scripts
+
+- `npm start` — browser mode (Node server only)
+- `npm run app` — desktop app (Electron)
+- `npm run app:smoke` — boot + self-check, then quit
+- `npm run icon` — regenerate the app icon

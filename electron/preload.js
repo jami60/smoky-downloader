@@ -1,0 +1,20 @@
+// Smoky — Electron preload.
+// Exposes native capabilities to the page; desktop-shim.js merges them into
+// window.smokyDesktop when present.
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('smokyDesktopNative', {
+  minimizeWindow: () => ipcRenderer.invoke('win:minimize'),
+  toggleMaximize: () => ipcRenderer.invoke('win:maximize'),
+  closeWindow: () => ipcRenderer.invoke('win:close'),
+  chooseFolder: async () => {
+    const r = await ipcRenderer.invoke('dialog:chooseFolder');
+    return r && r.path ? r.path : null;
+  },
+  chooseFile: async () => {
+    const r = await ipcRenderer.invoke('dialog:chooseFile');
+    return r && r.path ? r.path : null;
+  },
+  openFolder: (dir) => ipcRenderer.invoke('shell:openPath', dir),
+  deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
+});
