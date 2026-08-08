@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smoky — Multi Media Downloader</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2327c276'/%3E%3Ctext x='16' y='23' font-family='Arial' font-size='19' font-weight='800' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+
+<div class="stars"></div>
+<div id="snow-layer"></div>
+
+<div class="app">
+
+  <!-- ======================================================= SIDEBAR ==== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div class="brand-name">Smoky</div>
+    </div>
+
+    <div class="nav-label">Workspace</div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-page="home"><i data-icon="home"></i><span>Home</span></button>
+      <button class="nav-item" data-page="downloader"><i data-icon="download"></i><span>Downloader</span></button>
+      <button class="nav-item" data-page="queue"><i data-icon="list"></i><span>Queue</span><span class="nav-badge" id="queue-badge">0</span></button>
+      <button class="nav-item" data-page="converter"><i data-icon="refresh"></i><span>Converter</span></button>
+      <button class="nav-item" data-page="history"><i data-icon="clock"></i><span>History</span></button>
+      <button class="nav-item" data-page="credits"><i data-icon="star"></i><span>Credits</span></button>
+      <button class="nav-item" data-page="settings"><i data-icon="gear"></i><span>Settings</span></button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="storage-card">
+        <div class="storage-head">
+          <span class="storage-title">Local storage</span>
+          <span class="storage-status">Ready</span>
+        </div>
+        <div class="track"><div class="fill" id="storage-fill" style="width:34%"></div></div>
+        <div class="storage-foot">
+          <span>Saved on this device</span>
+          <b id="storage-pct">34%</b>
+        </div>
+      </div>
+      <div class="privacy-note">
+        Private by default.<br />
+        Nothing leaves your device.
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========================================================= MAIN ====== -->
+  <main class="main">
+    <header class="topbar">
+      <div class="crumbs" id="crumbs">Home <span class="sep">/</span> <b>Workspace</b></div>
+      <div class="topbar-right">
+        <div class="dot-row">
+          <span class="dot pink"></span><span class="dot orange"></span><span class="dot yellow"></span>
+          <span class="dot green"></span><span class="dot cyan"></span><span class="dot blue"></span>
+          <span class="dot purple"></span><span class="dot magenta"></span><span class="dot teal"></span>
+          <span class="dot lime"></span>
+        </div>
+        <button class="tb-btn" id="tb-pause" title="Pause"><i data-icon="pause"></i></button>
+        <div class="wave-cluster">
+          <div class="wave" id="tb-wave"><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="wave-pct">68%</span>
+        </div>
+        <button class="tb-btn" title="Notifications"><i data-icon="bell"></i></button>
+        <button class="tb-btn help" title="Help"><i data-icon="help"></i></button>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ================================================== HOME ========= -->
+      <section class="page active" id="page-home">
+        <div class="hero">
+          <div>
+            <div class="eyebrow"><span class="dot"></span>Your media, your way</div>
+            <h1>Download anything.<br />Keep it smoky.</h1>
+            <p>One calm, powerful place for every video, audio track, and playlist you want to keep close.</p>
+          </div>
+          <div class="hero-stats">
+            <div class="stat-card"><div class="num">1,200+</div><div class="sub">platforms ready</div></div>
+            <div class="stat-card"><div class="num">Local</div><div class="sub">saved on device</div></div>
+          </div>
+        </div>
+
+        <!-- download bar -->
+        <div class="dl-card">
+          <div class="dl-row">
+            <div class="dl-input-wrap">
+              <i data-icon="link"></i>
+              <input type="text" class="dl-url" placeholder="Paste a video or audio link here..." spellcheck="false" />
+            </div>
+            <button class="btn dl-paste"><i data-icon="clipboard"></i>Paste</button>
+            <button class="btn btn-primary dl-submit"><i data-icon="arrow-down"></i>Download</button>
+          </div>
+          <div class="dl-controls">
+            <div class="field">
+              <label>Format</label>
+              <select class="dl-format">
+                <option value="mp4-1080">MP4 Video · 1080p</option>
+                <option value="mp4-4k">MP4 Video · 4K</option>
+                <option value="mp4-best">MP4 Video · Best</option>
+                <option value="mkv-4k">WebM / MKV · 4K</option>
+                <option value="mp3">MP3 Audio</option>
+                <option value="m4a">M4A Audio</option>
+                <option value="flac">FLAC · Lossless</option>
+                <option value="wav">WAV · Lossless</option>
+                <option value="opus">OPUS Audio</option>
+                <option value="aac">AAC Audio</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Quality</label>
+              <select class="dl-quality">
+                <option value="best">Up to 1080p</option>
+                <option value="4k">Up to 4K</option>
+                <option value="source">Best available</option>
+              </select>
+            </div>
+            <label class="check">
+              <input type="checkbox" class="dl-snow" checked />
+              <span class="box"><i data-icon="check"></i></span>
+              <span>Ambient snow</span>
+            </label>
+            <div class="dl-folder">
+              <span class="folder-path" id="folder-label">Downloads\Smoky</span>
+              <button class="btn btn-sm dl-folder-btn">Choose folder</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- works with -->
+        <div class="works-row">
+          <span class="works-label">Works with</span>
+          <span class="platform-pill"><i data-icon="yt"></i>YouTube</span>
+          <span class="platform-pill"><i data-icon="tiktok"></i>TikTok</span>
+          <span class="platform-pill"><i data-icon="ig"></i>Instagram</span>
+          <span class="platform-pill"><i data-icon="vimeo"></i>Vimeo</span>
+          <span class="platform-pill"><i data-icon="soundcloud"></i>SoundCloud</span>
+          <span class="platform-pill"><i data-icon="spotify"></i>Spotify</span>
+          <span class="platform-pill more">+ 1,200 more ↗</span>
+        </div>
+
+        <!-- main grid -->
+        <div class="grid-main">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">Active downloads</span>
+              <span style="display:flex;align-items:center;gap:14px">
+                <span class="sub" style="font-size:12px;color:var(--muted-2)" id="active-count">No active downloads</span>
+                <button class="card-link danger" id="delete-finished">Delete finished</button>
+              </span>
+            </div>
+            <div id="active-list"></div>
+          </div>
+
+          <div class="grid-right">
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Output formats</span>
+                <button class="card-link" data-go="settings">Customize</button>
+              </div>
+              <div class="format-list">
+                <div class="format-row"><span class="f-dot" style="background:#27c276"></span><span class="f-name">MP4 Video</span><span class="f-desc">1080p · H.264</span></div>
+                <div class="format-row"><span class="f-dot" style="background:#29d9d5"></span><span class="f-name">WebM / MKV</span><span class="f-desc">4K · VP9</span></div>
+                <div class="format-row"><span class="f-dot" style="background:#ffd93d"></span><span class="f-name">MP3 / M4A</span><span class="f-desc">Best available</span></div>
+                <div class="format-row"><span class="f-dot" style="background:#a55eea"></span><span class="f-name">FLAC / WAV</span><span class="f-desc">Lossless</span></div>
+                <div class="format-row"><span class="f-dot" style="background:#ff9f43"></span><span class="f-name">OGG / OPUS / AAC</span><span class="f-desc">Efficient</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Recently saved</span>
+                <button class="card-link" data-go="history">View all</button>
+              </div>
+              <div id="recent-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== DOWNLOADER ======= -->
+      <section class="page" id="page-downloader">
+        <!-- download card -->
+        <div class="dl-card">
+          <div class="dl-row">
+            <div class="dl-input-wrap">
+              <i data-icon="link"></i>
+              <input type="text" class="dl-url" placeholder="Paste a video or audio link here..." spellcheck="false" />
+            </div>
+            <button class="btn dl-paste"><i data-icon="clipboard"></i>Paste</button>
+            <button class="btn btn-primary dl-submit"><i data-icon="arrow-down"></i>Download</button>
+          </div>
+          <div class="dl-controls">
+            <div class="field">
+              <label>Format</label>
+              <select class="dl-format">
+                <option value="mp4-1080">MP4 Video · 1080p</option>
+                <option value="mp4-4k">MP4 Video · 4K</option>
+                <option value="mp4-best">MP4 Video · Best</option>
+                <option value="mkv-4k">WebM / MKV · 4K</option>
+                <option value="mp3">MP3 Audio</option>
+                <option value="m4a">M4A Audio</option>
+                <option value="flac">FLAC · Lossless</option>
+                <option value="wav">WAV · Lossless</option>
+                <option value="opus">OPUS Audio</option>
+                <option value="aac">AAC Audio</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Quality</label>
+              <select class="dl-quality">
+                <option value="best">Up to 1080p</option>
+                <option value="4k">Up to 4K</option>
+                <option value="source">Best available</option>
+              </select>
+            </div>
+            <label class="check">
+              <input type="checkbox" class="dl-snow" checked />
+              <span class="box"><i data-icon="check"></i></span>
+              <span>Ambient snow</span>
+            </label>
+            <div class="dl-folder">
+              <span class="folder-path" id="folder-label-2">Downloads\Smoky</span>
+              <button class="btn btn-sm dl-folder-btn">Choose folder</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- works with -->
+        <div class="works-row">
+          <span class="works-label">Works with</span>
+          <span class="platform-pill"><i data-icon="yt"></i>YouTube</span>
+          <span class="platform-pill"><i data-icon="tiktok"></i>TikTok</span>
+          <span class="platform-pill"><i data-icon="ig"></i>Instagram</span>
+          <span class="platform-pill"><i data-icon="vimeo"></i>Vimeo</span>
+          <span class="platform-pill"><i data-icon="soundcloud"></i>SoundCloud</span>
+          <span class="platform-pill"><i data-icon="spotify"></i>Spotify</span>
+          <span class="platform-pill more">+ 1,200 more ↗</span>
+        </div>
+
+        <div class="dl-hero">
+          <div class="eyebrow"><span class="dot"></span>Downloader</div>
+          <h2>Everything in one calm flow.</h2>
+          <p>Paste a link above, pick a format, choose a local folder, and let Smoky handle the rest. Video platforms use <code>yt-dlp</code>; Spotify links use <code>spotDL</code> to prepare audio locally.</p>
+        </div>
+
+        <div class="card platforms-card">
+          <div class="card-head"><span class="card-title">Supported platforms</span></div>
+          <div class="pc-head">
+            <p>Smoky uses <span class="inline-code">yt-dlp</span> for broad platform support. Spotify links use <span class="inline-code">spotDL</span>; install it once with <span class="inline-code">py -m pip install -U spotdl</span> before downloading Spotify audio.</p>
+          </div>
+          <div class="platforms-grid">
+            <div class="mini-card"><div class="num">1,200+</div><div class="sub">video &amp; audio sites</div></div>
+            <div class="mini-card"><div class="num">Local</div><div class="sub">private file storage</div></div>
+            <div class="mini-card"><div class="num">Live</div><div class="sub">progress updates</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">Formats at a glance</span></div>
+          <div class="formats-grid">
+            <div class="fmt-box">
+              <h4>Video</h4>
+              <div class="fmt-pills">
+                <span class="fmt-pill">MP4</span><span class="fmt-pill">WebM</span><span class="fmt-pill">MKV</span><span class="fmt-pill">MOV</span>
+              </div>
+            </div>
+            <div class="fmt-box">
+              <h4>Audio</h4>
+              <div class="fmt-pills">
+                <span class="fmt-pill">MP3</span><span class="fmt-pill">M4A</span><span class="fmt-pill">FLAC</span><span class="fmt-pill">WAV</span><span class="fmt-pill">OGG</span><span class="fmt-pill">OPUS</span><span class="fmt-pill">AAC</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================================================== QUEUE ======= -->
+      <section class="page" id="page-queue">
+        <div class="page-head">
+          <div>
+            <h2>Queue</h2>
+            <div class="sub" id="queue-sub">Nothing in the queue right now.</div>
+          </div>
+          <button class="btn btn-sm" id="queue-delete-finished">Delete finished</button>
+        </div>
+        <div id="queue-list"></div>
+      </section>
+
+      <!-- ================================================= CONVERTER ====== -->
+      <section class="page" id="page-converter">
+        <div class="page-head">
+          <div>
+            <h2>Converter</h2>
+            <div class="sub" id="cvt-sub">Turn local files into any format — powered by ffmpeg.</div>
+          </div>
+          <button class="btn btn-sm" id="cvt-clear">Clear finished</button>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-head"><span class="card-title">Convert a file</span></div>
+          <div class="drop-zone" id="drop-zone" tabindex="0">
+            <div class="icon-circle"><i data-icon="upload"></i></div>
+            <p id="dz-text"><b>Drop a file here</b> or click to browse</p>
+            <small id="dz-file">Video and audio files — MP4, MKV, WebM, MP3, FLAC, WAV, M4A, OGG, OPUS and more.</small>
+          </div>
+          <input type="file" id="file-input" hidden />
+          <div class="cvt-controls">
+            <div class="field"><label>Output</label></div>
+            <div class="cvt-pills" id="cvt-pills">
+              <span class="cvt-pill active" data-format="mp3">MP3</span>
+              <span class="cvt-pill" data-format="m4a">M4A</span>
+              <span class="cvt-pill" data-format="flac">FLAC</span>
+              <span class="cvt-pill" data-format="wav">WAV</span>
+              <span class="cvt-pill" data-format="ogg">OGG</span>
+              <span class="cvt-pill" data-format="opus">OPUS</span>
+              <span class="cvt-pill" data-format="aac">AAC</span>
+              <span class="cvt-pill" data-format="mp4">MP4</span>
+            </div>
+            <button class="btn btn-primary" id="cvt-go" disabled><i data-icon="refresh"></i>Convert</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">Conversions</span>
+            <span class="sub" id="cvt-count" style="font-size:12px;color:var(--muted-2)">No conversions yet.</span>
+          </div>
+          <div id="cvt-list"></div>
+        </div>
+      </section>
+
+      <!-- =================================================== HISTORY ======= -->
+      <section class="page" id="page-history">
+        <div class="page-head">
+          <div>
+            <h2>History</h2>
+            <div class="sub" id="history-sub">Everything you saved with Smoky.</div>
+          </div>
+        </div>
+        <div class="card">
+          <div id="history-list"></div>
+        </div>
+      </section>
+
+      <!-- =================================================== CREDITS ====== -->
+      <section class="page" id="page-credits">
+        <div class="page-head">
+          <div>
+            <h2>Credits</h2>
+            <div class="sub">Smoky stands on the shoulders of open source.</div>
+          </div>
+        </div>
+        <div class="grid-main" style="grid-template-columns:1fr 1fr">
+          <div class="card">
+            <div class="card-head"><span class="card-title">yt-dlp</span></div>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:10px">The engine behind 1,200+ video &amp; audio platforms — YouTube, TikTok, Instagram, Vimeo, SoundCloud and countless more.</p>
+            <div class="tool-status"><span class="dot green"></span><span id="yt-status" class="ok">Installed</span></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><span class="card-title">spotDL</span></div>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Downloads Spotify tracks as high-quality MP3, prepared locally on your device.</p>
+            <div class="tool-status"><span class="dot" id="spot-dot"></span><span id="spot-status">Checking…</span></div>
+            <p style="margin-top:10px;font-size:12px;color:var(--muted-2)">Install with <span class="inline-code">py -m pip install -U spotdl</span></p>
+          </div>
+        </div>
+        <div class="card" style="margin-top:20px">
+          <div class="card-head"><span class="card-title">Private by default</span></div>
+          <p style="color:var(--muted);font-size:13px">Smoky downloads straight to your own device. No accounts, no cloud, no tracking. Nothing leaves your machine — everything stays smoky.</p>
+        </div>
+      </section>
+
+      <!-- ================================================== SETTINGS ====== -->
+      <section class="page" id="page-settings">
+        <div class="page-head">
+          <div>
+            <h2>Settings</h2>
+            <div class="sub">Tune Smoky to your taste.</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-head"><span class="card-title">Appearance</span></div>
+          <div class="theme-swatches" id="theme-swatches">
+            <button class="theme-swatch active" data-theme="smoky"><span class="swatch-dot" style="background:linear-gradient(145deg,#2fd18a,#1d9e60)"><i data-icon="check"></i></span><span class="swatch-name">Smoky</span></button>
+            <button class="theme-swatch" data-theme="midnight"><span class="swatch-dot" style="background:linear-gradient(145deg,#5a9bff,#3f74e0)"><i data-icon="check"></i></span><span class="swatch-name">Midnight</span></button>
+            <button class="theme-swatch" data-theme="amethyst"><span class="swatch-dot" style="background:linear-gradient(145deg,#b16ef0,#8d48d8)"><i data-icon="check"></i></span><span class="swatch-name">Amethyst</span></button>
+            <button class="theme-swatch" data-theme="ember"><span class="swatch-dot" style="background:linear-gradient(145deg,#ff9a52,#f07a2e)"><i data-icon="check"></i></span><span class="swatch-name">Ember</span></button>
+            <button class="theme-swatch" data-theme="paper"><span class="swatch-dot" style="background:linear-gradient(145deg,#ffffff,#dfe7e1);border-color:rgba(0,0,0,.15)"><i data-icon="check"></i></span><span class="swatch-name">Paper</span></button>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <div class="card">
+            <div class="card-head"><span class="card-title">Downloads</span></div>
+            <div class="set-row">
+              <div><div class="lbl">Downloads folder</div><div class="hint">Where Smoky saves everything</div></div>
+              <div class="ctl"><input type="text" class="text-input" id="set-folder" /><button class="btn btn-sm" id="set-folder-save">Save</button></div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">Default format</div><div class="hint">Used for new downloads</div></div>
+              <div class="ctl">
+                <select id="set-format">
+                  <option value="mp4-1080">MP4 Video · 1080p</option>
+                  <option value="mp4-4k">MP4 Video · 4K</option>
+                  <option value="mp4-best">MP4 Video · Best</option>
+                  <option value="mkv-4k">WebM / MKV · 4K</option>
+                  <option value="mp3">MP3 Audio</option>
+                  <option value="m4a">M4A Audio</option>
+                  <option value="flac">FLAC · Lossless</option>
+                  <option value="wav">WAV · Lossless</option>
+                  <option value="opus">OPUS Audio</option>
+                  <option value="aac">AAC Audio</option>
+                </select>
+              </div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">Default quality</div><div class="hint">Upper limit for video streams</div></div>
+              <div class="ctl">
+                <select id="set-quality">
+                  <option value="best">Up to 1080p</option>
+                  <option value="4k">Up to 4K</option>
+                  <option value="source">Best available</option>
+                </select>
+              </div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">Ambient snow</div><div class="hint">Calm floating particles in the UI</div></div>
+              <label class="check">
+                <input type="checkbox" id="set-snow" checked />
+                <span class="box"><i data-icon="check"></i></span>
+                <span>On</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><span class="card-title">Tools</span></div>
+            <div class="set-row">
+              <div><div class="lbl">yt-dlp</div><div class="hint">Engine for 1,200+ platforms</div></div>
+              <div class="ctl"><div class="tool-status" id="yt-row"><span class="dot green"></span><span class="ok">Installed</span></div></div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">spotDL</div><div class="hint">Engine for Spotify audio</div></div>
+              <div class="ctl"><div class="tool-status" id="spot-row"><span class="dot"></span><span>Checking…</span></div></div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">ffmpeg</div><div class="hint">Engine for the converter</div></div>
+              <div class="ctl"><div class="tool-status" id="ff-row"><span class="dot"></span><span>Checking…</span></div></div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">Install command</div><div class="hint">Run in your terminal</div></div>
+              <div class="ctl"><span class="inline-code">py -m pip install -U spotdl</span></div>
+            </div>
+            <div class="set-row">
+              <div><div class="lbl">Smoky</div><div class="hint">Version 1.0.0 · local only</div></div>
+              <div class="ctl"><span class="tool-status"><span class="dot green"></span><span class="ok">Ready</span></span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div id="toasts"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# local user data (settings, history — stays on your device)
+data/
+
+# logs
+server.log
+*.log
+
+# dependencies
+node_modules/
+
+# Freebuff / editor cruft
+.freebuff/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,13 @@
+{
+  "name": "smoky",
+  "version": "1.0.0",
+  "description": "Smoky — multi media downloader. Dark, calm, private by default.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
