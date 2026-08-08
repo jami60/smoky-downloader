@@ -146,10 +146,26 @@ async function dirSize(dir) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) total += await dirSize(p);
       else if (e.isFile()) { const st = await fsp.stat(p); total += st.size; }
-    }
-  } catch {}
+    }  } catch {}
   return total;
 }
+
+// Newest regular file in a folder — fallback for finding the output file of
+// tools that don't announce their destination (e.g. spotDL).
+async function newestFileIn(dir) {
+  try {
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    let best = null, bestTime = 0;
+    for (const e of entries) {
+      if (e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      const st = await fsp.stat(p);
+      if (st.mtimeMs > bestTime) { bestTime = st.mtimeMs; best = p; }
+    }
+    return best;
+  } catch { return null; }
+}
+
 
 // -------------------------------------------------------------- download ---
 function parseProgress(line, item) {
@@ -272,13 +288,24 @@ function pump() {
     finish(item);
   });
 
-  child.on('close', (code) => {
+  child.on('close', async (code) => {
     if (item.status === 'failed' || item.status === 'cancelled') { finish(item); return; }
     if (code === 0) {
       item.status = 'finished';
       item.percent = 100;
       item.speed = null;
       item.eta = null;
+      // spotDL (and friends) never announce their destination — resolve the
+      // output file from the folder so delete/open buttons can work.
+      if (!item.file) {
+        const found = await newestFileIn(folder);
+        if (found) {
+          item.file = found;
+          if (!item.title || item.title === 'Resolving link…' || item.title === 'Spotify track…') {
+            item.title = path.basename(found).replace(/\.[^.]+$/, '');
+          }
+        }
+      }
     } else {
       item.status = 'failed';
       const last = tail.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ');
@@ -516,12 +543,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (!body.path) return sendJson(res, 400, { error: 'missing path' });
       try {
+        // idempotent delete: a file that no longer exists is already deleted
+        if (!fs.existsSync(body.path)) return sendJson(res, 200, { ok: true });
         const st = fs.statSync(body.path);
-        if (!st.isFile()) return sendJson(res, 400, { error: 'not a file' });
+        if (!st.isFile()) return sendJson(res, 200, { ok: true });
         fs.unlinkSync(body.path);
         return sendJson(res, 200, { ok: true });
       } catch (e) {
-        return sendJson(res, 404, { error: 'file not found' });
+        return sendJson(res, 200, { ok: true });
       }
     }
 
