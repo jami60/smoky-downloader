@@ -478,7 +478,7 @@ function serveStatic(res, pathname) {
   if (!full.startsWith(PUBLIC)) { sendJson(res, 403, { error: 'forbidden' }); return; }
   fs.readFile(full, (err, buf) => {
     if (err) { sendJson(res, 404, { error: 'not found' }); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream', 'Content-Length': buf.length });
     res.end(buf);
   });
 }
