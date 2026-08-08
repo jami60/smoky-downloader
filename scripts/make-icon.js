@@ -1,66 +1,83 @@
-// Generates the Smoky app icon (PNG + ICO) with zero dependencies.
-// Draws a rounded mint square with a pixel-letter "S", then wraps the PNG into an ICO.
+// Generates the Smoky app icon (PNG + ICO + favicon) with zero dependencies.
+// Reads electron/icon-source.png (the designed 2000x2000 mark), downscales it
+// preserving transparency, and writes:
+//   electron/icon.png        (256x256, window icon)
+//   electron/icon.ico        (PNG-in-ICO wrapper)
+//   public/assets/app-icon.png (64x64 favicon)
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 
-const S = 256;
-const px = Buffer.alloc(S * S * 4);
-
-function setPx(x, y, r, g, b, a) {
-  if (x < 0 || y < 0 || x >= S || y >= S) return;
-  const i = (y * S + x) * 4;
-  px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = a;
+// ------------------------------------------------------------ PNG decode ----
+function decodePNG(buf) {
+  if (buf[0] !== 0x89 || buf[1] !== 0x50) throw new Error('not a PNG');
+  let pos = 8, width = 0, height = 0, bitDepth = 0, colorType = 0;
+  const idat = [];
+  while (pos < buf.length) {
+    const len = buf.readUInt32BE(pos);
+    const type = buf.toString('ascii', pos + 4, pos + 8);
+    const data = buf.subarray(pos + 8, pos + 8 + len);
+    if (type === 'IHDR') { width = data.readUInt32BE(0); height = data.readUInt32BE(4); bitDepth = data[8]; colorType = data[9]; }
+    else if (type === 'IDAT') idat.push(data);
+    else if (type === 'IEND') break;
+    pos += 12 + len;
+  }
+  if (bitDepth !== 8 || (colorType !== 6 && colorType !== 2)) throw new Error(`unsupported PNG: depth ${bitDepth}, colorType ${colorType}`);
+  const bpp = colorType === 6 ? 4 : 3;
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const out = Buffer.alloc(width * height * 4);
+  const prev = Buffer.alloc(stride);
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * (stride + 1);
+    const filter = raw[rowStart];
+    const line = Buffer.alloc(stride);
+    for (let x = 0; x < stride; x++) {
+      const cur = raw[rowStart + 1 + x];
+      const a = x >= bpp ? line[x - bpp] : 0;
+      const b = prev[x];
+      const c = x >= bpp ? prev[x - bpp] : 0;
+      let v = cur;
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        v += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+      }
+      line[x] = v & 0xff;
+    }
+    for (let x = 0; x < width; x++) {
+      const si = x * bpp, di = (y * width + x) * 4;
+      out[di] = line[si]; out[di + 1] = line[si + 1]; out[di + 2] = line[si + 2];
+      out[di + 3] = bpp === 4 ? line[si + 3] : 255;
+    }
+    prev.set(line);
+  }
+  return { width, height, rgba: out };
 }
 
-function roundedRect(x0, y0, x1, y1, rad, fill) {
-  for (let y = y0; y < y1; y++) {
-    for (let x = x0; x < x1; x++) {
-      const cx = Math.max(x0 + rad - x, x - (x1 - rad - 1), 0);
-      const cy = Math.max(y0 + rad - y, y - (y1 - rad - 1), 0);
-      if (cx * cx + cy * cy <= rad * rad) fill(x, y);
+// ------------------------------------------------------------ bilinear -----
+function scaleRGBA(src, sw, sh, dw, dh) {
+  const out = Buffer.alloc(dw * dh * 4);
+  for (let oy = 0; oy < dh; oy++) {
+    const sy = ((oy + 0.5) * sh) / dh - 0.5;
+    const y0 = Math.max(0, Math.floor(sy)), y1 = Math.min(sh - 1, y0 + 1);
+    const wy = sy - y0;
+    for (let ox = 0; ox < dw; ox++) {
+      const sx = ((ox + 0.5) * sw) / dw - 0.5;
+      const x0 = Math.max(0, Math.floor(sx)), x1 = Math.min(sw - 1, x0 + 1);
+      const wx = sx - x0;
+      const w00 = (1 - wx) * (1 - wy), w01 = wx * (1 - wy), w10 = (1 - wx) * wy, w11 = wx * wy;
+      const p00 = (y0 * sw + x0) * 4, p01 = (y0 * sw + x1) * 4, p10 = (y1 * sw + x0) * 4, p11 = (y1 * sw + x1) * 4;
+      const di = (oy * dw + ox) * 4;
+      out[di] = src[p00] * w00 + src[p01] * w01 + src[p10] * w10 + src[p11] * w11;
+      out[di + 1] = src[p00 + 1] * w00 + src[p01 + 1] * w01 + src[p10 + 1] * w10 + src[p11 + 1] * w11;
+      out[di + 2] = src[p00 + 2] * w00 + src[p01 + 2] * w01 + src[p10 + 2] * w10 + src[p11 + 2] * w11;
+      out[di + 3] = src[p00 + 3] * w00 + src[p01 + 3] * w01 + src[p10 + 3] * w10 + src[p11 + 3] * w11;
     }
   }
-}
-
-// background: rounded mint gradient square
-roundedRect(0, 0, S, S, 58, (x, y) => {
-  const t = y / (S - 1);
-  const r = Math.round(47 + (29 - 47) * t);
-  const g = Math.round(209 + (158 - 209) * t);
-  const b = Math.round(138 + (96 - 138) * t);
-  setPx(x, y, r, g, b, 255);
-});
-
-// subtle inner highlight at the top
-roundedRect(14, 14, S - 14, S - 14, 46, (x, y) => {
-  const i = (y * S + x) * 4;
-  const a = Math.max(0, 26 - y * 0.18) * 0.5;
-  px[i] = Math.min(255, px[i] + a);
-  px[i + 1] = Math.min(255, px[i + 1] + a);
-  px[i + 2] = Math.min(255, px[i + 2] + a);
-});
-
-// "S" as a 5x7 pixel letter
-const S_BITS = [
-  1, 1, 1, 1, 1,
-  1, 0, 0, 0, 0,
-  1, 0, 0, 0, 0,
-  1, 1, 1, 1, 0,
-  0, 0, 0, 0, 1,
-  0, 0, 0, 0, 1,
-  1, 1, 1, 1, 1,
-];
-const cell = 30;
-const ox = Math.floor((S - 5 * cell) / 2);
-const oy = Math.floor((S - 7 * cell) / 2) - 2;
-for (let row = 0; row < 7; row++) {
-  for (let col = 0; col < 5; col++) {
-    if (!S_BITS[row * 5 + col]) continue;
-    roundedRect(ox + col * cell + 2, oy + row * cell + 2, ox + (col + 1) * cell - 2, oy + (row + 1) * cell - 2, 8, (x, y) => {
-      setPx(x, y, 255, 255, 255, 255);
-    });
-  }
+  return out;
 }
 
 // ---------------------------------------------------------------- PNG ------
@@ -98,13 +115,6 @@ function encodePNG(width, height, rgba) {
   return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))]);
 }
 
-const png = encodePNG(S, S, px);
-const outDir = path.join(__dirname, '..', 'electron');
-fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, 'icon.png'), png);
-fs.writeFileSync(path.join(outDir, 'icon.ico'), icoFromPng(png));
-console.log('Icon geschrieben: electron/icon.png + electron/icon.ico (' + png.length + ' bytes)');
-
 function icoFromPng(pngBuf) {
   const header = Buffer.alloc(6);
   header.writeUInt16LE(0, 0);
@@ -112,11 +122,29 @@ function icoFromPng(pngBuf) {
   header.writeUInt16LE(1, 4); // count
   const entry = Buffer.alloc(16);
   entry[0] = 0; entry[1] = 0; // 256x256
-  entry[2] = 0; entry[3] = 0; // no palette
-  entry[4] = 0; entry[5] = 0; // reserved
-  entry.writeUInt16LE(1, 4);  // planes
-  entry.writeUInt16LE(32, 6); // bpp
-  entry.writeUInt32LE(pngBuf.length, 8); // data size
-  entry.writeUInt32LE(22, 12); // data offset (6 header + 16 entry)
+  entry[2] = 0; entry[3] = 0;
+  entry[4] = 0; entry[5] = 0;
+  entry.writeUInt16LE(1, 4);
+  entry.writeUInt16LE(32, 6);
+  entry.writeUInt32LE(pngBuf.length, 8);
+  entry.writeUInt32LE(22, 12);
   return Buffer.concat([header, entry, pngBuf]);
 }
+
+// ------------------------------------------------------------------ main ----
+const root = path.join(__dirname, '..');
+const source = decodePNG(fs.readFileSync(path.join(root, 'electron', 'icon-source.png')));
+
+const outDir = path.join(root, 'electron');
+fs.mkdirSync(outDir, { recursive: true });
+
+const png256 = encodePNG(256, 256, scaleRGBA(source.rgba, source.width, source.height, 256, 256));
+fs.writeFileSync(path.join(outDir, 'icon.png'), png256);
+fs.writeFileSync(path.join(outDir, 'icon.ico'), icoFromPng(png256));
+
+const fav64 = encodePNG(64, 64, scaleRGBA(source.rgba, source.width, source.height, 64, 64));
+const assetsDir = path.join(root, 'public', 'assets');
+fs.mkdirSync(assetsDir, { recursive: true });
+fs.writeFileSync(path.join(assetsDir, 'app-icon.png'), fav64);
+
+console.log(`Icon geschrieben: electron/icon.png (256x256, ${png256.length} B), electron/icon.ico, public/assets/app-icon.png`);
