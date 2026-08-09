@@ -168,6 +168,13 @@ const ytdlp = resolveYtdlp();
 const spotdl = resolveSpotdl();
 const ffmpegCmd = bundledCmd('ffmpeg.exe') || (hasCommand('ffmpeg') ? { cmd: 'ffmpeg', args: [] } : null);
 const ffprobeCmd = bundledCmd('ffprobe.exe') || (hasCommand('ffprobe') ? { cmd: 'ffprobe', args: [] } : null);
+// Directory of the ffmpeg/ffprobe we resolved to — passed to yt-dlp via
+// --ffmpeg-location so friends without ffmpeg on their PATH can still merge.
+// Only set when it's a real file path (bundled exe); PATH-resolved ffmpeg
+// needs no hint.
+const FFMPEG_DIR = ffmpegCmd && ffmpegCmd.cmd.includes(path.sep) && fs.existsSync(ffmpegCmd.cmd)
+  ? path.dirname(ffmpegCmd.cmd)
+  : null;
 const YTDLP_OK = !!ytdlp;
 const SPOTDL_OK = !!spotdl;
 const FFMPEG_OK = !!ffmpegCmd;
@@ -296,6 +303,7 @@ function pump() {
       '--newline', '--no-warnings', '--no-playlist',
       '-o', outTpl,
       ...fmt.args(item.quality),
+      ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
       ...browserFlag(item.browserName),
       item.url,
     ];
