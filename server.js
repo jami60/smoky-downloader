@@ -1230,6 +1230,35 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { tracks: await scanLibrary() });
     }
 
+    if (req.method === 'POST' && p === '/api/edit-tags') {
+      const body = await readBody(req);
+      const file = body && body.file;
+      if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 400, { error: 'not found' });
+      if (!ffmpegCmd) return sendJson(res, 400, { error: 'ffmpeg missing' });
+      const title = String(body.title || '').trim();
+      const artist = String(body.artist || '').trim();
+      const album = String(body.album || '').trim();
+      const ext = path.extname(file);
+      const tmp = file.slice(0, -ext.length) + '.tagfix' + ext;
+      const args = ['-y', '-i', file, '-c', 'copy'];
+      if (title) args.push('-metadata', `title=${title}`);
+      if (artist) args.push('-metadata', `artist=${artist}`);
+      if (album) args.push('-metadata', `album=${album}`);
+      args.push(tmp);
+      await new Promise((resolve) => {
+        const p = spawn(ffmpegCmd.cmd, args, { windowsHide: true });
+        p.on('error', () => resolve());
+        p.on('close', (code) => {
+          try {
+            if (code === 0 && fs.existsSync(tmp)) fs.renameSync(tmp, file);
+            else fs.rmSync(tmp, { force: true });
+          } catch { try { fs.rmSync(tmp, { force: true }); } catch {} }
+          resolve();
+        });
+      });
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (req.method === 'GET' && p === '/api/stats') {
       const h = history;
       const total = h.length;
