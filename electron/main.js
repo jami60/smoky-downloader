@@ -73,6 +73,19 @@ app.whenReady().then(async () => {
   });
 
   win.once('ready-to-show', () => win.show());
+
+  // Taskbar progress: the Windows icon shows a bar while a download runs.
+  setInterval(async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/status`);
+      const s = await res.json();
+      const active = (s.queue || []).find((q) => q.status === 'downloading' || q.status === 'processing' || q.status === 'queued');
+      if (!active) { win.setProgressBar(-1); return; }
+      if (active.status === 'queued') win.setProgressBar(0.05);
+      else win.setProgressBar(Math.max(0.02, Math.min(1, (active.percent || 0) / 100)));
+    } catch { /* server briefly unreachable */ }
+  }, 1000);
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     // open external links (e.g. the YouTube channel) in the system browser
     if (/^https?:/i.test(url)) shell.openExternal(url);
