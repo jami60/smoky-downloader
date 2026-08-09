@@ -6,6 +6,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
+const os = require('node:os');
 
 const PORT = process.env.PORT || 4173;
 const APP_VERSION = require('./package.json').version;
@@ -491,16 +492,67 @@ function ffprobe(args) {
 
 async function probeMedia(file) {
   const dur = await ffprobe(['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]);
-  const streams = await ffprobe(['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', file]);
+  // Echte Video-Streams zählen, aber NICHT eingebettete Cover (attached_pic) —
+  // sonst wird eine MP3 mit Album-Cover fälschlich als Video erkannt.
+  let hasRealVideo = false;
+  try {
+    const raw = await ffprobe(['-v', 'error', '-show_entries', 'stream=codec_type:stream_disposition', '-of', 'json', file]);
+    const parsed = JSON.parse(raw);
+    hasRealVideo = (parsed.streams || []).some((s) => s.codec_type === 'video' && !(s.disposition && s.disposition.attached_pic));
+  } catch {}
   const duration = parseFloat(dur);
   return {
     duration: isFinite(duration) ? duration : null,
-    hasVideo: /\bvideo\b/.test(streams),
+    hasVideo: hasRealVideo,
   };
 }
 
 function safeName(name) {
   return String(name || 'file').replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 80) || 'file';
+}
+
+// Tags (Titel/Artist/Album) aus einer Audiodatei lesen — werden beim
+// MP3 → MP4-Zweig in die Video-Metadaten übernommen.
+async function readTags(file) {
+  try {
+    const raw = await ffprobe(['-v', 'error', '-show_entries', 'format_tags', '-of', 'json', file]);
+    const parsed = JSON.parse(raw);
+    const t = (parsed.format && parsed.format.tags) || {};
+    return { title: t.title || '', artist: t.artist || t.album_artist || '', album: t.album || '' };
+  } catch { return { title: '', artist: '', album: '' }; }
+}
+
+// Album-Cover aus der MP3 als Bilddatei extrahieren (erster Video-Stream).
+function extractCover(srcPath, id) {
+  return new Promise((resolve) => {
+    const out = path.join(os.tmpdir(), `smoky-cover-${id}.jpg`);
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', srcPath, '-an', '-map', '0:v:0', '-c:v', 'copy', out], { windowsHide: true });
+    p.on('close', (code) => {
+      if (code === 0 && fs.existsSync(out) && fs.statSync(out).size > 0) resolve(out);
+      else { try { fs.unlinkSync(out); } catch {} resolve(null); }
+    });
+    p.on('error', () => resolve(null));
+  });
+}
+
+// Fallback-Bild (dunkel + Titel-Text), wenn die MP3 kein Cover hat.
+function makeFallbackImage(id, title) {
+  return new Promise((resolve) => {
+    const out = path.join(os.tmpdir(), `smoky-fallback-${id}.png`);
+    const text = String(title || 'Smoky').replace(/[':]/g, '').slice(0, 36) || 'Smoky';
+    const vf = `drawtext=fontfile='C\\:/Windows/Fonts/arial.ttf':text='${text}':fontsize=72:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2`;
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-f', 'lavfi', '-i', 'color=c=0x1b2030:s=1280x1280:r=1', '-frames:v', '1', '-vf', vf, out], { windowsHide: true });
+    p.on('close', (code) => {
+      if (code === 0 && fs.existsSync(out) && fs.statSync(out).size > 0) resolve(out);
+      else {
+        // Fallback ohne Text, falls drawtext scheitert
+        const p2 = spawn(ffmpegCmd.cmd, ['-y', '-f', 'lavfi', '-i', 'color=c=0x1b2030:s=1280x1280:r=1', '-frames:v', '1', out], { windowsHide: true });
+        p2.on('close', () => resolve(fs.existsSync(out) && fs.statSync(out).size > 0 ? out : null));
+        p2.on('error', () => resolve(null));
+      }
+    });
+    p.on('error', () => resolve(null));
+  });
 }
 
 function convertFile(id, srcPath, origName, format) {
@@ -519,9 +571,11 @@ function convertFile(id, srcPath, origName, format) {
 
   // only delete sources that were uploaded as temp files — never the user's originals
   const inDir = path.join(DATA_DIR, 'convert-in');
+  let artPath = null;
   const cleanupSource = () => {
     try {
       if (path.normalize(srcPath).startsWith(inDir)) fs.unlinkSync(srcPath);
+      if (artPath) fs.unlinkSync(artPath);
     } catch {}
   };
 
@@ -541,7 +595,18 @@ function convertFile(id, srcPath, origName, format) {
       if (format === 'mp4' && hasVideo) {
         args = ['-y', '-i', srcPath, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outPath];
       } else if (format === 'mp4') {
-        args = ['-y', '-i', srcPath, '-vn', '-c:a', 'aac', '-b:a', '192k', outPath];
+        // Audio → MP4 mit Cover als Video-Track: Das Album-Cover (oder ein
+        // generiertes Bild) wird zum Video, Tags bleiben in den Metadaten.
+        const [cover, tags] = await Promise.all([extractCover(srcPath, id), readTags(srcPath)]);
+        artPath = cover || await makeFallbackImage(id, tags.title);
+        args = ['-y', '-i', srcPath];
+        if (artPath) {
+          args.push('-loop', '1', '-i', artPath, '-map', '0:a', '-map', '1:v', '-c:a', 'aac', '-b:a', '192k', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-vf', 'scale=1280:1280:force_original_aspect_ratio=decrease,pad=1280:1280:(ow-iw)/2:(oh-ih)/2:color=black', '-shortest');
+        } else {
+          args.push('-vn', '-c:a', 'aac', '-b:a', '192k');
+        }
+        for (const [k, v] of Object.entries(tags)) if (v) args.push('-metadata', `${k}=${v}`);
+        args.push('-movflags', '+faststart', outPath);
       } else {
         args = ['-y', '-i', srcPath, '-vn', ...(AUDIO_TARGETS[format] || AUDIO_TARGETS.mp3), outPath];
       }
