@@ -1015,7 +1015,7 @@
       const gap = 3, bw = Math.max(1, (W - gap * bars) / bars);
       const done = Math.round(bars * Math.max(0, Math.min(1, progressRatio || 0)));
       for (let i = 0; i < bars; i++) {
-        const h = Math.max(2, wavePeaks[i] * H * 0.92);
+        const h = Math.max(2, wavePeaks[i] * H);
         ctx.fillStyle = i < done ? 'var(--accent)' : 'var(--surface-3)';
         ctx.fillRect(i * (bw + gap), (H - h) / 2, bw, h);
       }
@@ -1064,7 +1064,7 @@
         const e = Math.max(s + 1, Math.floor(Math.exp(lnLen * (i + 1) / n)));
         let v = 0;
         for (let j = s; j < Math.min(e, freq.length); j++) v = Math.max(v, freq[j]);
-        const h = Math.max(4, (v / 255) * H * 0.95);
+        const h = Math.max(4, (v / 255) * H);
         const x = i * (bw + gap);
         const grad = ctx.createLinearGradient(0, H, 0, H - h);
         grad.addColorStop(0, mint);
