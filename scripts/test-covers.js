@@ -5,6 +5,8 @@ const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+// Test-Isolation: Cover-Cache etc. landen in einem Temp-Ordner.
+process.env.SMOKY_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-covers-data-'));
 const { startServer, settings, server } = require('../server.js');
 
 let failed = 0;

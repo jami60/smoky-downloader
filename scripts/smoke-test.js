@@ -5,6 +5,9 @@ const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+// Test-Isolation: Daten (Settings/History) landen in einem Temp-Ordner — die
+// echten Settings des Nutzers dürfen durch Tests nie überschrieben werden.
+process.env.SMOKY_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-data-'));
 const { startServer, settings } = require('../server.js');
 const APP_VERSION = require('../package.json').version;
 

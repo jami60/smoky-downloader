@@ -15,9 +15,11 @@ const PUBLIC = path.join(ROOT, 'public');
 // In the packaged app the code lives inside the read-only app.asar, so
 // persistent state must live outside it (Windows: %APPDATA%\Smoky). In dev
 // and standalone runs we keep the data/ folder next to server.js.
-const DATA_DIR = __dirname.includes('app.asar')
+// SMOKY_DATA_DIR: Test-Isolation — Smoke-Tests legen ihre Daten in einen
+// Temp-Ordner, damit echte Settings/History nie überschrieben werden.
+const DATA_DIR = process.env.SMOKY_DATA_DIR || (__dirname.includes('app.asar')
   ? path.join(process.env.APPDATA || process.env.HOME || process.cwd(), 'Smoky')
-  : path.join(ROOT, 'data');
+  : path.join(ROOT, 'data'));
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const VAULT_QUOTA = 10 * 1024 * 1024 * 1024; // 10 GB "local vault"
@@ -29,6 +31,8 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.flac': 'audio/flac', '.wav': 'audio/wav',
@@ -77,9 +81,7 @@ function videoArgs(quality, ext) {
 
 // Audio downloads always carry automatic tags (title, artist) and, where the
 // container supports it, the cover art — via yt-dlp's embed flags. (WAV and
-// raw AAC have no standard cover-art slot, so they get tags only.) The album
-// tag is filled in after the download by ensureAlbumTag (only when missing,
-// so real albums from YouTube Music / spotDL are never overwritten).
+// raw AAC have no standard cover-art slot, so they get tags only.)
 const EMBED = ['--embed-metadata'];
 const EMBED_ART = [...EMBED, '--embed-thumbnail'];
 // WAV und AAC haben keinen Cover-Art-Slot — dort wird der Thumbnail als
@@ -425,10 +427,6 @@ function launchItem(item) {
           }
         }
       }
-      // Album-Tag nachziehen, wenn die Quelle keins liefert (z. B. YouTube).
-      if (item.file && AUDIO_ARGS[item.formatKey]) {
-        try { await ensureAlbumTag(item.file, item.title); } catch {}
-      }
       // Optional: fertige Audiodateien nach Künstler/Album sortieren.
       try { await organizeIntoFolders(item); } catch {}
     } else {
@@ -464,14 +462,21 @@ function scheduleRetry(item) {
   setTimeout(pump, delay);
 }
 
-function fileHasTag(file, name) {
-  return new Promise((resolve) => {
-    const p = spawn(ffprobeCmd.cmd, ['-v', 'error', '-show_entries', `format_tags=${name}`, '-of', 'default=noprint_wrappers=1:nokey=1', file], { windowsHide: true });
-    let out = '';
-    p.stdout.on('data', (d) => (out += d));
-    p.on('error', () => resolve(false));
-    p.on('close', () => resolve(out.trim().length > 0));
-  });
+// Zielordner für die Ordner-Struktur: Künstler/Album — oder nur Künstler,
+// wenn kein echtes Album vorliegt. Wichtig: bei YouTube-Videos ohne Album
+// entspricht das Album-Tag oft dem Songtitel — das würde einen Ordner PRO
+// SONG erzeugen („setfrvr/xaviersobased - linda/xaviersobased - linda.mp3")
+// statt einer sauberen Gruppierung. Album-Tags, die dem Titel entsprechen,
+// gelten daher als fehlend → Song liegt flach im Künstler-Ordner.
+function resolveOrganizePath(folder, tags) {
+  const artist = (tags.artist || '').trim();
+  let album = (tags.album || '').trim();
+  const title = (tags.title || '').trim();
+  if (!artist && !album) return null;
+  if (album && title && (album === title || album.startsWith(title + ' ') || title.startsWith(album + ' '))) album = '';
+  return artist
+    ? path.join(folder, safeName(artist), album ? safeName(album) : '')
+    : path.join(folder, safeName(album));
 }
 
 // Verschiebt fertige Audiodateien nach Künstler/Album (nur wenn aktiviert).
@@ -480,13 +485,11 @@ async function organizeIntoFolders(item) {
   const ext = path.extname(item.file).toLowerCase();
   if (!AUDIO_EXTS.has(ext)) return;
   const tags = await probeTags(item.file);
-  const artist = (tags.artist || '').trim();
-  const album = (tags.album || '').trim();
-  if (!artist && !album) return;
+  const targetDir = resolveOrganizePath(settings.folder, tags);
+  if (!targetDir) return;
   const base = path.basename(item.file);
   const oldDir = path.dirname(item.file);
   const oldStem = base.slice(0, base.length - path.extname(base).length);
-  const targetDir = path.join(settings.folder, safeName(artist || 'Unknown Artist'), safeName(album || 'Unknown Album'));
   try {
     fs.mkdirSync(targetDir, { recursive: true });
     let target = path.join(targetDir, base);
@@ -508,27 +511,6 @@ async function organizeIntoFolders(item) {
       }
     } catch {}
   } catch {}
-}
-
-// Sets the album tag to the title when the file has no album tag yet (stream
-// copy — fast, never re-encodes, never overwrites a real album).
-async function ensureAlbumTag(file, title) {
-  if (!file || !title || !ffmpegCmd || !ffprobeCmd) return;
-  if (await fileHasTag(file, 'album')) return;
-  title = String(title).replace(/\s*\[[^\]]*]\s*$/, '').trim() || title; // ohne "[videoId]"-Suffix
-  const ext = path.extname(file);
-  const tmp = file.slice(0, -ext.length) + '.tagfix' + ext;
-  await new Promise((resolve) => {
-    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-c', 'copy', '-metadata', `album=${title}`, tmp], { windowsHide: true });
-    p.on('error', () => { try { fs.rmSync(tmp, { force: true }); } catch {} resolve(); });
-    p.on('close', (code) => {
-      try {
-        if (code === 0 && fs.existsSync(tmp)) fs.renameSync(tmp, file);
-        else fs.rmSync(tmp, { force: true });
-      } catch { try { fs.rmSync(tmp, { force: true }); } catch {} }
-      resolve();
-    });
-  });
 }
 
 // Fuehrt einen Befehl aus und liefert stdout zurueck (mit Timeout).
@@ -1534,7 +1516,7 @@ function startServer(port = PORT, silent = false) {
   });
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server };
+module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath };
 
 if (require.main === module) {
   startServer();
