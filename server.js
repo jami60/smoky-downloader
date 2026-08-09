@@ -270,6 +270,17 @@ function parseProgress(line, item) {
     item.status = 'processing';
     return true;
   }
+  // 4) spotDL (Spotify): "Found 50 songs in Today's Top Hits (Playlist)"
+  m = line.match(/Found\s+(\d+)\s+songs?/i);
+  if (m) { item.trackCount = parseInt(m[1], 10); item.trackIndex = item.trackIndex || 0; return true; }
+  // spotDL: `Downloaded "Artist - Title":` — ein fertiger Track
+  m = line.match(/^Downloaded\s+"(.+?)":/i);
+  if (m) {
+    item.trackIndex = (item.trackIndex || 0) + 1;
+    item.title = m[1].trim();
+    if (item.trackCount) item.percent = Math.round((item.trackIndex / item.trackCount) * 100);
+    return true;
+  }
   return false;
 }
 
@@ -282,7 +293,7 @@ function enqueue(url, formatKey, quality, folder, browserName) {
     quality,
     folder,
     browserName: browserName || 'none',
-    title: isSpotify(url) ? 'Spotify track…' : 'Resolving link…',
+    title: isSpotify(url) ? (isPlaylistUrl(url) ? 'Spotify playlist…' : 'Spotify track…') : 'Resolving link…',
     status: 'queued',
     percent: 0,
     speed: null,

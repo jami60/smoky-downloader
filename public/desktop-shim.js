@@ -123,7 +123,7 @@ window.smokyDesktop = (() => {
       return true;
     };
 
-    if (item.title && item.title !== 'Resolving link…' && item.title !== 'Spotify track…' && seenTitles.get(id) !== item.title) {
+    if (item.title && item.title !== 'Resolving link…' && item.title !== 'Spotify track…' && item.title !== 'Spotify playlist…' && seenTitles.get(id) !== item.title) {
       seenTitles.set(id, item.title);
       emit(downloadListeners, { id, state: 'metadata', title: item.title });
     }
