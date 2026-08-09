@@ -39,7 +39,7 @@ const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.
 // ---------------------------------------------------------------- state ----
 const queue = [];            // active + waiting items (in memory)
 let history = [];            // persisted finished items
-const THEMES = ['smoky', 'midnight', 'aurora', 'ember', 'ocean', 'rose', 'cyber', 'forest', 'slate', 'solar', 'rain', 'horror', 'light', 'spring', 'summer', 'autumn'];
+const THEMES = ['smoky', 'midnight', 'aurora', 'ember', 'ocean', 'rose', 'cyber', 'forest', 'slate', 'solar', 'rain', 'horror', 'light', 'spring', 'summer', 'autumn', 'galaxy', 'lava', 'sakura', 'custom'];
 let settings = {
   folder: path.join(process.env.USERPROFILE || process.env.HOME || '.', 'Downloads', 'Smoky'),
   format: 'mp4-1080',
