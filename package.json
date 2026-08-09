@@ -42,8 +42,18 @@
       "signExecutable": false,
       "target": [
         { "target": "zip" },
-        { "target": "dir" }
+        { "target": "dir" },
+        { "target": "nsis" }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Smoky",
+      "artifactName": "Smoky-Setup-${version}.exe"
     }
   },
   "engines": {
