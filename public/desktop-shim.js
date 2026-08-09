@@ -91,11 +91,14 @@ window.smokyDesktop = (() => {
       return out;
     },
 
-    async startDownload({ url, format, quality, outputDir, browserName }) {
+    async startDownload({ url, format, quality, outputDir, browserName, tracks }) {
       const data = await api('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, format: format || 'mp4', quality: quality || '1080', outputDir: outputDir || null, browserName: browserName || 'none' }),
+        body: JSON.stringify({
+          url, format: format || 'mp4', quality: quality || '1080', outputDir: outputDir || null, browserName: browserName || 'none',
+          tracks: Array.isArray(tracks) && tracks.length ? tracks : null,
+        }),
       });
       return { id: data.item.id };
     },

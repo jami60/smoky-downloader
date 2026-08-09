@@ -226,7 +226,7 @@ async function dirSize(dir) {
 
 // Newest regular file in a folder — fallback for finding the output file of
 // tools that don't announce their destination (e.g. spotDL).
-async function newestFileIn(dir) {
+async function newestFileIn(dir, sinceMs) {
   try {
     const entries = await fsp.readdir(dir, { withFileTypes: true });
     let best = null, bestTime = 0;
@@ -234,10 +234,32 @@ async function newestFileIn(dir) {
       if (e.isDirectory()) continue;
       const p = path.join(dir, e.name);
       const st = await fsp.stat(p);
+      // `sinceMs`: nur Dateien berücksichtigen, die WÄHREND dieses Downloads
+      // entstanden sind — nie einen alten, fremden Eintrag als Ergebnis
+      // interpretieren (sonst angelt sich ein Download einen falschen File).
+      if (sinceMs && st.mtimeMs < sinceMs) continue;
       if (st.mtimeMs > bestTime) { bestTime = st.mtimeMs; best = p; }
     }
     return best;
   } catch { return null; }
+}
+
+// Alle Audiodateien, die seit `sinceMs` in `dir` neu entstanden sind — für
+// gebündelte spotDL-Downloads, die mehrere Dateien auf einmal liefern.
+async function newAudioFilesIn(dir, sinceMs) {
+  try {
+    const entries = await fsp.readdir(dir, { withFileTypes: true });
+    const out = [];
+    for (const e of entries) {
+      if (e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      if (!AUDIO_EXTS.has(path.extname(p).toLowerCase())) continue;
+      const st = await fsp.stat(p);
+      if (sinceMs && st.mtimeMs < sinceMs) continue;
+      out.push({ path: p, mtime: st.mtimeMs });
+    }
+    return out.sort((a, b) => a.mtime - b.mtime).map((x) => x.path);
+  } catch { return []; }
 }
 
 
@@ -312,6 +334,7 @@ function enqueue(url, formatKey, quality, folder, browserName, tracks) {
     eta: null,
     trackIndex: null,
     trackCount: picked ? picked.length : (isPlaylistUrl(url) ? 0 : null),
+    _isSpot: isSpotify(url),
     file: null,
     error: null,
     startedAt: null,
@@ -326,11 +349,37 @@ function pump() {
   if (queue.length === 0) return;
   const limit = Math.max(1, Math.min(6, Number(settings.maxParallel) || 3));
   while (running.length < limit) {
-    const item = queue.find((q) => q.status === 'queued');
+    // spotDL nie parallel starten: die gleichzeitigen YouTube-Suchen mehrerer
+    // spotDL-Prozesse triggern Rate-Limits („No results found“ trotz vorhan-
+    // dener Videos). Gebündelte Playlists holen sich Parallelität intern über
+    // --threads. Läuft ein spotDL-Prozess, starten nur noch Nicht-Spotify-
+    // Items — die Spotify-Items warten der Reihe nach.
+    const spotRunning = running.some((r) => r._isSpot);
+    const item = spotRunning
+      ? queue.find((q) => q.status === 'queued' && !q._isSpot)
+      : queue.find((q) => q.status === 'queued');
     if (!item) break;
     running.push(item);
     launchItem(item);
   }
+}
+
+// Liest aus spotDLs Ausgabe die eigentliche Fehlerursache heraus (spotDL
+// liefert Exit 0, auch wenn einzelne Tracks fehlschlagen).
+function extractSpotError(tail) {
+  const lines = tail.split(/\r?\n/).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    let m = line.match(/No results found for song:\s*(.+)/i);
+    if (m) return `Not found on YouTube: ${m[1].trim()}`;
+    m = line.match(/LookupError:\s*(.+)/i);
+    if (m) return m[1].trim();
+    m = line.match(/Failed to download\s+"([^"]+)"/i);
+    if (m) return `Failed to download: ${m[1].trim()}`;
+    m = line.match(/^ERROR:\s*(.+)/i);
+    if (m) return m[1].trim();
+  }
+  return null;
 }
 
 function launchItem(item) {
@@ -357,8 +406,15 @@ function launchItem(item) {
       finish(item);
       return;
     }
+    // Explizites `download`-Operation: spotDL 4.5.2 erkennt die Operation nur
+    // bei EINER einzelnen URL automatisch — mit mehreren Queries (gebündelte
+    // Playlist) wirft es sonst „invalid choice“.
+    // --threads: gebündelte Playlist-Downloads laufen innerhalb EINES spotDL-
+    // Prozesses parallel — deutlich schneller als N einzelne Prozesse. Die
+    // Anzahl paralleler spotDL-PROZESSE wird unten trotzdem auf 1 begrenzt,
+    // damit die gleichzeitigen YouTube-Suchen nicht gedrosselt werden.
     cmd = spotdl.cmd;
-    args = [...spotdl.args, ...(picked || [item.url]), '--output', folder, '--format', 'mp3', '--overwrite', 'skip'];
+    args = [...spotdl.args, 'download', ...(picked || [item.url]), '--output', folder, '--format', 'mp3', '--overwrite', 'skip', '--threads', '4'];
     if (picked) item.title = 'Spotify playlist…';
   } else {
     if (!YTDLP_OK) {
@@ -412,14 +468,47 @@ function launchItem(item) {
     if (item.status === 'failed' || item.status === 'cancelled') { finish(item); return; }
     if (item._retrying) return; // 'error' hat den Retry schon eingeplant — kein Doppel-Retry
     if (code === 0) {
+      // spotDL meldet Exit 0 auch dann, wenn NICHTS heruntergeladen wurde
+      // (z. B. „LookupError: No results found for song: …“). Für Spotify daher
+      // IMMER prüfen, dass wirklich eine neue Audiodatei entstanden ist —
+      // sonst wird der Download ehrlich als fehlgeschlagen markiert statt sich
+      // einen fremden, alten File aus dem Ordner als „Ergebnis“ zu angeln.
+      if (isSpot) {
+        const since = (item.startedAt || Date.now()) - 5000; // Puffer für mtime-Präzision
+        const newFiles = await newAudioFilesIn(folder, since);
+        if (!newFiles.length) {
+          item.status = 'failed';
+          item.error = extractSpotError(tail) || 'spotDL finished without downloading anything';
+          finish(item);
+          return;
+        }
+        item.status = 'finished';
+        item.percent = 100;
+        item.speed = null;
+        item.eta = null;
+        const found = newFiles[newFiles.length - 1];
+        item.file = found;
+        // Gebündelte Playlist-Downloads: ALLE neuen Dateien organisieren (und
+        // bei der neuesten den verschobenen Zielpfad übernehmen).
+        try {
+          for (const f of newFiles) {
+            const copy = { ...item, file: f };
+            await organizeIntoFolders(copy);
+            if (f === found && copy.file) item.file = copy.file;
+          }
+        } catch {}
+        item.title = path.basename(item.file).replace(/\.[^.]+$/, '');
+        finish(item);
+        return;
+      }
       item.status = 'finished';
       item.percent = 100;
       item.speed = null;
       item.eta = null;
-      // spotDL (and friends) never announce their destination — resolve the
-      // output file from the folder so delete/open buttons can work.
+      // yt-dlp kündigt sein Ziel normal an; falls doch nicht (exotische
+      // Ausgaben), nur Dateien akzeptieren, die während dieses Laufs entstanden.
       if (!item.file) {
-        const found = await newestFileIn(folder);
+        const found = await newestFileIn(folder, (item.startedAt || Date.now()) - 5000);
         if (found) {
           item.file = found;
           if (!item.title || item.title === 'Resolving link…' || item.title === 'Spotify track…') {
@@ -445,7 +534,7 @@ function launchItem(item) {
 function canAutoRetry(item) {
   if ((item.retries || 0) >= 2) return false;
   const msg = String(item.error || '').toLowerCase();
-  if (/not installed|sign in|signin|private|unavailable|removed|copyright|dpapi|decrypt|cookie database|unsupported url|geo-restricted|content is not available/i.test(msg)) return false;
+  if (/not installed|sign in|signin|private|unavailable|removed|copyright|dpapi|decrypt|cookie database|unsupported url|geo-restricted|content is not available|no results found|lookuperror|not found on youtube|nothing was downloaded/i.test(msg)) return false;
   return true;
 }
 

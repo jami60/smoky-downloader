@@ -1,6 +1,6 @@
 {
   "name": "smoky",
-  "version": "1.8.4",
+  "version": "1.8.5",
   "description": "Smoky — multi media downloader. Dark, calm, private by default.",
   "main": "electron/main.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "test:updater": "node scripts/test-updater.js",
     "test:covers": "node scripts/test-covers.js",
     "test:organize": "node scripts/test-organize.js",
+    "test:spotdl": "node scripts/test-spotdl.js",
     "test": "npm run smoke:test && npm run test:updater && npm run test:covers && npm run test:organize",
     "icon": "node scripts/make-icon.js",
     "dist": "electron-builder --win zip dir",
