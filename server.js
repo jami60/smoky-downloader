@@ -82,14 +82,17 @@ function videoArgs(quality, ext) {
 // so real albums from YouTube Music / spotDL are never overwritten).
 const EMBED = ['--embed-metadata'];
 const EMBED_ART = [...EMBED, '--embed-thumbnail'];
+// WAV und AAC haben keinen Cover-Art-Slot — dort wird der Thumbnail als
+// separate Bilddatei neben die Audiodatei geschrieben (--write-thumbnail);
+// coverFor() findet ihn dann über siblingCover().
 const AUDIO_ARGS = {
   mp3:  ['-x', '--audio-format', 'mp3', '--audio-quality', '0', ...EMBED_ART],
   m4a:  ['-x', '--audio-format', 'm4a', ...EMBED_ART],
   flac: ['-x', '--audio-format', 'flac', ...EMBED_ART],
-  wav:  ['-x', '--audio-format', 'wav', ...EMBED],
+  wav:  ['-x', '--audio-format', 'wav', '--write-thumbnail', ...EMBED],
   ogg:  ['-x', '--audio-format', 'ogg', ...EMBED_ART],
   opus: ['-x', '--audio-format', 'opus', ...EMBED_ART],
-  aac:  ['-x', '--audio-format', 'aac', ...EMBED],
+  aac:  ['-x', '--audio-format', 'aac', '--write-thumbnail', ...EMBED],
 };
 
 const FORMATS = {};
@@ -477,6 +480,8 @@ async function organizeIntoFolders(item) {
   const album = (tags.album || '').trim();
   if (!artist && !album) return;
   const base = path.basename(item.file);
+  const oldDir = path.dirname(item.file);
+  const oldStem = base.slice(0, base.length - path.extname(base).length);
   const targetDir = path.join(settings.folder, safeName(artist || 'Unknown Artist'), safeName(album || 'Unknown Album'));
   try {
     fs.mkdirSync(targetDir, { recursive: true });
@@ -486,6 +491,18 @@ async function organizeIntoFolders(item) {
     fs.renameSync(item.file, target);
     item.file = target;
     item.folder = targetDir;
+    // Passendes Schwester-Bild (Thumbnail) mit umziehen, falls vorhanden.
+    try {
+      for (const f of fs.readdirSync(oldDir)) {
+        const l = f.toLowerCase();
+        if (!SIBLING_IMG_EXTS.some((e) => l.endsWith(e))) continue;
+        const fStem = f.slice(0, f.length - path.extname(f).length);
+        if (fStem === oldStem || fStem.startsWith(oldStem)) {
+          const dest = path.join(targetDir, f);
+          if (!fs.existsSync(dest)) fs.renameSync(path.join(oldDir, f), dest);
+        }
+      }
+    } catch {}
   } catch {}
 }
 
@@ -1063,6 +1080,49 @@ async function scanLibrary() {
 }
 
 const coverDir = path.join(DATA_DIR, 'covers');
+const SIBLING_IMG_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
+// Sucht ein Bild mit gleichem Basisnamen neben der Audiodatei (yt-dlp
+// --write-thumbnail legt z. B. "Titel [id].webp" neben "Titel [id].wav").
+function siblingCover(file) {
+  const dir = path.dirname(file);
+  const base = path.basename(file);
+  const stem = base.slice(0, base.length - path.extname(base).length).toLowerCase();
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      const l = f.toLowerCase();
+      if (!SIBLING_IMG_EXTS.some((e) => l.endsWith(e))) continue;
+      const fStem = f.slice(0, f.length - path.extname(f).length).toLowerCase();
+      if (fStem === stem || fStem.startsWith(stem)) return path.join(dir, f);
+    }
+  } catch {}
+  return null;
+}
+
+// Bestehende Downloads nachrüsten: Video-ID aus dem Dateinamen ([id]) holen
+// und das YouTube-Thumbnail einmalig neben die Datei schreiben. Seriell, damit
+// nicht 14 yt-dlp-Prozesse gleichzeitig auf YouTube hämmern.
+let coverBackfillChain = Promise.resolve();
+async function backfillCover(file) {
+  if (!YTDLP_OK) return null;
+  const m = path.basename(file).match(/\[([A-Za-z0-9_-]{6,})\]\.[^.]+$/);
+  if (!m) return null;
+  const id = m[1];
+  const hash = crypto.createHash('md5').update('thumb:' + file).digest('hex');
+  const doneFlag = path.join(coverDir, hash + '.done');
+  if (fs.existsSync(doneFlag)) return siblingCover(file);
+  try { fs.mkdirSync(coverDir, { recursive: true }); } catch { return null; }
+  const dir = path.dirname(file);
+  const run = () => new Promise((resolve) => {
+    const p = spawn(ytdlp.cmd, [...ytdlp.args, '--skip-download', '--write-thumbnail', '--no-warnings', '-o', path.join(dir, '%(title)s [%(id)s].%(ext)s'), `https://www.youtube.com/watch?v=${id}`], { windowsHide: true, env: TOOL_ENV });
+    p.on('error', () => resolve());
+    p.on('close', () => resolve());
+  });
+  coverBackfillChain = coverBackfillChain.then(run, run);
+  await coverBackfillChain;
+  try { fs.writeFileSync(doneFlag, '1'); } catch {}
+  return siblingCover(file);
+}
+
 async function coverFor(file) {
   if (!ffmpegCmd) return null;
   const hash = crypto.createHash('md5').update(file).digest('hex');
@@ -1074,7 +1134,12 @@ async function coverFor(file) {
     p.on('error', () => resolve());
     p.on('close', () => resolve());
   });
-  return fs.existsSync(out) ? out : null;
+  if (fs.existsSync(out)) return out;
+  // Kein eingebettetes Cover (z. B. WAV/AAC) → Schwester-Bild neben der Datei?
+  const sibling = siblingCover(file);
+  if (sibling) return sibling;
+  // Sonst einmalig per yt-dlp nachrüsten (nur wenn eine Video-ID im Namen steckt).
+  return backfillCover(file);
 }
 
 async function statusPayload() {
