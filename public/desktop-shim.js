@@ -132,9 +132,9 @@ window.smokyDesktop = (() => {
       case 'queued':
         return { id, state: 'resolving', message: 'Waiting in queue…' };
       case 'downloading':
-        return { id, state: 'downloading', percent: item.percent || 0, speed: item.speed, eta: item.eta };
+        return { id, state: 'downloading', percent: item.percent || 0, speed: item.speed, eta: item.eta, trackIndex: item.trackIndex, trackCount: item.trackCount };
       case 'processing':
-        return { id, state: 'downloading', percent: item.percent || 0, speed: item.speed, eta: item.eta };
+        return { id, state: 'downloading', percent: item.percent || 0, speed: item.speed, eta: item.eta, trackIndex: item.trackIndex, trackCount: item.trackCount };
       case 'finished':
         if (!once('complete')) return null;
         return { id, state: 'complete', outputDir: item.folder, filePath: item.file || null };

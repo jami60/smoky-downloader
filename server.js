@@ -217,9 +217,20 @@ async function newestFileIn(dir) {
 
 
 // -------------------------------------------------------------- download ---
+function isPlaylistUrl(url) {
+  // YouTube playlists carry a list= param (also /playlist?list= and /playlists/…);
+  // Spotify playlists/albums are explicit path segments.
+  if (/youtube\.com|youtu\.be/i.test(url)) return /[?&]list=[^&]+/.test(url);
+  if (/open\.spotify\.com/i.test(url)) return /\/(playlist|album)\/[A-Za-z0-9]+/.test(url);
+  return false;
+}
+
 function parseProgress(line, item) {
+  // 0) playlist position — "[download] Downloading item 3 of 10"
+  let m = line.match(/Downloading item (\d+) of (\d+)/i);
+  if (m) { item.trackIndex = parseInt(m[1], 10); item.trackCount = parseInt(m[2], 10); }
   // 1) final file naming — [download] Destination / Merger / Remuxer / ExtractAudio
-  let m = line.match(/\[download\]\s+Destination:\s+(.+)/i)
+  m = line.match(/\[download\]\s+Destination:\s+(.+)/i)
     || line.match(/\[Merger\]\s+Merging formats into\s+"([^"]+)"/i)
     || line.match(/\[VideoRemuxer\]\s+Remuxing video into\s+"([^"]+)"/i)
     || line.match(/\[ExtractAudio\]\s+Destination:\s+(.+)/i)
@@ -261,6 +272,8 @@ function enqueue(url, formatKey, quality, folder, browserName) {
     percent: 0,
     speed: null,
     eta: null,
+    trackIndex: null,
+    trackCount: isPlaylistUrl(url) ? 0 : null,
     file: null,
     error: null,
     startedAt: null,
@@ -304,16 +317,21 @@ function pump() {
       return;
     }
     const fmt = FORMATS[item.formatKey] || FORMATS['mp4-1080'];
+    const playlist = isPlaylistUrl(item.url);
     cmd = ytdlp.cmd;
     args = [
       ...ytdlp.args,
-      '--newline', '--no-warnings', '--no-playlist',
+      '--newline', '--no-warnings',
+      // playlists download every track; single videos stay single even when
+      // they happen to belong to a playlist
+      playlist ? '--yes-playlist' : '--no-playlist',
       '-o', outTpl,
       ...fmt.args(item.quality),
       ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
       ...browserFlag(item.browserName),
       item.url,
     ];
+    if (playlist) item.title = 'Playlist…';
   }
 
   const child = spawn(cmd, args, { windowsHide: true });
