@@ -590,10 +590,11 @@
     }
     function achAdd(partial) {
       const s = loadAch();
-      for (const k in partial) s[k] = (s[k]||0) + partial[k];
+      let changed = false;
+      for (const k in partial) if (partial[k]) { s[k] = (s[k]||0) + partial[k]; changed = true; }
       const fresh = [];
       for (const a of ACHIEVEMENTS) { if (!s.unlocked[a.id] && a.test(s)) { s.unlocked[a.id] = true; fresh.push(a); } }
-      if (fresh.length) saveAch(s);
+      if (changed || fresh.length) saveAch(s);
       renderAch();
       for (const a of fresh) {
         toast(`<b>Achievement freigeschaltet:</b> ${a.icon} ${a.title}`);
