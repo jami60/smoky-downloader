@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 // Test-Isolation: Daten (Settings/History) landen in einem Temp-Ordner — die
 // echten Settings des Nutzers dürfen durch Tests nie überschrieben werden.
 process.env.SMOKY_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-data-'));
-const { startServer, settings } = require('../server.js');
+const { startServer, settings, history } = require('../server.js');
 const APP_VERSION = require('../package.json').version;
 
 let passed = 0;
@@ -134,9 +134,30 @@ async function json(base, path, opts) {
   const okStatic = await fetch(base + '/desktop-shim.js');
   check('GET /desktop-shim.js → 200 (legitime Datei bleibt erreichbar)', okStatic.status === 200);
 
+  // ---------------------------------------------------- history repair ----
+  // WICHTIG: vor /api/history-clear laufen — clear reassigniert das Modul-Array,
+  // danach wäre unser gehaltener Ref stale und die Seeds kämen nie an.
+  history.length = 0;
+  const missingFile = path.join(testDir, 'nie-existiert.mp3');
+  const realFile = path.join(testDir, 'existiert.mp3');
+  fs.writeFileSync(realFile, 'x');
+  history.push({ id: 'h1', title: 'fehlt', file: missingFile, finishedAt: 1 });
+  history.push({ id: 'h2', title: 'da', file: realFile, finishedAt: 2 });
+  const { res: hr, data: hd } = await json(base, '/api/history-repair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  check('POST /api/history-repair → 200', hr.status === 200, 'status=' + hr.status);
+  check('  entfernt 1 fehlende Datei, behält 1', hd.removed === 1 && hd.kept === 1, JSON.stringify(hd));
+  const { data: hg } = await json(base, '/api/history');
+  check('  GET /api/history hat nur noch den echten Eintrag', Array.isArray(hg.history) && hg.history.length === 1 && hg.history[0].id === 'h2', JSON.stringify(hg.history));
+  history.length = 0;
+
   // ------------------------------------------------------------- clear -----
   const { res: hc } = await json(base, '/api/history-clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   check('POST /api/history-clear → ok', hc.status === 200);
+
+  // --------------------------------------------------- tools-update ------
+  const { res: tu, data: tud } = await json(base, '/api/tools-update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dryRun: true }) });
+  // dryRun: keine Downloads, nur Versionen — beweist, dass der Endpoint sauber antwortet.
+  check('POST /api/tools-update (dryRun) → 200 mit ok + Versionen', tu.status === 200 && tud && tud.ok && tud.dryRun === true && 'ytdlp' in tud, 'status=' + tu.status + ' body=' + JSON.stringify(tud));
 
   console.log('\n──────────────────────────────');
   console.log(`Ergebnis: ${passed} ok, ${failed} fehlgeschlagen`);

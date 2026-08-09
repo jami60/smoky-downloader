@@ -182,6 +182,106 @@ function resolveYtdlp() {
   return null;
 }
 
+function cmdVersion(cmd, flag) {
+  if (!cmd) return null;
+  try {
+    return require('node:child_process').execFileSync(cmd.cmd, [flag], { encoding: 'utf8', windowsHide: true }).trim().split(/\r?\n/)[0];
+  } catch { return null; }
+}
+
+// ------------------------------------------------ bundled tools update -----
+// yt-dlp / ffmpeg aktualisieren: Download in den tools-Ordner, Selbsttest des
+// neuen Binaries und erst DANN ersetzen (transactional). Bei jedem Fehler
+// bleibt das bisherige Binary unangetastet.
+function downloadFile(url, dest, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https:') ? require('node:https') : require('node:http');
+    const req = mod.get(url, { headers: { 'User-Agent': 'Smoky/1.0' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        const next = new URL(res.headers.location, url).toString();
+        return resolve(downloadFile(next, dest, redirects - 1));
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return reject(new Error('HTTP ' + res.statusCode + ' für ' + url));
+      }
+      const ws = fs.createWriteStream(dest);
+      res.pipe(ws);
+      ws.on('finish', () => ws.close(() => resolve(dest)));
+      ws.on('error', reject);
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+  });
+}
+
+function findFileRecursive(dir, name) {
+  try {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { const found = findFileRecursive(p, name); if (found) return found; }
+      else if (e.name === name) return p;
+    }
+  } catch {}
+  return null;
+}
+
+async function updateBundledTools() {
+  const ytdlpPath = bundledPath('yt-dlp.exe');
+  const toolsDir = ytdlpPath ? path.dirname(ytdlpPath) : path.join(__dirname, 'tools');
+  const out = {};
+  try { fs.mkdirSync(toolsDir, { recursive: true }); } catch {}
+  // yt-dlp (18 MB, GitHub Release)
+  try {
+    const tmp = path.join(toolsDir, 'yt-dlp.exe.tmp');
+    await downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', tmp);
+    const ver = cmdVersion({ cmd: tmp }, '--version');
+    if (!ver) throw new Error('neues yt-dlp.exe startet nicht');
+    const cur = path.join(toolsDir, 'yt-dlp.exe');
+    try { fs.unlinkSync(cur + '.old'); } catch {}
+    if (fs.existsSync(cur)) fs.renameSync(cur, cur + '.old');
+    fs.renameSync(tmp, cur);
+    try { fs.unlinkSync(cur + '.old'); } catch {}
+    out.ytdlp = ver;
+  } catch (e) {
+    try { fs.unlinkSync(path.join(toolsDir, 'yt-dlp.exe.tmp')); } catch {}
+    out.error = 'yt-dlp: ' + String(e.message || e);
+  }
+  // ffmpeg + ffprobe (gyan.dev essentials-Zip, ~100 MB, via PowerShell entpacken)
+  const zip = path.join(toolsDir, 'ffmpeg-release.zip');
+  const extractDir = path.join(toolsDir, 'ffmpeg-extract');
+  try {
+    await downloadFile('https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip', zip);
+    fs.rmSync(extractDir, { recursive: true, force: true });
+    fs.mkdirSync(extractDir, { recursive: true });
+    require('node:child_process').execFileSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${extractDir}' -Force`], { windowsHide: true, stdio: 'ignore' });
+    const ffmpegNew = findFileRecursive(extractDir, 'ffmpeg.exe');
+    const ffprobeNew = findFileRecursive(extractDir, 'ffprobe.exe');
+    if (!ffmpegNew || !ffprobeNew) throw new Error('ffmpeg/ffprobe nicht im Archiv gefunden');
+    const v = cmdVersion({ cmd: ffmpegNew }, '-version');
+    if (!v) throw new Error('neues ffmpeg.exe startet nicht');
+    for (const name of ['ffmpeg.exe', 'ffprobe.exe']) {
+      const cur = path.join(toolsDir, name);
+      const src = name === 'ffmpeg.exe' ? ffmpegNew : ffprobeNew;
+      try { fs.unlinkSync(cur + '.old'); } catch {}
+      if (fs.existsSync(cur)) fs.renameSync(cur, cur + '.old');
+      fs.copyFileSync(src, cur);
+    }
+    for (const name of ['ffmpeg.exe', 'ffprobe.exe']) { try { fs.unlinkSync(path.join(toolsDir, name + '.old')); } catch {} }
+    out.ffmpeg = v;
+  } catch (e) {
+    out.error = (out.error ? out.error + ' | ' : '') + 'ffmpeg: ' + String(e.message || e);
+  } finally {
+    // Immer aufräumen (Erfolg UND Fehler) — Zip + Entpack-Ordner dürfen weder
+    // liegen bleiben noch ins Paket wandern.
+    try { fs.unlinkSync(zip); } catch {}
+    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+  }
+  out.ok = !out.error;
+  return out;
+}
+
 // Same idea for spotDL: prefer the pip-installed `py -m spotdl`, fall back to PATH.
 function resolveSpotdl() {
   try {
@@ -1464,7 +1564,7 @@ async function statusPayload() {
     settings,
     storage,
     player: playerState,
-    tools: { ytdlp: YTDLP_OK, spotdl: SPOTDL_OK, ffmpeg: FFMPEG_OK, ffprobe: FFPROBE_OK },
+    tools: { ytdlp: YTDLP_OK, spotdl: SPOTDL_OK, ffmpeg: FFMPEG_OK, ffprobe: FFPROBE_OK, versions: { ytdlp: cmdVersion(ytdlp, '--version'), ffmpeg: cmdVersion(ffmpegCmd, '-version') } },
   };
 }
 
@@ -1644,6 +1744,30 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (req.method === 'POST' && p === '/api/history-repair') {
+      // Einträge, deren Datei nicht (mehr) existiert, aus der History entfernen.
+      const before = history.length;
+      let removed = 0;
+      history = history.filter((h) => {
+        let exists = false;
+        try { exists = !!h.file && fs.existsSync(h.file); } catch {}
+        if (!exists) removed++;
+        return exists;
+      });
+      saveJson(HISTORY_FILE, history);
+      return sendJson(res, 200, { removed, kept: history.length, before, after: history.length });
+    }
+
+    if (req.method === 'POST' && p === '/api/tools-update') {
+      const body = await readBody(req);
+      // dryRun: nur Versionen melden, nichts herunterladen (Tests, UI-Vorschau).
+      if (body && body.dryRun) {
+        return sendJson(res, 200, { ok: true, dryRun: true, ytdlp: cmdVersion(ytdlp, '--version'), ffmpeg: cmdVersion(ffmpegCmd, '-version') });
+      }
+      const result = await updateBundledTools();
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === 'GET' && p === '/api/status') {
       return sendJson(res, 200, await statusPayload());
     }
@@ -1771,7 +1895,7 @@ function spotFormatFor(formatKey) {
   return SPOT_FORMATS.has(formatKey) ? formatKey : 'mp3';
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile };
+module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive };
 
 if (require.main === module) {
   startServer();

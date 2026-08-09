@@ -207,6 +207,23 @@ app.whenReady().then(async () => {
               inp.value = old;
               return a && b ? 'ok' : 'fail';
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // History-Repair + Tools-Update Buttons existieren
+          repairBtn: !!document.getElementById('repairHistory'),
+          toolsBtn: !!document.getElementById('toolsUpdate'),
+          // Toast mit data-goto-Link navigiert zu den Settings
+          toastGoto: (() => {
+            try {
+              const el = document.getElementById('toast');
+              el.innerHTML = '<a href="#" data-goto="Settings">go</a>';
+              el.classList.add('show');
+              const link = el.querySelector('a[data-goto]');
+              link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              const nav = document.querySelector('.nav-item[data-view="Settings"]');
+              const ok = nav && nav.classList.contains('active');
+              el.classList.remove('show');
+              return ok ? 'ok' : 'fail';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         })`);
         console.log('SMOKE_OK ' + JSON.stringify(result));

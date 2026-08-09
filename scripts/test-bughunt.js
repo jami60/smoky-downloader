@@ -8,7 +8,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const assert = require('node:assert');
 
-const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile } = require('../server.js');
+const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive } = require('../server.js');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -96,6 +96,21 @@ check('moveFile: Copy-Fallback greift, wenn rename wirft', () => {
   // Ziel existiert schon nach dem Kopieren nicht doppelt, Quelle weg.
   assert.ok(moveFile(a, b));
   assert.ok(!fs.existsSync(a) && fs.readFileSync(b, 'utf8') === 'inhalt');
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
+// ---------------------------------------------- findFileRecursive (Tools) --
+check('findFileRecursive: findet verschachtelte Datei', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-find-'));
+  fs.mkdirSync(path.join(d, 'a', 'b'), { recursive: true });
+  fs.writeFileSync(path.join(d, 'a', 'b', 'ffmpeg.exe'), 'x');
+  assert.strictEqual(findFileRecursive(d, 'ffmpeg.exe'), path.join(d, 'a', 'b', 'ffmpeg.exe'));
+  fs.rmSync(d, { recursive: true, force: true });
+});
+check('findFileRecursive: null bei fehlender Datei', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-find-'));
+  fs.writeFileSync(path.join(d, 'nope.txt'), 'x');
+  assert.strictEqual(findFileRecursive(d, 'ffmpeg.exe'), null);
   fs.rmSync(d, { recursive: true, force: true });
 });
 
