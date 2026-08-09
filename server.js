@@ -1230,6 +1230,24 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { tracks: await scanLibrary() });
     }
 
+    if (req.method === 'GET' && p === '/api/playlist-export') {
+      const tracks = await scanLibrary();
+      if (!tracks.length) return sendJson(res, 404, { error: 'no tracks' });
+      const lines = ['#EXTM3U'];
+      for (const t of tracks) {
+        const name = [t.artist, t.title].filter(Boolean).join(' - ') || path.basename(t.path);
+        lines.push(`#EXTINF:${Math.round(t.duration || 0)},${name}`);
+        lines.push(t.path);
+      }
+      const body = lines.join('\r\n');
+      res.writeHead(200, {
+        'Content-Type': 'audio/x-mpegurl',
+        'Content-Length': Buffer.byteLength(body),
+        'Content-Disposition': 'attachment; filename="Smoky-Playlist.m3u"',
+      });
+      return res.end(body);
+    }
+
     if (req.method === 'GET' && p === '/api/play') {
       const file = u.searchParams.get('file');
       if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
