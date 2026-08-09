@@ -13,6 +13,7 @@
     "test:organize": "node scripts/test-organize.js",
     "test:spotdl": "node scripts/test-spotdl.js",
     "test:spotdl-skip": "node scripts/test-spotdl-skip.js",
+    "test:spotify-embed": "node scripts/test-spotify-embed.js",
     "test:bughunt": "node scripts/test-bughunt.js",
     "test": "npm run smoke:test && npm run test:updater && npm run test:covers && npm run test:organize && npm run test:bughunt",
     "icon": "node scripts/make-icon.js",

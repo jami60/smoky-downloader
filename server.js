@@ -690,13 +690,66 @@ function runCmdOut(cmd, args, timeoutMs) {
 }
 
 // Listet die Tracks einer Playlist auf (Titel/Artist/URL) — ohne sie zu laden.
-// Spotify nutzt spotDL save, alles andere yt-dlp --flat-playlist (schnell).
+// Spotify: Embed-Listing (schnell, ~1 Request), Fallback spotDL save; alles
+// andere yt-dlp --flat-playlist (schnell).
+// Spotify-Session (sp_t-Cookie) + Embed-Listing — deutlich schneller und
+// robuster als `spotdl save`: Playlists liefern dieselbe Trackliste in ~2 s
+// statt >100 s (ein Request statt Track-für-Track-Metadaten). Album-Embeds
+// hat Spotify abgeschafft (404) — dort greift unten der Fallback.
+const SPOTIFY_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+let spotifySessionCache = { cookie: null, at: 0 };
+async function spotifySession() {
+  if (spotifySessionCache.cookie && Date.now() - spotifySessionCache.at < 10 * 60 * 1000) return spotifySessionCache.cookie;
+  const res = await fetch('https://open.spotify.com', { headers: { 'User-Agent': SPOTIFY_UA, 'Accept-Language': 'en' }, redirect: 'manual' });
+  const setc = res.headers.getSetCookie ? res.headers.getSetCookie() : (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')] : []);
+  const sp_t = (setc.join(';').match(/sp_t=[^;]+/) || [''])[0];
+  if (!sp_t) throw new Error('Spotify session unavailable');
+  spotifySessionCache = { cookie: sp_t, at: Date.now() };
+  return sp_t;
+}
+
+// Trackliste aus der Spotify-Embed-Seite. Playlists funktionieren und liefern
+// die volle Trackliste inkl. Track-URIs; Album-Embeds antworten mit
+// pageProps.status 404 (von Spotify abgeschafft) → wirft → Fallback unten.
+async function spotifyEmbedTracks(url) {
+  const m = String(url).match(/open\.spotify\.com\/(playlist|album)\/([A-Za-z0-9]+)/i);
+  if (!m) throw new Error('unsupported spotify url');
+  const kind = m[1].toLowerCase();
+  const id = m[2];
+  const cookie = await spotifySession();
+  const res = await fetch(`https://open.spotify.com/embed/${kind}/${id}`, {
+    headers: { 'User-Agent': SPOTIFY_UA, Cookie: cookie, 'Accept-Language': 'en' },
+  });
+  const html = await res.text();
+  const data = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+  if (!data) throw new Error('spotify embed parse failed');
+  const j = JSON.parse(data[1]);
+  const pageProps = (j.props && j.props.pageProps) || {};
+  if (pageProps.status && pageProps.status !== 200) throw new Error('spotify embed unavailable (' + pageProps.status + ')');
+  const entity = pageProps.state && pageProps.state.data && pageProps.state.data.entity;
+  const list = entity && entity.trackList;
+  if (!Array.isArray(list) || !list.length) throw new Error('no tracks in spotify embed');
+  return list.map((t, i) => ({
+    index: i + 1,
+    title: t.title || ('Track ' + (i + 1)),
+    artist: t.subtitle || '',
+    url: t.uri ? 'https://open.spotify.com/track/' + String(t.uri).split(':').pop() : '',
+  })).filter((t) => /^https?:\/\//i.test(t.url));
+}
+
 async function listPlaylistTracks(url) {
   if (isSpotify(url)) {
+    const isAlbum = /\/album\//i.test(url);
+    // 1) Schneller Embed-Pfad (kein spotDL nötig) — funktioniert für Playlists.
+    try {
+      return await spotifyEmbedTracks(url);
+    } catch { /* Fallback unten */ }
+    // 2) Bisheriger Weg: spotDL save (Alben, private Playlists).
     if (!SPOTDL_OK) throw new Error('spotDL is not installed. Run: py -m pip install -U spotdl');
     const tmp = path.join(os.tmpdir(), 'smoky-playlist-' + crypto.randomBytes(4).toString('hex') + '.spotdl');
+    let spotdlErr = null;
     try {
-      await runCmdOut(spotdl.cmd, [...spotdl.args, 'save', url, '--save-file', tmp], 120000);
+      await runCmdOut(spotdl.cmd, [...spotdl.args, 'save', url, '--save-file', tmp], 90000);
       const raw = fs.readFileSync(tmp, 'utf8');
       const tracks = JSON.parse(raw);
       return (Array.isArray(tracks) ? tracks : []).map((t, i) => ({
@@ -705,9 +758,15 @@ async function listPlaylistTracks(url) {
         artist: t.artist || (Array.isArray(t.artists) ? t.artists.join(', ') : ''),
         url: t.url || '',
       })).filter((t) => /^https?:\/\//i.test(t.url));
-    } finally {
+    } catch (e) { spotdlErr = e; }
+    finally {
       try { fs.unlinkSync(tmp); } catch {}
     }
+    // 3) Beides gescheitert — verständliche Meldung statt hängendem Picker
+    // (Album-Listen blockt Spotify gerade komplett: Embed abgeschafft, API 429).
+    throw new Error(isAlbum
+      ? 'Spotify blockiert Album-Listen gerade (Album-Embeds abgeschafft). Nutze die Playlist des Albums oder füge die Track-Links einzeln ein.'
+      : ('Die Playlist konnte nicht geladen werden. ' + (spotdlErr && spotdlErr.message ? spotdlErr.message.slice(0, 120) : '')));
   }
   if (!YTDLP_OK) throw new Error('yt-dlp is not installed. Run: py -m pip install -U yt-dlp');
   const json = await runCmdOut(ytdlp.cmd, [...ytdlp.args, '--flat-playlist', '--no-warnings', '-J', url], 60000);
