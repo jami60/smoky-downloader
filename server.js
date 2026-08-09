@@ -144,10 +144,15 @@ function bundledPath(name) {
 function bundledCmd(name) {
   const p = bundledPath(name);
   if (!p) return null;
-  try {
-    require('node:child_process').execFileSync(p, ['-version'], { stdio: 'ignore', windowsHide: true });
-    return { cmd: p, args: [] };
-  } catch { return null; }
+  // ffmpeg accepts `-version`; yt-dlp does NOT (it parses it as a rate-limit
+  // flag and exits 2) — try both forms so every bundled tool is recognised.
+  for (const flag of ['-version', '--version']) {
+    try {
+      require('node:child_process').execFileSync(p, [flag], { stdio: 'ignore', windowsHide: true });
+      return { cmd: p, args: [] };
+    } catch { /* try next flag */ }
+  }
+  return null;
 }
 
 // Resolve the best yt-dlp: bundled exe first (ships with the app), then the
@@ -185,6 +190,13 @@ const ffprobeCmd = bundledCmd('ffprobe.exe') || (hasCommand('ffprobe') ? { cmd: 
 const FFMPEG_DIR = ffmpegCmd && ffmpegCmd.cmd.includes(path.sep) && fs.existsSync(ffmpegCmd.cmd)
   ? path.dirname(ffmpegCmd.cmd)
   : null;
+// Prepending the bundled tools dir to PATH guarantees that yt-dlp and spotDL
+// (which spawn ffmpeg/ffprobe themselves for postprocessing) find the bundled
+// copy — belt and braces on top of --ffmpeg-location, and the only mechanism
+// spotDL honours.
+const TOOL_ENV = FFMPEG_DIR
+  ? { ...process.env, PATH: `${FFMPEG_DIR}${path.delimiter}${process.env.PATH || ''}` }
+  : process.env;
 const YTDLP_OK = !!ytdlp;
 const SPOTDL_OK = !!spotdl;
 const FFMPEG_OK = !!ffmpegCmd;
@@ -337,7 +349,7 @@ function pump() {
     if (playlist) item.title = 'Playlist…';
   }
 
-  const child = spawn(cmd, args, { windowsHide: true });
+  const child = spawn(cmd, args, { windowsHide: true, env: TOOL_ENV });
   item.child = child;
 
   let tail = '';
