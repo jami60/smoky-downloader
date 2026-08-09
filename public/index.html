@@ -609,6 +609,64 @@
         ctx.fillRect(i * (bw + gap), (H - h) / 2, bw, h);
       }
     }
+    // --------------------------------------------- live-visualizer -----
+    // Echtzeit-FFT: Die Balken tanzen zur Musik (Theme-Farbverlauf).
+    // Bei Pause/Stop fällt er auf die statische Wellenform mit Fortschritt zurück.
+    let visAnalyser = null, visCtx = null, visRaf = null;
+    function ensureVis() {
+      if (visAnalyser) return true;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        visCtx = new AC();
+        const src = visCtx.createMediaElementSource(playerAudio);
+        visAnalyser = visCtx.createAnalyser();
+        visAnalyser.fftSize = 256;
+        visAnalyser.smoothingTimeConstant = 0.8;
+        src.connect(visAnalyser);
+        visAnalyser.connect(visCtx.destination);
+        return true;
+      } catch { return false; }
+    }
+    function visLoop() {
+      if (!visAnalyser) return;
+      const playing = playerAudio && !playerAudio.paused && !playerAudio.ended;
+      if (!playing) { drawWave(playerAudio.duration ? playerAudio.currentTime / playerAudio.duration : 0); visRaf = requestAnimationFrame(visLoop); return; }
+      const freq = new Uint8Array(visAnalyser.frequencyBinCount);
+      visAnalyser.getByteFrequencyData(freq);
+      const ctx = playerWave.getContext('2d');
+      const W = playerWave.width = playerWave.clientWidth;
+      const H = playerWave.height = 92;
+      ctx.clearRect(0, 0, W, H);
+      if (W < 10) { visRaf = requestAnimationFrame(visLoop); return; }
+      const rootStyle = getComputedStyle(document.documentElement);
+      const accent = rootStyle.getPropertyValue('--accent').trim() || '#8b7cff';
+      const mint = rootStyle.getPropertyValue('--mint').trim() || '#72e2c0';
+      const n = 64, gap = 3;
+      const bw = Math.max(1, (W - gap * n) / n);
+      const per = Math.max(1, Math.floor(freq.length / n));
+      for (let i = 0; i < n; i++) {
+        let v = 0;
+        for (let j = 0; j < per; j++) v = Math.max(v, freq[i * per + j]);
+        const h = Math.max(4, (v / 255) * H * 0.95);
+        const x = i * (bw + gap);
+        const grad = ctx.createLinearGradient(0, H, 0, H - h);
+        grad.addColorStop(0, mint);
+        grad.addColorStop(1, accent);
+        ctx.fillStyle = grad;
+        const r = Math.min(5, bw / 2);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, H - h, bw, h, r); else ctx.rect(x, H - h, bw, h);
+        ctx.fill();
+      }
+      visRaf = requestAnimationFrame(visLoop);
+    }
+    function startVis() {
+      if (ensureVis()) {
+        if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {});
+        cancelAnimationFrame(visRaf);
+        visLoop();
+      }
+    }
     async function loadWaveform(path) {
       wavePeaks = null;
       drawWave(0);
@@ -636,6 +694,7 @@
       currentIndex = i;
       const t = library[i];
       playerAudio.src = playUrl(t.path);
+      startVis();
       playerAudio.play().catch(() => {});
       playerTitleEl.textContent = t.title;
       playerArtistEl.textContent = t.artist || 'Unknown artist';
@@ -665,10 +724,10 @@
         const p = playerAudio.currentTime / playerAudio.duration;
         playerSeek.value = Math.round(p * 1000);
         playerTimeEl.textContent = fmtDur(playerAudio.currentTime) + ' / ' + fmtDur(playerAudio.duration);
-        if (wavePeaks) drawWave(p);
+        if (wavePeaks && !visAnalyser) drawWave(p);
       }
     });
-    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; });
+    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); });
     playerAudio.addEventListener('pause', () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; });
     playerAudio.addEventListener('ended', () => { if (repeatOn) { playerAudio.currentTime = 0; playerAudio.play().catch(() => {}); } else nextTrack(); });
     playerSeek.addEventListener('input', () => { if (playerAudio.duration) playerAudio.currentTime = (playerSeek.value / 1000) * playerAudio.duration; });
