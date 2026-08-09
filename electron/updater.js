@@ -56,6 +56,46 @@ async function checkForUpdates(manifestUrl, currentVersion) {
   };
 }
 
+// -------------------------------------------------------- github api ------
+// Check the latest GitHub release of a public repo — no manifest file needed.
+// The version comes from the release tag, the payload is the *-update.zip
+// asset (must be attached to the release, e.g. Smoky-1.5.1-update.zip).
+async function checkForGitHubUpdate(repo, currentVersion, timeoutMs = 10000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let release;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Smoky-Updater' },
+      signal: ctrl.signal,
+      redirect: 'follow',
+    });
+    if (!res.ok) {
+      // 404 = no release yet → treat as "nothing available", not an error.
+      if (res.status === 404) {
+        return { available: false, version: '', notes: '', url: '', current: currentVersion };
+      }
+      throw new Error('HTTP ' + res.status);
+    }
+    release = await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const version = String(release.tag_name || '').replace(/^v/i, '');
+  const asset = (release.assets || []).find((a) => /-update\.zip$/i.test(a.name || ''));
+  if (!version || !asset || !asset.browser_download_url) {
+    return { available: false, version, notes: '', url: '', current: currentVersion };
+  }
+  return {
+    available: isNewer(version, currentVersion),
+    version,
+    notes: release.body || '',
+    url: asset.browser_download_url,
+    current: currentVersion,
+  };
+}
+
 // ----------------------------------------------------------- download -----
 async function download(url, dest) {
   const res = await fetch(url, { redirect: 'follow' });
@@ -142,4 +182,4 @@ async function applyUpdate(url, { appDir, execPath, log = () => {} }) {
   return true;
 }
 
-module.exports = { parseVersion, isNewer, fetchManifest, checkForUpdates, download, unzip, applyUpdate };
+module.exports = { parseVersion, isNewer, fetchManifest, checkForUpdates, checkForGitHubUpdate, download, unzip, applyUpdate };

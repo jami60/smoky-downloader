@@ -7,9 +7,9 @@ const { startServer } = require('../server.js');
 const updater = require('./updater.js');
 
 // --------------------------------------------------------------------------
-// Updates — point this at your hosted update.json (see README → Updates).
+// Updates — checked against the latest GitHub release of this public repo.
 // The env override exists for testing and power users.
-const UPDATE_MANIFEST_URL = process.env.SMOKY_UPDATE_URL || 'https://example.com/smoky/update.json';
+const UPDATE_REPO = process.env.SMOKY_UPDATE_REPO || 'jami60/smoky-downloader';
 const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return '0.0.0'; } })();
 
 const SMOKE = process.argv.includes('--smoke');
@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
   setTimeout(async () => {
     if (!app.isPackaged) return;
     try {
-      const r = await updater.checkForUpdates(UPDATE_MANIFEST_URL, APP_VERSION);
+      const r = await updater.checkForGitHubUpdate(UPDATE_REPO, APP_VERSION);
       if (!r.available) return;
       const choice = dialog.showMessageBoxSync(win, {
         type: 'info',
@@ -206,7 +206,7 @@ async function runUpdate(url) {
 ipcMain.handle('updates:check', async () => {
   if (!app.isPackaged) return { error: 'Updates are only available in the desktop app.' };
   try {
-    const r = await updater.checkForUpdates(UPDATE_MANIFEST_URL, APP_VERSION);
+    const r = await updater.checkForGitHubUpdate(UPDATE_REPO, APP_VERSION);
     return r;
   } catch (e) {
     return { error: String(e && e.message || e) };
