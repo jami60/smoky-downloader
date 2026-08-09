@@ -137,7 +137,7 @@ window.smokyDesktop = (() => {
         return { id, state: 'downloading', percent: item.percent || 0, speed: item.speed, eta: item.eta, trackIndex: item.trackIndex, trackCount: item.trackCount };
       case 'finished':
         if (!once('complete')) return null;
-        return { id, state: 'complete', outputDir: item.folder, filePath: item.file || null };
+        return { id, state: 'complete', outputDir: item.folder, filePath: item.file || null, bytes: item.bytes || null };
       case 'failed':
         if (!once('error')) return null;
         return { id, state: 'error', message: item.error || 'Download failed' };

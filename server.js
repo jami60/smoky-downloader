@@ -436,6 +436,9 @@ async function ensureAlbumTag(file, title) {
 function finish(item) {
   item.finishedAt = now();
   if (item.status === 'finished') {
+    let size = null;
+    try { if (item.file) size = fs.statSync(item.file).size; } catch {}
+    item.bytes = size;
     history.unshift({
       id: item.id,
       title: item.title,
@@ -444,7 +447,7 @@ function finish(item) {
       file: item.file,
       folder: item.folder,
       finishedAt: item.finishedAt,
-      size: null,
+      size,
     });
     history = history.slice(0, 200);
     saveJson(HISTORY_FILE, history);
