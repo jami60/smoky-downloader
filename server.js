@@ -49,6 +49,7 @@ let settings = {
   musicVolume: 22,
   guideSeen: false,
   maxParallel: 3,
+  organizeFolders: false,
 };
 const running = [];          // derzeit aktive Downloads (parallel, max. settings.maxParallel)
 let conversions = [];        // ffmpeg conversions (in memory)
@@ -421,6 +422,8 @@ function launchItem(item) {
       if (item.file && AUDIO_ARGS[item.formatKey]) {
         try { await ensureAlbumTag(item.file, item.title); } catch {}
       }
+      // Optional: fertige Audiodateien nach Künstler/Album sortieren.
+      try { await organizeIntoFolders(item); } catch {}
     } else {
       item.status = 'failed';
       const last = tail.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ');
@@ -438,6 +441,28 @@ function fileHasTag(file, name) {
     p.on('error', () => resolve(false));
     p.on('close', () => resolve(out.trim().length > 0));
   });
+}
+
+// Verschiebt fertige Audiodateien nach Künstler/Album (nur wenn aktiviert).
+async function organizeIntoFolders(item) {
+  if (!item.file || !settings.organizeFolders) return;
+  const ext = path.extname(item.file).toLowerCase();
+  if (!AUDIO_EXTS.has(ext)) return;
+  const tags = await probeTags(item.file);
+  const artist = (tags.artist || '').trim();
+  const album = (tags.album || '').trim();
+  if (!artist && !album) return;
+  const base = path.basename(item.file);
+  const targetDir = path.join(settings.folder, safeName(artist || 'Unknown Artist'), safeName(album || 'Unknown Album'));
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+    let target = path.join(targetDir, base);
+    if (path.normalize(target) === path.normalize(item.file)) return;
+    if (fs.existsSync(target)) target = path.join(targetDir, item.id + '-' + base);
+    fs.renameSync(item.file, target);
+    item.file = target;
+    item.folder = targetDir;
+  } catch {}
 }
 
 // Sets the album tag to the title when the file has no album tag yet (stream
