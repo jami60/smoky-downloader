@@ -48,8 +48,9 @@ let settings = {
   theme: 'midnight',
   musicVolume: 22,
   guideSeen: false,
+  maxParallel: 3,
 };
-let current = null;          // the download currently running
+const running = [];          // derzeit aktive Downloads (parallel, max. settings.maxParallel)
 let conversions = [];        // ffmpeg conversions (in memory)
 let playerState = null;      // { title, artist, playing, updatedAt } — für Discord Rich Presence
 
@@ -313,10 +314,17 @@ function enqueue(url, formatKey, quality, folder, browserName) {
 }
 
 function pump() {
-  if (current || queue.length === 0) return;
-  const item = queue.find((q) => q.status === 'queued');
-  if (!item) return;
-  current = item;
+  if (queue.length === 0) return;
+  const limit = Math.max(1, Math.min(6, Number(settings.maxParallel) || 3));
+  while (running.length < limit) {
+    const item = queue.find((q) => q.status === 'queued');
+    if (!item) break;
+    running.push(item);
+    launchItem(item);
+  }
+}
+
+function launchItem(item) {
   item.status = 'downloading';
   item.startedAt = now();
   item.percent = 0;
@@ -465,7 +473,7 @@ function finish(item) {
     history = history.slice(0, 200);
     saveJson(HISTORY_FILE, history);
   }
-  current = null;
+  const ri = running.indexOf(item); if (ri !== -1) running.splice(ri, 1);
   setTimeout(pump, 400);
 }
 
@@ -818,7 +826,7 @@ const server = http.createServer(async (req, res) => {
         q.status = 'cancelled';
         q.error = null;
         if (q.child && q.child.kill) { try { q.child.kill(); } catch {} }
-        if (current && current.id === q.id) current = null;
+        const ri = running.indexOf(q); if (ri !== -1) running.splice(ri, 1);
         setTimeout(pump, 300);
       }
       return sendJson(res, 200, { ok: true });
