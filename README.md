@@ -6,11 +6,11 @@ Ein ruhiger, lokaler Multi-Media-Downloader für Windows. Videos, Musik, Playlis
 
 ## Installation (2 Minuten)
 
-1. **`Smoky-Setup-1.5.2.exe`** doppelklicken
+1. **`Smoky-Setup-1.8.2.exe`** doppelklicken
 2. Installationsordner wählen → **Installieren**
 3. Fertig — Smoky startet mit einer Desktop-Verknüpfung
 
-> Alternativ: Die portable Version `Smoky-1.5.2-win.zip` entpacken und `Smoky.exe` starten (z. B. vom USB-Stick, keine Installation nötig).
+> Alternativ: Die portable Version `Smoky-1.8.2-win.zip` entpacken und `Smoky.exe` starten (z. B. vom USB-Stick, keine Installation nötig).
 
 ---
 

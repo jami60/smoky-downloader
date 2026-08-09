@@ -25,4 +25,6 @@ contextBridge.exposeInMainWorld('smokyDesktopNative', {
   applyUpdate: (url) => ipcRenderer.invoke('updates:apply', url),
   // Clipboard-Erkennung: main.js meldet erkannte Download-Links an die Seite.
   onClipboardUrl: (cb) => ipcRenderer.on('clipboard:url', (_e, url) => { try { cb(url); } catch {} }),
+  // Update-Fortschritt: main.js meldet Download-% / Entpacken / Fehler an die Seite.
+  onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, p) => { try { cb(p); } catch {} }),
 });

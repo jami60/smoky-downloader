@@ -249,6 +249,7 @@
       <div class="side-bottom"><div class="mita-sticker" id="mitaSticker" title="Mita — klick mich!"><div class="mita-sticker-face"><img id="mitaStickerImg" alt="Mita" style="display:none"><span>👧</span></div><div class="mita-sticker-copy"><b>Mita</b><span id="mitaStickerStatus">Immer für dich da.</span></div></div><div class="storage-card"><div class="storage-top"><span>Local storage</span><strong>Ready</strong></div><div class="meter"><i></i></div><div class="storage-meta"><span>Saved on this device</span><span>34%</span></div></div><div class="local-note"><svg viewBox="0 0 24 24"><path d="M6 11V8a6 6 0 0 1 12 0v3"/><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M12 15v3"/></svg><span>Private by default.<br>Nothing leaves your device.</span></div></div>
     </aside>
     <div id="clipBanner" style="display:none;position:fixed;bottom:20px;right:20px;z-index:46;align-items:center;gap:12px;padding:11px 16px;border:1px solid var(--border-bright);border-radius:14px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);box-shadow:var(--shadow)"><span style="font-size:13px">📎 <b id="clipHost">Link</b> <span data-i18n="banner.detected">erkannt</span></span><button class="primary-btn" id="clipDownload" style="padding:9px 13px;font-size:12px" data-i18n="banner.download">Download</button><button class="icon-btn" id="clipDismiss" style="width:28px;height:28px" title="Verwerfen">✕</button></div>
+    <div id="updateProgress" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:47;min-width:280px;max-width:420px;padding:12px 16px;border:1px solid var(--border-bright);border-radius:14px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);box-shadow:var(--shadow)"><b id="updateProgressLabel">Update…</b><i style="display:block;height:5px;margin-top:10px;border-radius:99px;background:var(--surface-3);overflow:hidden"><span id="updateProgressBar" style="display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--mint));transition:width .3s ease"></span></i></div>
     <div class="guide-overlay" id="trackPicker" aria-hidden="true">
       <section class="guide-modal" role="dialog" aria-modal="true" style="max-width:560px;max-height:min(680px,calc(100vh - 48px))">
         <button class="guide-close" id="trackPickerClose" aria-label="Close track picker">×</button>
@@ -719,6 +720,29 @@
       }
     };
     checkUpdatesBtn.addEventListener('click', runUpdateCheck);
+    // Live-Fortschritt während des Update-Downloads (Download-%, Entpacken, Fehler).
+    if (desktop && desktop.onUpdateProgress) {
+      desktop.onUpdateProgress((p) => {
+        const box = document.getElementById('updateProgress');
+        if (!box || !p) return;
+        if (p.phase === 'error') {
+          box.style.display = 'none';
+          toast(`${t('toast.checkFail')} ${esc(p.message || '')}`);
+          return;
+        }
+        const label = document.getElementById('updateProgressLabel');
+        const bar = document.getElementById('updateProgressBar');
+        box.style.display = 'block';
+        if (p.phase === 'download') {
+          const mb = (b) => (b / 1048576).toFixed(1) + ' MB';
+          if (bar) bar.style.width = (p.percent || 0) + '%';
+          if (label) label.textContent = p.total ? `Update ${p.percent}% · ${mb(p.received)} / ${mb(p.total)}` : t('upd.installing');
+        } else if (p.phase === 'extract') {
+          if (bar) bar.style.width = '100%';
+          if (label) label.textContent = t('upd.installing');
+        }
+      });
+    }
     showVersion();
     renderGuide();
     (async () => {
@@ -1115,6 +1139,7 @@
         library = data.tracks || [];
         playerCountEl.textContent = library.length + ' ' + t('player.count');
         renderLibrary();
+        restoreLastPlayback();
       } catch { /* library not reachable */ }
     }
     let playerQuery = '';
@@ -1222,6 +1247,12 @@
     async function loadWaveform(path) {
       wavePeaks = null;
       drawWave(0);
+      if (waveCache.has(path)) {
+        // Gecachte Peaks — die volle Audiodatei nicht erneut laden/decoden.
+        wavePeaks = waveCache.get(path);
+        drawWave(playerAudio.duration ? playerAudio.currentTime / playerAudio.duration : 0);
+        return;
+      }
       try {
         const res = await fetch(playUrl(path));
         const buf = await res.arrayBuffer();
@@ -1239,11 +1270,54 @@
           for (let j = i * block; j < Math.min((i + 1) * block, data.length); j++) max = Math.max(max, Math.abs(data[j]));
           wavePeaks.push(max);
         }
+        waveCache.set(path, wavePeaks);
         drawWave(playerAudio.duration ? playerAudio.currentTime / playerAudio.duration : 0);
       } catch { /* waveform not available */ }
     }
     // Meldet den aktuellen Track an den Server — Discord Rich Presence zeigt ihn an.
     const sendPlayerState = (playing) => { try { fetch('/api/player-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: playerTitleEl.textContent, artist: playerArtistEl.textContent, playing }) }).catch(() => {}); } catch {} };
+    // Zuletzt gespielten Track + Position merken — nach einem Neustart geht's weiter.
+    let lastPosSaveAt = 0;
+    const saveLastPlayback = () => {
+      try {
+        if (currentIndex >= 0) {
+          localStorage.setItem('smoky-last-track', library[currentIndex].path);
+          localStorage.setItem('smoky-last-position', String(playerAudio.currentTime || 0));
+        }
+      } catch {}
+    };
+    let playbackResumed = false;
+    function restoreLastPlayback() {
+      if (playbackResumed || currentIndex !== -1 || !library.length) return;
+      let savedPath = null, savedPos = 0;
+      try { savedPath = localStorage.getItem('smoky-last-track'); savedPos = Number(localStorage.getItem('smoky-last-position') || 0); } catch {}
+      if (!savedPath) return;
+      const i = library.findIndex((tr) => tr.path === savedPath);
+      if (i < 0) return;
+      playbackResumed = true;
+      const t = library[i];
+      currentIndex = i;
+      playerAudio.src = playUrl(t.path);
+      startVis();
+      playerTitleEl.textContent = t.title;
+      playerArtistEl.textContent = t.artist || t('player.unknown');
+      playerAlbumEl.textContent = t.album || '';
+      playerCoverImg.src = coverUrl(t.path);
+      playerCoverImg.style.display = '';
+      playerCoverImg.onerror = () => { playerCoverImg.style.display = 'none'; };
+      renderLibrary();
+      loadWaveform(t.path);
+      if (savedPos > 1) {
+        playerAudio.addEventListener('loadedmetadata', () => {
+          try { if (playerAudio.currentTime < 1 && playerAudio.duration) playerAudio.currentTime = Math.min(savedPos, Math.max(0, playerAudio.duration - 0.5)); } catch {}
+        }, { once: true });
+      }
+      playerAudio.play().catch(() => {});
+      sendPlayerState(true);
+      updateMediaSession();
+    }
+    // Waveform-Peaks pro Track cachen — nicht bei jedem Abspielen die ganze Datei laden.
+    const waveCache = new Map();
     function playTrack(i) {
       if (i < 0 || i >= library.length) return;
       currentIndex = i;
@@ -1260,6 +1334,8 @@
       renderLibrary();
       loadWaveform(t.path);
       sendPlayerState(true);
+      saveLastPlayback();
+      updateMediaSession();
       try { if (bgAudio && !bgAudio.paused) { bgAudio.pause(); if (musicToggle) musicToggle.setAttribute('aria-pressed', 'false'); } } catch {}
     }
     function nextTrack() {
@@ -1275,6 +1351,31 @@
       if (playerAudio.currentTime > 3) { playerAudio.currentTime = 0; return; }
       playTrack((currentIndex - 1 + library.length) % library.length);
     }
+    // System-Media-Controls (Windows-Overlay, Media-Keys): Titel/Künstler/Cover an
+    // das Betriebssystem melden — sonst zeigt Windows nur das ♫-Platzhalter-Symbol.
+    const updateMediaSession = () => {
+      if (!('mediaSession' in navigator)) return;
+      try {
+        const t = currentIndex >= 0 ? library[currentIndex] : null;
+        if (!t) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; return; }
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: t.title || 'Smoky',
+          artist: t.artist || t('player.unknown'),
+          album: t.album || '',
+          artwork: [{ src: coverUrl(t.path), sizes: '512x512' }],
+        });
+        navigator.mediaSession.playbackState = playerAudio.paused ? 'paused' : 'playing';
+      } catch { /* MediaSession nicht verfügbar */ }
+    };
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler('play', () => { playerAudio.play().catch(() => {}); });
+        navigator.mediaSession.setActionHandler('pause', () => playerAudio.pause());
+        navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
+        navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
+        navigator.mediaSession.setActionHandler('seekto', (d) => { if (playerAudio.duration && typeof d.seekTime === 'number') playerAudio.currentTime = d.seekTime; });
+      } catch {}
+    }
     playerAudio.addEventListener('timeupdate', () => {
       if (playerAudio.duration) {
         const p = playerAudio.currentTime / playerAudio.duration;
@@ -1282,9 +1383,11 @@
         playerTimeEl.textContent = fmtDur(playerAudio.currentTime) + ' / ' + fmtDur(playerAudio.duration);
         if (wavePeaks && !visAnalyser) drawWave(p);
       }
+      const now = Date.now();
+      if (now - lastPosSaveAt > 2000) { lastPosSaveAt = now; saveLastPlayback(); }
     });
-    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); sendPlayerState(true); });
-    playerAudio.addEventListener('pause', () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; sendPlayerState(false); });
+    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); sendPlayerState(true); updateMediaSession(); });
+    playerAudio.addEventListener('pause', () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; sendPlayerState(false); saveLastPlayback(); updateMediaSession(); });
     playerAudio.addEventListener('ended', () => { if (repeatOn) { playerAudio.currentTime = 0; playerAudio.play().catch(() => {}); } else nextTrack(); });
     playerSeek.addEventListener('input', () => { if (playerAudio.duration) playerAudio.currentTime = (playerSeek.value / 1000) * playerAudio.duration; });
     playerPlayBtn.addEventListener('click', () => { if (currentIndex < 0) { if (library.length) playTrack(0); } else if (playerAudio.paused) playerAudio.play().catch(() => {}); else playerAudio.pause(); });

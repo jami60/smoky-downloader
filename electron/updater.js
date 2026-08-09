@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { pipeline } = require('node:stream/promises');
-const { Readable } = require('node:stream');
+const { Readable, Transform } = require('node:stream');
 
 // ------------------------------------------------------------- versions ----
 function parseVersion(v) {
@@ -97,10 +97,25 @@ async function checkForGitHubUpdate(repo, currentVersion, timeoutMs = 10000) {
 }
 
 // ----------------------------------------------------------- download -----
-async function download(url, dest) {
+// onProgress({ phase:'download', received, total, percent }) wird regelmäßig
+// gemeldet, damit die UI einen echten Fortschrittsbalken zeigen kann.
+async function download(url, dest, onProgress) {
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(dest));
+  const total = Number(res.headers.get('content-length') || 0);
+  let received = 0;
+  let lastReport = 0;
+  const report = new Transform({
+    transform(chunk, _enc, cb) {
+      received += chunk.length;
+      if (onProgress && (received - lastReport >= 262144 || received === total)) {
+        lastReport = received;
+        onProgress({ phase: 'download', received, total, percent: total ? Math.min(100, Math.round((received / total) * 100)) : 0 });
+      }
+      cb(null, chunk);
+    },
+  });
+  await pipeline(Readable.fromWeb(res.body), report, fs.createWriteStream(dest));
 }
 
 // ------------------------------------------------------------ extract -----
@@ -138,16 +153,18 @@ function contentRoot(staging) {
 
 // applyUpdate(url, { appDir, execPath, log }) → downloads, extracts and
 // hands over to a batch that swaps the app folder and relaunches.
-async function applyUpdate(url, { appDir, execPath, log = () => {} }) {
+async function applyUpdate(url, { appDir, execPath, log = () => {}, onProgress = null }) {
   if (!appDir || !execPath) throw new Error('applyUpdate needs appDir + execPath');
   const tmp = path.join(os.tmpdir(), 'smoky-update-' + Date.now());
   fs.mkdirSync(tmp, { recursive: true });
 
   log('downloading update…');
+  if (onProgress) onProgress({ phase: 'download', received: 0, total: 0, percent: 0 });
   const zip = path.join(tmp, 'update.zip');
-  await download(url, zip);
+  await download(url, zip, onProgress || undefined);
 
   log('extracting update…');
+  if (onProgress) onProgress({ phase: 'extract' });
   const staging = path.join(tmp, 'staging');
   await unzip(zip, staging);
 

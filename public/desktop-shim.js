@@ -143,6 +143,9 @@ window.smokyDesktop = (() => {
       // Dev-Hook für Tests ohne Electron
       (window.__clipboardCbs = window.__clipboardCbs || []).push(cb);
     },
+    onUpdateProgress(cb) {
+      if (native && native.onUpdateProgress) native.onUpdateProgress(cb);
+    },
   };
 
   // ---------------------------------------------- download event mapping --

@@ -21,6 +21,22 @@ const APP_VERSION = (() => { try { return require('../package.json').version; } 
 const SMOKE = process.argv.includes('--smoke');
 let win = null;
 
+// Nur eine Instanz gleichzeitig: ein zweiter Start fokussiert das offene Fenster
+// statt ein zweites zu öffnen (der Update-Relaunch startet erst nach taskkill).
+// Auch die Smoke-Instanz nimmt am Lock teil — sonst bootet sie neben der
+// laufenden App und crasht sich mit ihr über den gemeinsamen Cache.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  if (SMOKE) console.log('SMOKE_FAIL another instance is running');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+
 // Crash diagnostics: GUI apps show no console, so log to a file in userData.
 let logPath = '';
 try { logPath = path.join(app.getPath('userData'), 'smoky.log'); } catch {}
@@ -142,7 +158,10 @@ app.whenReady().then(async () => {
           bridge: typeof window.smokyDesktop === 'object',
           nativeBridge: typeof window.smokyDesktopNative === 'object',
           views: document.querySelectorAll('.page-view').length,
-          viewsInMain: [...document.querySelectorAll('.page-view')].filter(v => document.querySelector('main').contains(v)).length
+          viewsInMain: [...document.querySelectorAll('.page-view')].filter(v => document.querySelector('main').contains(v)).length,
+          mediaSession: typeof navigator.mediaSession === 'object',
+          updateProgressEl: !!document.getElementById('updateProgress'),
+          updateProgressBridge: typeof (window.smokyDesktop && window.smokyDesktop.onUpdateProgress) === 'function'
         })`);
         console.log('SMOKE_OK ' + JSON.stringify(result));
       } catch (err) {
@@ -152,6 +171,7 @@ app.whenReady().then(async () => {
     });
   }
 });
+}
 
 app.on('window-all-closed', () => app.quit());
 
@@ -223,28 +243,29 @@ ipcMain.handle('fs:deleteFile', async (_event, filePath) => {
 // ------------------------------------------------------------------ updates --
 let updating = false;
 
+// Update-Fortschritt an die Seite melden (Download-%, Entpacken, Fehler).
+function sendUpdateProgress(p) {
+  try { if (win && !win.isDestroyed()) win.webContents.send('update:progress', p); } catch {}
+}
+
 async function runUpdate(url) {
   if (updating) return { ok: false, error: 'Update already in progress' };
   updating = true;
   try {
-    dialog.showMessageBoxSync(win, {
-      type: 'info',
-      title: 'Smoky update',
-      message: 'Downloading update…',
-      detail: 'Smoky will close itself, install the update and restart. This can take a few minutes.',
-      buttons: ['OK'],
-      noLink: true,
-    });
+    // Kein blockierender Modal mehr — die Seite zeigt einen echten Fortschrittsbalken.
+    sendUpdateProgress({ phase: 'download', received: 0, total: 0, percent: 0 });
     await updater.applyUpdate(url, {
       appDir: path.dirname(process.execPath),
       execPath: process.execPath,
       log,
+      onProgress: sendUpdateProgress,
     });
     app.exit(0);
     return { ok: true };
   } catch (e) {
     updating = false;
     log('update failed:', e && e.stack || e);
+    sendUpdateProgress({ phase: 'error', message: String(e && e.message || e) });
     dialog.showMessageBoxSync(win, {
       type: 'error',
       title: 'Smoky update',
