@@ -225,6 +225,10 @@ window.smokyDesktop = (() => {
       d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   };
 
+  const histAvatar = (h) => h.file
+    ? `<div class="recent-avatar" style="overflow:hidden;padding:0;border-radius:7px"><img src="/api/cover?file=${encodeURIComponent(h.file)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.textContent='${esc((h.format || 'M').charAt(0))}'"></div>`
+    : `<div class="recent-avatar">${esc((h.format || 'M').charAt(0))}</div>`;
+
   const renderHistory = (history) => {
     const card = historyCard();
     if (!card) return;
@@ -234,7 +238,7 @@ window.smokyDesktop = (() => {
     }
     card.innerHTML = history.slice(0, 60).map((h) => `
       <div class="recent-row" style="align-items:center">
-        <div class="recent-avatar">${esc((h.format || 'M').charAt(0))}</div>
+        ${histAvatar(h)}
         <div class="recent-copy"><b>${esc(h.title)}</b><span>${esc(h.format)} · ${esc(h.folder || '')}</span></div>
         <span style="font-size:10px;color:var(--muted-2)">${fmtTime(h.finishedAt)}</span>
       </div>`).join('');
@@ -247,7 +251,7 @@ window.smokyDesktop = (() => {
     if (!items.length) return; // keep the built-in empty state
     card.innerHTML = items.map((h) => `
       <div class="recent-row">
-        <div class="recent-avatar">${esc((h.format || 'M').charAt(0))}</div>
+        ${histAvatar(h)}
         <div class="recent-copy"><b>${esc(h.title)}</b><span>${esc(h.format)}</span></div>
         <span>✓</span>
       </div>`).join('');

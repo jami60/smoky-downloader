@@ -176,6 +176,37 @@ app.whenReady().then(async () => {
               window.__ensureQueueItem({ id: 'faketest1', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', status: 'downloading', formatKey: 'mp3', quality: '1080' });
               return document.querySelectorAll('.queue-item[data-download-id="faketest1"]').length > 0 ? 'ok' : 'no-nodes';
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // Player-Polish: Subtitle versteckt, wenn Album == Titel
+          playerAlbumHide: (() => {
+            try {
+              const titleEl = document.getElementById('playerTitle');
+              const albumEl = document.getElementById('playerAlbum');
+              const oldTitle = titleEl.textContent;
+              titleEl.textContent = 'X';
+              setPlayerAlbum('X');
+              const a = albumEl.style.display === 'none';
+              setPlayerAlbum('Y');
+              const b = albumEl.style.display !== 'none' && albumEl.textContent === 'Y';
+              titleEl.textContent = oldTitle;
+              return a && b ? 'ok' : 'fail';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // URL-Icon wechselt live aufs Plattform-Logo und zurück
+          urlIconSwitch: (() => {
+            try {
+              const inp = document.getElementById('urlInput');
+              const icon = document.getElementById('urlIcon');
+              const old = inp.value;
+              inp.value = 'https://open.spotify.com/track/x';
+              updateUrlIcon(inp.value);
+              const a = icon.style.color !== '';
+              inp.value = 'https://example.com';
+              updateUrlIcon(inp.value);
+              const b = icon.style.color === '';
+              inp.value = old;
+              return a && b ? 'ok' : 'fail';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         })`);
         console.log('SMOKE_OK ' + JSON.stringify(result));
