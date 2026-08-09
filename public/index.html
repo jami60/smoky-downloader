@@ -457,18 +457,16 @@
       }
       if (!guideSeen) setTimeout(openGuide, 2100); // erst nach dem Splash
     })();
-    // Splash: nach 1,5 s ausblenden (Theme ist dann schon gesetzt → Splash trägt die zufällige Farbe)
+    // Splash: nach 1,5 s ausblenden (Theme ist dann schon gesetzt → Splash trägt die Farbe)
     const splash = document.getElementById('splash');
     setTimeout(() => { splash.classList.add('hide'); setTimeout(() => splash.remove(), 650); }, 1500);
-    const savedTheme = (() => { try { return localStorage.getItem('smoky-theme'); } catch { return null; } })();
     const AMBIENT = { spring:['Ambient petals','Ambient petals','Let soft blossom petals drift across the screen.'], summer:['Sunshine','Sunshine','Let warm golden sun-dust glow over the workspace.'], autumn:['Falling leaves','Falling leaves','Let autumn leaves tumble down the screen.'], rain:['Ambient rain','Ambient rain','Switch on animated rain drops in the background.'], midnight:['Ambient snow','Ambient snow','Keep the quiet animated snowfall in the background.'] };
     const applyTheme = (theme) => { root.dataset.theme=theme; try { localStorage.setItem('smoky-theme',theme); } catch {}; try { fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme }) }).catch(() => {}); } catch {}; const a=AMBIENT[theme]; document.getElementById('ambientLabel').textContent=a ? a[0] : 'Ambient snow'; document.getElementById('ambientTitle').textContent=a ? a[1] : 'Ambient snow'; document.getElementById('ambientDescription').textContent=a ? a[2] : 'Keep the quiet animated snowfall in the background.'; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); document.querySelectorAll('.theme-choice').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); };
     document.querySelectorAll('.theme-dot, .theme-choice').forEach(btn => btn.addEventListener('click', () => { applyTheme(btn.dataset.set); toast(`<b>${btn.dataset.label || btn.dataset.set}</b> theme applied`); }));
-    // Beim Start jedes Mal ein anderes Theme (zufällig, das letzte nicht wiederholen)
-    const themeNames = [...document.querySelectorAll('.theme-dot')].map(x => x.dataset.set);
-    let launchTheme = themeNames[Math.floor(Math.random() * themeNames.length)];
-    if (themeNames.length > 1) { let guard = 0; while (launchTheme === savedTheme && guard++ < 12) launchTheme = themeNames[Math.floor(Math.random() * themeNames.length)]; }
-    applyTheme(launchTheme);
+    // Beim Start das Theme der echten Jahreszeit (März–Mai=Spring, Juni–Aug=Summer,
+    // Sep–Nov=Autumn, Dez–Feb=Winter) — manuelles Wechseln jederzeit möglich
+    const seasonOf = () => { const m = new Date().getMonth() + 1; if (m >= 3 && m <= 5) return 'spring'; if (m >= 6 && m <= 8) return 'summer'; if (m >= 9 && m <= 11) return 'autumn'; return 'midnight'; };
+    applyTheme(seasonOf());
     const snowToggle = document.getElementById('snowToggle');
     snowToggle.checked = localStorage.getItem('smoky-snow') !== 'off';
     canvas.classList.toggle('hidden', !snowToggle.checked);
