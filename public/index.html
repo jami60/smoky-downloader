@@ -1227,8 +1227,9 @@
         const buf = await res.arrayBuffer();
         const Ctx = window.AudioContext || window.webkitAudioContext;
         const ctx = new Ctx();
-        const decoded = await ctx.decodeAudioData(buf);
-        ctx.close();
+        let decoded;
+        try { decoded = await ctx.decodeAudioData(buf); }
+        finally { try { ctx.close(); } catch {} } // nie Contexts leaken (Browser-Limit ~6)
         const data = decoded.getChannelData(0);
         const bars = 110;
         const block = Math.max(1, Math.floor(data.length / bars));

@@ -335,6 +335,8 @@ function launchItem(item) {
   item.status = 'downloading';
   item.startedAt = now();
   item.percent = 0;
+  item._retrying = false;
+  item._finished = false;
 
   const folder = item.folder || settings.folder;
   try { fs.mkdirSync(folder, { recursive: true }); } catch {}
@@ -406,6 +408,7 @@ function launchItem(item) {
 
   child.on('close', async (code) => {
     if (item.status === 'failed' || item.status === 'cancelled') { finish(item); return; }
+    if (item._retrying) return; // 'error' hat den Retry schon eingeplant — kein Doppel-Retry
     if (code === 0) {
       item.status = 'finished';
       item.percent = 100;
@@ -455,6 +458,7 @@ function scheduleRetry(item) {
   item.error = null;
   item.percent = 0;
   item.child = null;
+  item._retrying = true; // verhindert Doppel-Retry durch nachfolgendes 'close'
   const ri = running.indexOf(item);
   if (ri !== -1) running.splice(ri, 1);
   setTimeout(pump, delay);
@@ -580,6 +584,8 @@ async function listPlaylistTracks(url) {
 }
 
 function finish(item) {
+  if (item._finished) return; // idempotent — 'error' + 'close' feuern nacheinander
+  item._finished = true;
   item.finishedAt = now();
   if (item.status === 'finished') {
     let size = null;
@@ -973,9 +979,14 @@ function convertFile(id, srcPath, origName, format) {
 
 // ------------------------------------------------------------- HTTP app ----
 function sendJson(res, code, obj) {
-  const body = JSON.stringify(obj);
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
-  res.end(body);
+  // Defensiv: Der Request kann schon zerstört sein (z. B. „body too large"),
+  // dann darf hier nichts mehr werfen — ein Fehler in diesem Pfad würde die
+  // Exception aus dem Handler-Catch entkommen lassen und den Server crashen.
+  try {
+    const body = JSON.stringify(obj);
+    res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+    res.end(body);
+  } catch {}
 }
 
 function readBody(req) {
@@ -1005,11 +1016,21 @@ function serveFile(req, res, full, mime, extraHeaders = {}) {
       'Content-Type': mime, 'Content-Length': end - start + 1,
       'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${stat.size}`, ...extraHeaders,
     });
-    fs.createReadStream(full, { start, end }).pipe(res);
+    pipeFile(res, full, { start, end });
   } else {
     res.writeHead(200, { 'Content-Type': mime, 'Content-Length': stat.size, 'Accept-Ranges': 'bytes', ...extraHeaders });
-    fs.createReadStream(full).pipe(res);
+    pipeFile(res, full);
   }
+}
+
+// Streamt eine Datei zum Response und schluckt Fehler (Datei wurde zwischen
+// stat und read gelöscht/gesperrt) — ohne Error-Handler würde ein unhandled
+// 'error' auf dem Stream den kompletten Server-Prozess crashen.
+function pipeFile(res, full, opts) {
+  const stream = fs.createReadStream(full, opts || {});
+  stream.on('error', () => { try { res.destroy(); } catch {} });
+  res.on('close', () => { try { stream.destroy(); } catch {} });
+  stream.pipe(res);
 }
 
 function serveStatic(req, res, pathname) {
@@ -1142,14 +1163,28 @@ async function coverFor(file) {
   return backfillCover(file);
 }
 
+// Ordner-Größe wird max. alle 10 s neu berechnet — /api/status wird von
+// Elektron (1 s) und der UI (1,2 s) gepollt; ein Walk über eine große
+// Bibliothek bei jedem Poll würde Status-Updates unnötig verzögern.
+let storageBytes = 0;
+let storageAt = 0;
+async function computeStorage() {
+  const t = Date.now();
+  if (t - storageAt > 10000) {
+    storageAt = t;
+    storageBytes = await dirSize(settings.folder);
+  }
+  return storageBytes;
+}
+
 async function statusPayload() {
   let storage = { folder: settings.folder, bytes: 0, percent: 0, ready: true };
-  try { storage.bytes = await dirSize(settings.folder); } catch {}
+  try { storage.bytes = await computeStorage(); } catch {}
   storage.percent = Math.min(100, Math.round((storage.bytes / VAULT_QUOTA) * 100));
   if (storage.bytes === 0) storage.percent = 0;
   return {
     version: APP_VERSION,
-    queue: queue.map(({ child, ...q }) => q),
+    queue: queue.map(({ child, _retrying, _finished, ...q }) => q),
     history,
     conversions: conversions.map((c) => c),
     clips: clips.map((c) => c),
@@ -1269,11 +1304,13 @@ const server = http.createServer(async (req, res) => {
       const srcPath = path.join(inDir, `${id}-${safeName(name)}`);
       const ws = fs.createWriteStream(srcPath);
       req.pipe(ws);
-      await new Promise((resolve, reject) => {
-        ws.on('finish', resolve);
-        ws.on('error', reject);
-        req.on('error', reject);
+      const uploaded = await new Promise((resolve) => {
+        ws.on('finish', () => resolve(true));
+        ws.on('error', () => { try { fs.unlinkSync(srcPath); } catch {} resolve(false); });
+        req.on('error', () => { try { fs.unlinkSync(srcPath); } catch {} resolve(false); });
+        req.on('aborted', () => { try { fs.unlinkSync(srcPath); } catch {} resolve(false); });
       });
+      if (!uploaded) return sendJson(res, 400, { error: 'upload interrupted' });
       return sendJson(res, 200, { id, path: srcPath });
     }
 
@@ -1416,7 +1453,8 @@ const server = http.createServer(async (req, res) => {
       if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
       const cover = await coverFor(file);
       if (!cover) return sendJson(res, 204);
-      return serveFile(req, res, cover, 'image/jpeg');
+      // Schwester-Bilder können .png/.webp sein — passenden MIME-Type liefern
+      return serveFile(req, res, cover, MIME[path.extname(cover).toLowerCase()] || 'image/jpeg');
     }
 
     serveStatic(req, res, p);
