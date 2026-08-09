@@ -30,7 +30,10 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.flac': 'audio/flac', '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.aac': 'audio/aac', '.webm': 'video/webm', '.mp4': 'video/mp4',
 };
+const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.aac']);
 
 // ---------------------------------------------------------------- state ----
 const queue = [];            // active + waiting items (in memory)
@@ -574,16 +577,111 @@ function readBody(req) {
   });
 }
 
-function serveStatic(res, pathname) {
+function serveFile(req, res, full, mime, extraHeaders = {}) {
+  const stat = fs.statSync(full);
+  const range = req.headers.range;
+  if (range) {
+    const m = /bytes=(\d*)-(\d*)/.exec(range);
+    let start = m && m[1] ? parseInt(m[1], 10) : 0;
+    let end = m && m[2] ? parseInt(m[2], 10) : stat.size - 1;
+    if (isNaN(start)) start = 0;
+    if (isNaN(end) || end >= stat.size) end = stat.size - 1;
+    if (start > end || start >= stat.size) {
+      res.writeHead(416, { 'Content-Range': `bytes */${stat.size}` });
+      res.end();
+      return;
+    }
+    res.writeHead(206, {
+      'Content-Type': mime, 'Content-Length': end - start + 1,
+      'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${stat.size}`, ...extraHeaders,
+    });
+    fs.createReadStream(full, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, { 'Content-Type': mime, 'Content-Length': stat.size, 'Accept-Ranges': 'bytes', ...extraHeaders });
+    fs.createReadStream(full).pipe(res);
+  }
+}
+
+function serveStatic(req, res, pathname) {
   let file = pathname === '/' ? '/index.html' : pathname;
   try { file = decodeURIComponent(file); } catch {}
   const full = path.normalize(path.join(PUBLIC, file));
   if (!full.startsWith(PUBLIC)) { sendJson(res, 403, { error: 'forbidden' }); return; }
-  fs.readFile(full, (err, buf) => {
-    if (err) { sendJson(res, 404, { error: 'not found' }); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream', 'Content-Length': buf.length });
-    res.end(buf);
+  fs.stat(full, (err, stat) => {
+    if (err || !stat.isFile()) { sendJson(res, 404, { error: 'not found' }); return; }
+    try { serveFile(req, res, full, MIME[path.extname(full)] || 'application/octet-stream'); }
+    catch { sendJson(res, 404, { error: 'not found' }); }
   });
+}
+
+// ---------------------------------------------------------- media API ----
+function isInsideFolder(file, folder) {
+  const f = path.resolve(file);
+  const base = path.resolve(folder);
+  return f === base || f.startsWith(base + path.sep);
+}
+
+function probeTags(file) {
+  return new Promise((resolve) => {
+    if (!ffprobeCmd) return resolve({});
+    const p = spawn(ffprobeCmd.cmd, ['-v', 'error', '-show_entries', 'format=duration:format_tags', '-of', 'json', file], { windowsHide: true });
+    let out = '';
+    p.stdout.on('data', (d) => (out += d));
+    p.on('error', () => resolve({}));
+    p.on('close', () => {
+      try {
+        const j = JSON.parse(out);
+        const t = j.format.tags || {};
+        resolve({ title: t.title, artist: t.artist, album: t.album, duration: j.format.duration ? parseFloat(j.format.duration) : 0 });
+      } catch { resolve({}); }
+    });
+  });
+}
+
+async function scanLibrary() {
+  const files = [];
+  const walk = async (dir, depth) => {
+    if (depth > 2) return;
+    let entries;
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) await walk(p, depth + 1);
+      else if (AUDIO_EXTS.has(path.extname(e.name).toLowerCase())) files.push(p);
+    }
+  };
+  await walk(settings.folder, 0);
+  files.sort();
+  const tracks = [];
+  for (const f of files) {
+    const tags = await probeTags(f);
+    let size = 0;
+    try { size = fs.statSync(f).size; } catch {}
+    tracks.push({
+      path: f,
+      title: tags.title || path.basename(f, path.extname(f)),
+      artist: tags.artist || '',
+      album: tags.album || '',
+      duration: tags.duration || 0,
+      size,
+    });
+  }
+  return tracks;
+}
+
+const coverDir = path.join(DATA_DIR, 'covers');
+async function coverFor(file) {
+  if (!ffmpegCmd) return null;
+  const hash = crypto.createHash('md5').update(file).digest('hex');
+  const out = path.join(coverDir, hash + '.jpg');
+  if (fs.existsSync(out)) return out;
+  try { fs.mkdirSync(coverDir, { recursive: true }); } catch { return null; }
+  await new Promise((resolve) => {
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-an', '-c:v', 'mjpeg', '-frames:v', '1', out], { windowsHide: true });
+    p.on('error', () => resolve());
+    p.on('close', () => resolve());
+  });
+  return fs.existsSync(out) ? out : null;
 }
 
 async function statusPayload() {
@@ -739,7 +837,25 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { version: APP_VERSION });
     }
 
-    serveStatic(res, p);
+    if (req.method === 'GET' && p === '/api/library') {
+      return sendJson(res, 200, { tracks: await scanLibrary() });
+    }
+
+    if (req.method === 'GET' && p === '/api/play') {
+      const file = u.searchParams.get('file');
+      if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
+      return serveFile(req, res, file, MIME[path.extname(file).toLowerCase()] || 'application/octet-stream');
+    }
+
+    if (req.method === 'GET' && p === '/api/cover') {
+      const file = u.searchParams.get('file');
+      if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
+      const cover = await coverFor(file);
+      if (!cover) return sendJson(res, 204);
+      return serveFile(req, res, cover, 'image/jpeg');
+    }
+
+    serveStatic(req, res, p);
   } catch (err) {
     sendJson(res, 500, { error: String(err.message || err) });
   }
