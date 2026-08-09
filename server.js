@@ -52,6 +52,7 @@ let settings = {
 };
 const running = [];          // derzeit aktive Downloads (parallel, max. settings.maxParallel)
 let conversions = [];        // ffmpeg conversions (in memory)
+let clips = [];              // clip jobs (yt-dlp section download + ffmpeg)
 let playerState = null;      // { title, artist, playing, updatedAt } — für Discord Rich Presence
 
 function loadJson(file, fallback) {
@@ -622,6 +623,191 @@ function makeFallbackImage(id, title) {
   });
 }
 
+// --------------------------------------------------------------- clips ----
+// Ein Clip: yt-dlp lädt nur den Zeitausschnitt ([start,end)) herunter
+// (--download-sections), dann schneidet/remuxt ffmpeg das Segment. Optional
+// wird das Video auf 9:16 (1080×1920) umgebaut — Crop (ausfüllen) oder
+// Blur-Background (ganzes Video sichtbar) — plus optional ein Caption-Text.
+function toSeconds(value) {
+  const v = String(value || '').trim();
+  if (!v) return null;
+  if (/^\d+([.,]\d+)?$/.test(v)) {
+    const n = parseFloat(v.replace(',', '.'));
+    return isFinite(n) && n >= 0 ? n : null;
+  }
+  const m = v.match(/^(?:(\d+):)?(\d{1,2}):(\d{1,2}(?:[.,]\d+)?)$/);
+  if (m) {
+    const h = m[1] ? parseInt(m[1], 10) : 0;
+    const min = parseInt(m[2], 10);
+    const sec = parseFloat(m[3].replace(',', '.'));
+    if (min >= 60 || sec >= 60) return null;
+    return h * 3600 + min * 60 + sec;
+  }
+  return null;
+}
+
+function fmtTime(sec) {
+  const s = Math.floor(sec);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+}
+
+function startClipJob(body) {
+  const item = {
+    id: crypto.randomBytes(4).toString('hex'),
+    url: String(body.url || ''),
+    title: 'Resolving video…',
+    start: toSeconds(body.start),
+    end: toSeconds(body.end),
+    quality: HEIGHTS[String(body.quality).trim()] ? String(body.quality).trim() : '1080',
+    format: FORMATS[body.format] && FORMATS[body.format].kind === 'video' ? body.format : 'mp4',
+    vertical: body.vertical === true || body.vertical === 'crop' || body.vertical === 'blur' ? (body.vertical === 'blur' ? 'blur' : 'crop') : false,
+    caption: String(body.caption || '').trim().slice(0, 60),
+    status: 'preparing',
+    percent: 0,
+    output: null,
+    error: null,
+    startedAt: now(),
+    finishedAt: null,
+  };
+  clips.unshift(item);
+
+  (async () => {
+    try {
+      if (!YTDLP_OK) throw new Error('yt-dlp is not installed. Run: py -m pip install -U yt-dlp');
+      if (item.start === null || item.end === null || item.end <= item.start) throw new Error('Invalid time range — set a valid start and end.');
+      if (item.end - item.start > 15 * 60) throw new Error('Clips are limited to 15 minutes.');
+      if (!FFMPEG_OK) throw new Error('ffmpeg is not installed — the clip cutter needs it.');
+
+      const tmpDir = path.join(os.tmpdir(), 'smoky-clips', item.id);
+      fs.mkdirSync(tmpDir, { recursive: true });
+      item.status = 'downloading';
+
+      // Nur den Zeitausschnitt herunterladen (bestes verfügbares Video, kein Re-Encode beim Laden)
+      const titleFile = path.join(tmpDir, 'title.txt');
+      const dlArgs = [
+        ...ytdlp.args, '--newline', '--no-warnings', '--no-playlist',
+        '--print-to-file', '%(title)s', titleFile,
+        '--download-sections', `*${item.start}-${item.end}`,
+        '--force-keyframes-at-cuts',
+        '-f', 'bestvideo+bestaudio/best',
+        '--merge-output-format', 'mp4',
+        '-o', path.join(tmpDir, 'src.%(ext)s'),
+        '--no-part',
+        ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
+        item.url,
+      ];
+      await new Promise((resolve, reject) => {
+        const child = spawn(ytdlp.cmd, dlArgs, { windowsHide: true, env: TOOL_ENV });
+        child.stdout.on('data', () => {});
+        child.stderr.on('data', () => {});
+        child.on('error', reject);
+        child.on('close', (code) => (code === 0 ? resolve() : reject(new Error('Could not fetch the video section (yt-dlp exited ' + code + ').'))));
+      });
+      try {
+        const t = fs.readFileSync(titleFile, 'utf8').trim();
+        if (t) item.title = t;
+      } catch {}
+
+      const srcCandidates = ['src.mp4', 'src.webm', 'src.mkv', 'src.mov'];
+      const srcPath = srcCandidates.map((f) => path.join(tmpDir, f)).find((p) => fs.existsSync(p) && fs.statSync(p).size > 0);
+      if (!srcPath) throw new Error('The video section could not be found after download.');
+
+      const dur = await ffprobe(['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', srcPath]);
+      const duration = parseFloat(dur) || (item.end - item.start);
+      item.status = 'cutting';
+
+      const outDir = path.join(settings.folder, 'Clips');
+      fs.mkdirSync(outDir, { recursive: true });
+      const base = safeName((item.title !== 'Resolving video…' ? item.title : 'clip').replace(/\.[^.]+$/, '')) || 'clip';
+      // ffmpeg kann auf Windows keine eckigen Klammern oder Doppelpunkte in
+      // Ausgabepfaden — daher Zeitstempel mit Bindestrichen statt m:ss.
+      const t1 = `${Math.floor(item.start / 60)}-${String(Math.floor(item.start % 60)).padStart(2, '0')}`;
+      const t2 = `${Math.floor(item.end / 60)}-${String(Math.floor(item.end % 60)).padStart(2, '0')}`;
+      const outPath = path.join(outDir, `${base} (${t1}-${t2}).${item.format}`);
+
+      // Text für den Caption-Overlay (falls gewünscht): als Datei, damit auch
+      // Sonderzeichen wie Doppelpunkte sicher durchkommen.
+      let captionFile = null;
+      if (item.caption) {
+        captionFile = path.join(tmpDir, 'caption.txt');
+        fs.writeFileSync(captionFile, item.caption.replace(/\r?\n/g, ' '), 'utf8');
+      }
+
+      // Die Quelle ist bereits von yt-dlp auf [start,end) zugeschnitten —
+      // ffmpeg schneidet also nicht erneut, sondern re-encodiert nur das
+      // Segment (Länge = end-start, kein weiteres Seek).
+      const trim = ['-t', String(item.end - item.start)];
+      let args;
+      if (item.vertical) {
+        // 9:16 vertikal — Crop oder Blur-Background (ganzes Video sichtbar)
+        const target = '1080:1920';
+        const overlay = captionFile
+          ? `drawtext=fontfile='C\\:/Windows/Fonts/arialbd.ttf':textfile='${captionFile.replace(/\\/g, '/').replace(/:/g, '\\:')}':fontsize=52:fontcolor=white:borderw=3:bordercolor=black@0.7:x=(w-text_w)/2:y=h-th-140`
+          : null;
+        if (item.vertical === 'blur') {
+          const parts = [
+            '[0:v]split=2[bg][fg]',
+            `[bg]scale=${target}:force_original_aspect_ratio=increase,crop=${target},boxblur=30:4[bg2]`,
+            `[fg]scale=${target}:force_original_aspect_ratio=decrease[fg2]`,
+            '[bg2][fg2]overlay=(W-w)/2:(H-h)/2[base]',
+          ];
+          if (overlay) parts.push(`[base]${overlay}[out]`);
+          else parts.push('[base]null[out]');
+          args = ['-y', ...trim, '-i', srcPath, '-filter_complex', parts.join(';'), '-map', '[out]', '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', outPath];
+        } else {
+          const parts = [`[0:v]scale=${target}:force_original_aspect_ratio=increase,crop=${target}[v]`];
+          if (overlay) parts.push(`[v]${overlay}[out]`);
+          else parts.push('[v]null[out]');
+          args = ['-y', ...trim, '-i', srcPath, '-filter_complex', parts.join(';'), '-map', '[out]', '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', outPath];
+        }
+      } else {
+        // Querformat: höchstens die gewählte Qualität, Audio sauber auf AAC
+        const scaleH = `scale=-2:${item.quality}:force_original_aspect_ratio=decrease`;
+        const vf = captionFile
+          ? `${scaleH},drawtext=fontfile='C\\:/Windows/Fonts/arialbd.ttf':textfile='${captionFile.replace(/\\/g, '/').replace(/:/g, '\\:')}':fontsize=42:fontcolor=white:borderw=3:bordercolor=black@0.7:x=(w-text_w)/2:y=h-th-80`
+          : scaleH;
+        args = ['-y', ...trim, '-i', srcPath, '-vf', vf, '-map', '0:v:0', '-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', '-shortest', outPath];
+      }
+
+      await new Promise((resolve, reject) => {
+        const child = spawn(ffmpegCmd.cmd, ['-nostdin', '-progress', 'pipe:1', '-nostats', ...args], { windowsHide: true, env: TOOL_ENV });
+        let errTail = '';
+        child.stdout.on('data', (d) => {
+          const text = d.toString();
+          const m = text.match(/out_time_ms=(\d+)/);
+          if (m) {
+            const t = parseInt(m[1], 10) / 1e6;
+            item.percent = duration ? Math.min(100, Math.round((t / duration) * 100)) : 0;
+          }
+        });
+        child.stderr.on('data', (d) => { errTail = (errTail + d.toString()).slice(-600); });
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error((errTail.split(/\r?\n/).filter(Boolean).slice(-2).join(' | ')) || `ffmpeg exited with code ${code}`));
+        });
+      });
+
+      item.status = 'finished';
+      item.percent = 100;
+      item.output = outPath;
+      // Temp-Dateien aufräumen (SMOKY_KEEP_TMP=1 behält sie fürs Debuggen)
+      if (!process.env.SMOKY_KEEP_TMP) { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {} }
+    } catch (err) {
+      item.status = 'failed';
+      item.error = String(err.message || err);
+      try { fs.rmSync(path.join(os.tmpdir(), 'smoky-clips', item.id), { recursive: true, force: true }); } catch {}
+    } finally {
+      item.finishedAt = now();
+    }
+  })();
+
+  return item;
+}
+
 function convertFile(id, srcPath, origName, format) {
   const item = {
     id,
@@ -852,6 +1038,7 @@ async function statusPayload() {
     queue: queue.map(({ child, ...q }) => q),
     history,
     conversions: conversions.map((c) => c),
+    clips: clips.map((c) => c),
     settings,
     storage,
     player: playerState,
@@ -1000,6 +1187,23 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (req.method === 'POST' && p === '/api/clip') {
+      const body = await readBody(req);
+      if (!body.url || !/^https?:\/\//i.test(body.url)) return sendJson(res, 400, { error: 'Please paste a valid link.' });
+      const item = startClipJob(body);
+      return sendJson(res, 200, { item });
+    }
+
+    if (req.method === 'POST' && p === '/api/clips-delete') {
+      const body = await readBody(req);
+      const ids = new Set(body.ids || []);
+      for (let i = clips.length - 1; i >= 0; i--) {
+        const c = clips[i];
+        if ((c.status === 'finished' || c.status === 'failed') && (ids.size === 0 || ids.has(c.id))) clips.splice(i, 1);
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (req.method === 'POST' && p === '/api/history-clear') {
       history = [];
       saveJson(HISTORY_FILE, history);
@@ -1008,6 +1212,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && p === '/api/status') {
       return sendJson(res, 200, await statusPayload());
+    }
+
+    if (req.method === 'GET' && p === '/api/clips') {
+      return sendJson(res, 200, { clips: clips.map((c) => ({ ...c })) });
     }
 
     if (req.method === 'GET' && p === '/api/history') {

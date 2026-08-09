@@ -236,6 +236,7 @@
         <button class="nav-item" data-view="Player"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 6 3.5-6 3.5z"/></svg>Player</button>
         <button class="nav-item" data-view="Queue"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg>Queue <span class="nav-badge" id="queueBadge">0</span></button>
         <button class="nav-item" data-view="Converter"><svg viewBox="0 0 24 24"><path d="M4 7h11M4 12h7m-7 5h15M17 4l3 3-3 3m-3 7 3-3-3-3"/></svg>Converter</button>
+        <button class="nav-item" data-view="Clips"><svg viewBox="0 0 24 24"><path d="m7 2 1.5 3h7L17 2M8 6h8l.5 4H7.5L8 6Z"/><path d="M5 10h14v4H5zM6.5 14h11l.5 3H6zM7.5 17h9L17 21a2 2 0 0 1-2 1.5H9A2 2 0 0 1 7 21l.5-4Z"/></svg>Clips</button>
         <button class="nav-item" data-view="History"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5m4-1v5l3 2"/></svg>History</button>
         <button class="nav-item" data-view="Achievements"><svg viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3M9 16h6l-.6 4H9.6L9 16Z"/></svg>Achievements</button>
         <button class="nav-item" data-view="Credits"><svg viewBox="0 0 24 24"><path d="M12 3 14.8 8.7 21 9.6l-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>Credits</button>
@@ -290,6 +291,31 @@
           </div>
         </div>
         <audio id="playerAudio" preload="metadata"></audio>
+      </section>
+      <section class="page-view" id="clipsView">
+        <div class="view-header"><div><div class="view-kicker">Clips</div><h2>Cut the moment.</h2><p>Paste a YouTube URL, choose the start and end, and download only the part you need — up to 4K. Vertically styled clips (9:16) are ready for YouTube Shorts, TikTok and Reels.</p></div></div>
+        <div class="workspace-card"><h3>Video clip cutter</h3><p>Only the selected section is downloaded — fast and lean. <span style="color:var(--muted-2)">Tip:</span> In the Player you can use <b>„Use current time"</b> to grab the exact moment.</p>
+          <div class="converter-row" style="margin-top:16px">
+            <button class="file-pick" id="clipUrl" style="flex:1;min-width:280px">Paste a YouTube link…</button>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)"><span>Start</span><input id="clipStart" type="text" placeholder="0:05" aria-label="Clip start time" style="width:64px;padding:11px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;font-size:12px"></label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)"><span>End</span><input id="clipEnd" type="text" placeholder="0:20" aria-label="Clip end time" style="width:64px;padding:11px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;font-size:12px"></label>
+            <select class="format-select" id="clipQuality" aria-label="Clip quality"><option value="1080" selected>Up to 1080p</option><option value="2160">Up to 4K</option><option value="1440">Up to 1440p</option><option value="720">Up to 720p</option><option value="480">Up to 480p</option><option value="360">Up to 360p</option></select>
+            <button class="convert-btn" id="clipGo" style="padding:12px 20px">Cut clip</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap">
+            <label class="snow-toggle"><input id="clipVertical" type="checkbox"> <span>Vertical 9:16 (Shorts · TikTok · Reels)</span></label>
+            <label class="option-label" id="clipVerticalModeWrap" style="display:none"><span>Mode</span><select class="format-select" id="clipVerticalMode" aria-label="Vertical mode"><option value="crop">Crop to fill</option><option value="blur">Blurred background</option></select></label>
+            <label class="option-label" style="margin-left:auto"><span>Caption</span><input id="clipCaption" type="text" maxlength="60" placeholder="Optional text overlay…" aria-label="Caption text" style="width:200px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);outline:none;font-size:11px"></label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <button class="folder-btn" data-clip-preset="15">15s Short</button>
+            <button class="folder-btn" data-clip-preset="30">30s Short</button>
+            <button class="folder-btn" data-clip-preset="60">60s</button>
+            <button class="folder-btn" id="clipUseCurrent">⏱ Use current player time</button>
+          </div>
+          <span class="convert-status" id="clipStatus" style="margin-top:10px"></span>
+          <div class="queue-list" id="clipList" style="padding:0;margin-top:12px"></div>
+        </div>
       </section>
       <section class="page-view" id="converterView">
         <div class="view-header"><div><div class="view-kicker">Converter</div><h2>Shape your media.</h2><p>Convert a local video or audio file with FFmpeg while keeping everything on this device.</p></div></div>
@@ -647,6 +673,98 @@
     filePick.addEventListener('click', async () => { if(!desktop) return toast('File conversion is available in the desktop app'); const file=await desktop.chooseFile(); if(file){ selectedFile=file; filePick.textContent=file; convertStatus.textContent='Ready to convert'; } });
     document.getElementById('convertBtn').addEventListener('click', async () => { if(!selectedFile) return toast('Choose a media file first'); const format=document.getElementById('convertFormat').value; convertStatus.textContent='Converting locally…'; try { await desktop.startConvert({inputPath:selectedFile,format}); } catch(error) { convertStatus.textContent='Conversion could not start'; toast(`<b>Converter:</b> ${escapeHtml(error.message)}`); } });
     desktop?.onConvertUpdate((update) => { if(update.state==='starting') convertStatus.textContent='Converting locally…'; if(update.state==='complete'){convertStatus.textContent=`Saved as ${update.outputPath}`;toast('<b>Conversion complete.</b> Saved locally.'); if(typeof achAdd==='function') achAdd({conversions:1});} if(update.state==='error'){convertStatus.textContent='Conversion failed';toast(`<b>Converter:</b> ${escapeHtml(update.message || 'Try again.')}`);} });
+    // ------------------------------------------------------------ clips ---
+    const clipUrlEl = document.getElementById('clipUrl');
+    const clipStartEl = document.getElementById('clipStart');
+    const clipEndEl = document.getElementById('clipEnd');
+    const clipQualityEl = document.getElementById('clipQuality');
+    const clipVerticalEl = document.getElementById('clipVertical');
+    const clipVerticalModeWrap = document.getElementById('clipVerticalModeWrap');
+    const clipVerticalModeEl = document.getElementById('clipVerticalMode');
+    const clipCaptionEl = document.getElementById('clipCaption');
+    const clipStatusEl = document.getElementById('clipStatus');
+    const clipListEl = document.getElementById('clipList');
+    const clipStateLabel = (s) => ({ preparing: 'Preparing…', downloading: 'Downloading section…', cutting: 'Cutting & converting…', finished: 'Done', failed: 'Failed' }[s] || s);
+    clipUrlEl.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const url = (text.match(/https?:\/\/[^\s]+/) || [text])[0];
+        clipUrlEl.textContent = url.slice(0, 64) + (url.length > 64 ? '…' : '');
+        clipUrlEl.dataset.url = url;
+        clipStatusEl.textContent = 'Link ready — set start and end, then hit “Cut clip”.';
+      } catch { clipUrlEl.textContent = 'Paste a YouTube link…'; delete clipUrlEl.dataset.url; toast('Copy a link first, then click here.'); }
+    });
+    clipVerticalEl.addEventListener('change', () => { clipVerticalModeWrap.style.display = clipVerticalEl.checked ? '' : 'none'; });
+    document.querySelectorAll('[data-clip-preset]').forEach((btn) => btn.addEventListener('click', () => {
+      const secs = Number(btn.dataset.clipPreset);
+      clipStartEl.value = '0:00';
+      clipEndEl.value = fmtDur(secs);
+      clipStatusEl.textContent = `Preset: ${secs}s clip from 0:00 — adjust the times freely.`;
+    }));
+    const clipUseCurrent = document.getElementById('clipUseCurrent');
+    clipUseCurrent.addEventListener('click', () => {
+      const audio = document.getElementById('playerAudio');
+      const t = audio && isFinite(audio.currentTime) ? audio.currentTime : 0;
+      const start = Math.max(0, Math.floor(t - 5));
+      clipStartEl.value = fmtDur(start);
+      clipEndEl.value = fmtDur(t + 10);
+      clipStatusEl.textContent = `Taken from the player: ${fmtDur(start)} – ${fmtDur(t + 10)}. Adjust and cut.`;
+    });
+    const renderClips = () => {
+      fetch('/api/clips').then((r) => r.json()).then(({ clips }) => {
+        clipListEl.innerHTML = '';
+        if (!clips || !clips.length) {
+          clipListEl.innerHTML = '<p style="color:var(--muted-2);font-size:11px;padding:8px 2px">No clips yet — cut your first moment above.</p>';
+          return;
+        }
+        for (const c of clips) {
+          const row = document.createElement('div');
+          row.className = 'queue-item';
+          row.dataset.clipId = c.id;
+          const isDone = c.status === 'finished';
+          const isFailed = c.status === 'failed';
+          row.innerHTML = `<div class="thumb" style="background:linear-gradient(135deg,var(--accent-soft),var(--surface-3))"><div style="height:100%;display:grid;place-items:center;color:var(--accent-2);font-size:11px">✂</div></div><div class="item-details"><strong>${escapeHtml(c.title || 'Clip')}</strong><span>${escapeHtml(fmtDur(c.start))} – ${escapeHtml(fmtDur(c.end))} · ${c.vertical ? 'Vertical ' + (c.vertical === 'blur' ? 'blur' : 'crop') + ' · ' : ''}${c.caption ? 'Caption · ' : ''}${c.quality}p</span><div class="download-progress"><i style="width:${c.percent || 0}%"></i></div></div><div class="item-actions"><span class="status ${isDone ? 'done' : isFailed ? 'error' : 'progress'}">${isFailed ? 'Failed' : clipStateLabel(c.status)}${!isDone && !isFailed ? ' ' + (c.percent || 0) + '%' : ''}</span>${isDone ? `<button class="download-mini" data-clip-action="open" title="Open folder"><svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></button><button class="download-mini danger" data-clip-action="remove" title="Remove"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>` : isFailed ? `<button class="download-mini danger" data-clip-action="remove" title="Remove"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>` : ''}</div>`;
+          if (isFailed) row.querySelector('.item-details span').insertAdjacentHTML('beforeend', `<div style="color:var(--danger);font-size:10px;margin-top:3px">${escapeHtml(c.error || '')}</div>`);
+          clipListEl.appendChild(row);
+        }
+      }).catch(() => {});
+    };
+    clipListEl.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-clip-action]');
+      if (!btn) return;
+      const row = btn.closest('.queue-item');
+      const id = row.dataset.clipId;
+      if (btn.dataset.clipAction === 'open') {
+        const out = row.querySelector('.item-details span').textContent;
+        fetch('/api/status').then((r) => r.json()).then(({ clips }) => {
+          const c = clips.find((x) => x.id === id);
+          if (c && c.output) desktop?.openFolder(c.output);
+        });
+      } else {
+        fetch('/api/clips-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) }).then(renderClips);
+      }
+    });
+    document.getElementById('clipGo').addEventListener('click', async () => {
+      const url = clipUrlEl.dataset.url;
+      if (!url) { clipStatusEl.textContent = 'Click the link field and paste a YouTube URL first.'; return; }
+      const start = clipStartEl.value.trim();
+      const end = clipEndEl.value.trim();
+      if (!start || !end) { clipStatusEl.textContent = 'Set a start and end time (e.g. 0:05 and 0:20).'; return; }
+      const vertical = clipVerticalEl.checked ? clipVerticalModeEl.value : false;
+      const caption = clipCaptionEl.value.trim();
+      clipStatusEl.textContent = 'Starting clip job…';
+      try {
+        const res = await fetch('/api/clip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, start, end, quality: clipQualityEl.value, vertical, caption }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Clip could not be created');
+        clipStatusEl.textContent = 'Clip running — only the selected section is downloaded.';
+        clipUrlEl.textContent = 'Paste a YouTube link…'; delete clipUrlEl.dataset.url;
+        if (typeof achAdd === 'function') achAdd({ clips: 1 });
+        renderClips();
+      } catch (err) { clipStatusEl.textContent = 'Could not start: ' + err.message; }
+    });
+    setInterval(renderClips, 1500);
+    renderClips();
     // -------------------------------------------------- achievements ----
     const ACHIEVEMENTS = [
       { id:'first', icon:'🔓', title:'Erster Download', desc:'Schließe deinen ersten Download ab.', test:s=>s.downloads>=1, line:'Dein erster Download — der Anfang von allem! 🔓' },
@@ -655,6 +773,7 @@
       { id:'playlist', icon:'🎶', title:'Playlist-Held', desc:'Eine ganze Playlist geladen.', test:s=>s.playlists>=1, line:'Ganze Playlist geladen — du bist ein Held! 🎶' },
       { id:'night', icon:'🌙', title:'Nachteule', desc:'Zwischen 0 und 5 Uhr geladen.', test:s=>s.nights>=1, line:'Download nach Mitternacht? Nachtaktiv! 🌙' },
       { id:'converter', icon:'🔄', title:'Wandler', desc:'Erste Konvertierung geschafft.', test:s=>s.conversions>=1, line:'Erste Konvertierung — sauber gewandelt! 🔄' },
+      { id:'clipper', icon:'✂️', title:'Clip-Künstler', desc:'Deinen ersten Clip geschnitten.', test:s=>s.clips>=1, line:'Erster Clip geschnitten — Moment für immer! ✂️' },
       { id:'vault', icon:'👑', title:'Vault-König', desc:'1 GB in deinem Vault gesammelt.', test:s=>s.bytes>=1073741824, line:'1 GB in deinem Vault — König der Sammlung! 👑' },
       { id:'mitafan', icon:'💜', title:'Mita-Fan', desc:'Klicke Mita 10-mal.', test:s=>s.mitaClicks>=10, line:'10 Klicks — du bist ein echter Fan! 💜' },
     ];
