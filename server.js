@@ -67,14 +67,21 @@ function videoArgs(quality, ext) {
   return ['-f', sel, '--merge-output-format', ext];
 }
 
+// Audio downloads always carry automatic tags (title, artist) and, where the
+// container supports it, the cover art — via yt-dlp's embed flags. (WAV and
+// raw AAC have no standard cover-art slot, so they get tags only.) The album
+// tag is filled in after the download by ensureAlbumTag (only when missing,
+// so real albums from YouTube Music / spotDL are never overwritten).
+const EMBED = ['--embed-metadata'];
+const EMBED_ART = [...EMBED, '--embed-thumbnail'];
 const AUDIO_ARGS = {
-  mp3:  ['-x', '--audio-format', 'mp3', '--audio-quality', '0'],
-  m4a:  ['-x', '--audio-format', 'm4a'],
-  flac: ['-x', '--audio-format', 'flac'],
-  wav:  ['-x', '--audio-format', 'wav'],
-  ogg:  ['-x', '--audio-format', 'ogg'],
-  opus: ['-x', '--audio-format', 'opus'],
-  aac:  ['-x', '--audio-format', 'aac'],
+  mp3:  ['-x', '--audio-format', 'mp3', '--audio-quality', '0', ...EMBED_ART],
+  m4a:  ['-x', '--audio-format', 'm4a', ...EMBED_ART],
+  flac: ['-x', '--audio-format', 'flac', ...EMBED_ART],
+  wav:  ['-x', '--audio-format', 'wav', ...EMBED],
+  ogg:  ['-x', '--audio-format', 'ogg', ...EMBED_ART],
+  opus: ['-x', '--audio-format', 'opus', ...EMBED_ART],
+  aac:  ['-x', '--audio-format', 'aac', ...EMBED],
 };
 
 const FORMATS = {};
@@ -349,12 +356,47 @@ function pump() {
           }
         }
       }
+      // Album-Tag nachziehen, wenn die Quelle keins liefert (z. B. YouTube).
+      if (item.file && AUDIO_ARGS[item.formatKey]) {
+        try { await ensureAlbumTag(item.file, item.title); } catch {}
+      }
     } else {
       item.status = 'failed';
       const last = tail.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ');
       item.error = last || `yt-dlp exited with code ${code}`;
     }
     finish(item);
+  });
+}
+
+function fileHasTag(file, name) {
+  return new Promise((resolve) => {
+    const p = spawn(ffprobeCmd.cmd, ['-v', 'error', '-show_entries', `format_tags=${name}`, '-of', 'default=noprint_wrappers=1:nokey=1', file], { windowsHide: true });
+    let out = '';
+    p.stdout.on('data', (d) => (out += d));
+    p.on('error', () => resolve(false));
+    p.on('close', () => resolve(out.trim().length > 0));
+  });
+}
+
+// Sets the album tag to the title when the file has no album tag yet (stream
+// copy — fast, never re-encodes, never overwrites a real album).
+async function ensureAlbumTag(file, title) {
+  if (!file || !title || !ffmpegCmd || !ffprobeCmd) return;
+  if (await fileHasTag(file, 'album')) return;
+  title = String(title).replace(/\s*\[[^\]]*]\s*$/, '').trim() || title; // ohne "[videoId]"-Suffix
+  const ext = path.extname(file);
+  const tmp = file.slice(0, -ext.length) + '.tagfix' + ext;
+  await new Promise((resolve) => {
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-c', 'copy', '-metadata', `album=${title}`, tmp], { windowsHide: true });
+    p.on('error', () => { try { fs.rmSync(tmp, { force: true }); } catch {} resolve(); });
+    p.on('close', (code) => {
+      try {
+        if (code === 0 && fs.existsSync(tmp)) fs.renameSync(tmp, file);
+        else fs.rmSync(tmp, { force: true });
+      } catch { try { fs.rmSync(tmp, { force: true }); } catch {} }
+      resolve();
+    });
   });
 }
 
