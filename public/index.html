@@ -166,6 +166,15 @@
     @keyframes splashIn { from { opacity:0; transform:scale(.9) translateY(10px); } to { opacity:1; transform:none; } }
     @keyframes splashPulse { 50% { transform:scale(1.06); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent),0 24px 70px color-mix(in srgb,var(--accent) 55%,transparent); } }
     @keyframes splashFill { to { width:100%; } }
+    /* ------------------------------------------------------ mita toast --- */
+    .mita-toast { position:fixed; left:25px; bottom:25px; z-index:11; display:flex; align-items:center; gap:13px; max-width:350px; padding:13px 16px 13px 13px; border-radius:16px; background:var(--surface-3); border:1px solid var(--border-bright); box-shadow:var(--shadow); transform:translateY(130px); opacity:0; transition:all .55s cubic-bezier(.22,1,.36,1); }
+    .mita-toast.show { transform:translateY(0); opacity:1; }
+    .mita-toast .mita-avatar { width:46px; height:46px; border-radius:13px; overflow:hidden; flex:none; background:var(--accent-soft); display:grid; place-items:center; }
+    .mita-toast .mita-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+    .mita-toast .mita-avatar span { font-size:19px; }
+    .mita-toast .mita-copy { min-width:0; }
+    .mita-toast .mita-copy b { font-size:10px; color:var(--accent-2); display:block; margin-bottom:3px; letter-spacing:.08em; text-transform:uppercase; }
+    .mita-toast .mita-copy p { margin:0; font-size:12px; color:var(--text); line-height:1.45; }
     /* ------------------------------------------------------- player view --- */
     .player-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:22px;align-items:start}
     .player-list{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:var(--radius);overflow:hidden;max-height:560px;overflow-y:auto}
@@ -258,7 +267,7 @@
       </section>
       <section class="page-view" id="settingsView">
         <div class="view-header"><div><div class="view-kicker">Settings</div><h2>Make Smoky yours.</h2><p>Everything here is saved locally in the app. There are no profiles or accounts to manage.</p></div></div>
-        <div class="workspace-card"><div class="settings-row"><div><strong>Theme</strong><p>Switch the accent without leaving the page.</p></div><div class="theme-choices"><button class="theme-choice active" data-set="midnight" data-label="Winter">Winter</button><button class="theme-choice" data-set="spring">Spring</button><button class="theme-choice" data-set="summer">Summer</button><button class="theme-choice" data-set="autumn">Autumn</button><button class="theme-choice" data-set="aurora">Aurora</button><button class="theme-choice" data-set="ember">Ember</button><button class="theme-choice" data-set="ocean">Ocean</button><button class="theme-choice" data-set="rose">Rose</button><button class="theme-choice" data-set="cyber">Cyber</button><button class="theme-choice" data-set="forest">Forest</button><button class="theme-choice" data-set="slate">Slate</button><button class="theme-choice" data-set="solar">Solar</button><button class="theme-choice" data-set="rain">Rain</button><button class="theme-choice" data-set="horror">Horror</button><button class="theme-choice" data-set="light">Light</button></div></div><div class="settings-row"><div><strong id="ambientTitle">Ambient snow</strong><p id="ambientDescription">Keep the quiet animated snowfall in the background.</p></div><input id="snowToggleSettings" type="checkbox" checked></div><div class="settings-row"><div><strong>Browser session</strong><p>Choose which local browser may provide cookies for protected videos.</p></div><select class="format-select" id="browserSelect" aria-label="Browser session"><option value="none">Disabled</option><option value="chrome">Chrome</option><option value="edge">Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option><option value="vivaldi">Vivaldi</option><option value="opera">Opera</option><option value="opera-gx">Opera GX</option></select></div><div class="settings-row"><div><strong>Guide</strong><p>Open the Smoky walkthrough again whenever you need it.</p></div><button class="folder-btn" id="openGuide">Open guide</button></div><div class="settings-row"><div><strong>Updates</strong><p id="updateStatus">Smoky checks for updates on startup.</p></div><button class="folder-btn" id="checkUpdates">Check for updates</button></div><div class="settings-row"><div><strong>Download location</strong><p>Choose a folder from the Downloader panel before starting a job.</p></div><span class="status done">Local only</span></div></div>
+        <div class="workspace-card"><div class="settings-row"><div><strong>Theme</strong><p>Switch the accent without leaving the page.</p></div><div class="theme-choices"><button class="theme-choice active" data-set="midnight" data-label="Winter">Winter</button><button class="theme-choice" data-set="spring">Spring</button><button class="theme-choice" data-set="summer">Summer</button><button class="theme-choice" data-set="autumn">Autumn</button><button class="theme-choice" data-set="aurora">Aurora</button><button class="theme-choice" data-set="ember">Ember</button><button class="theme-choice" data-set="ocean">Ocean</button><button class="theme-choice" data-set="rose">Rose</button><button class="theme-choice" data-set="cyber">Cyber</button><button class="theme-choice" data-set="forest">Forest</button><button class="theme-choice" data-set="slate">Slate</button><button class="theme-choice" data-set="solar">Solar</button><button class="theme-choice" data-set="rain">Rain</button><button class="theme-choice" data-set="horror">Horror</button><button class="theme-choice" data-set="light">Light</button></div></div><div class="settings-row"><div><strong id="ambientTitle">Ambient snow</strong><p id="ambientDescription">Keep the quiet animated snowfall in the background.</p></div><input id="snowToggleSettings" type="checkbox" checked></div><div class="settings-row"><div><strong>Browser session</strong><p>Choose which local browser may provide cookies for protected videos.</p></div><select class="format-select" id="browserSelect" aria-label="Browser session"><option value="none">Disabled</option><option value="chrome">Chrome</option><option value="edge">Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option><option value="vivaldi">Vivaldi</option><option value="opera">Opera</option><option value="opera-gx">Opera GX</option></select></div><div class="settings-row"><div><strong>Guide</strong><p>Open the Smoky walkthrough again whenever you need it.</p></div><button class="folder-btn" id="openGuide">Open guide</button></div><div class="settings-row"><div><strong>Updates</strong><p id="updateStatus">Smoky checks for updates on startup.</p></div><button class="folder-btn" id="checkUpdates">Check for updates</button></div><div class="settings-row"><div><strong>Download location</strong><p>Choose a folder from the Downloader panel before starting a job.</p></div><span class="status done">Local only</span></div><div class="settings-row"><div><strong>Birthday</strong><p>Mita remembers the day and wishes you well.</p></div><div style="display:flex;gap:7px"><select class="format-select" id="birthdayDay" aria-label="Birthday day"></select><select class="format-select" id="birthdayMonth" aria-label="Birthday month"></select></div></div></div>
       </section>
     </main>
   </div>
@@ -292,6 +301,7 @@
     </section>
   </div>
   <div class="toast" id="toast"></div>
+  <div class="mita-toast" id="mitaToast" aria-live="polite"><div class="mita-avatar"><img id="mitaAvatarImg" alt="Mita" style="display:none"><span>👧</span></div><div class="mita-copy"><b>Mita</b><p id="mitaText"></p></div></div>
   <audio id="bgAudio" preload="metadata" src="assets/bg-music.wav"></audio>
   <script src="desktop-shim.js"></script>
   <script>
@@ -632,6 +642,70 @@
     playerList.addEventListener('click', (e) => { const tr = e.target.closest('.player-track'); if (tr) playTrack(parseInt(tr.dataset.index, 10)); });
     document.querySelector('.nav-item[data-view="Player"]')?.addEventListener('click', loadLibrary);
     loadLibrary();
+    // ------------------------------------------------------ mita sagt ----
+    const MITA_LINES = [
+      'Willkommen zurück. Die Downloads warten schon.',
+      'Hey, schön dich zu sehen. Alles bereit?',
+      'Paste einen Link und ich mach den Rest.',
+      'Deine Musik. Dein Safe Space. Genieß es.',
+      'Heute ist ein guter Tag für neue Beats.',
+      'Alles läuft lokal. Kein Stress, keine Wolken.',
+      'Ich halt dir den Rücken frei — du machst die Vibes.',
+    ];
+    const MITA_SPECIAL = {
+      '24-12': 'Frohe Weihnachten! 🎄 Nimm dir eine Auszeit — die Downloads laufen auch so.',
+      '25-12': 'Frohe Weihnachten! 🎁 Genieß den Tag.',
+      '26-12': 'Frohe Weihnachten! 🎄 Bleib gemütlich.',
+      '31-12': 'Bis gleich, altes Jahr — frohes Neues! 🎆',
+      '01-01': 'Frohes neues Jahr! 🎆 Lass uns das Jahr smoky beginnen.',
+      '31-10': 'Buh! 🎃 Gruselige Vibes heute — passt zum Horror-Theme.',
+    };
+    const mitaToast = document.getElementById('mitaToast');
+    const mitaText = document.getElementById('mitaText');
+    const mitaAvatarImg = document.getElementById('mitaAvatarImg');
+    mitaAvatarImg.addEventListener('load', () => cleanMitaImage(mitaAvatarImg), { once: true });
+    const mitaSay = (text) => {
+      mitaText.textContent = text;
+      if (!mitaAvatarImg.dataset.cleaned) mitaAvatarImg.src = 'assets/EXPLAINING.png';
+      mitaAvatarImg.style.display = '';
+      mitaAvatarImg.onerror = () => { mitaAvatarImg.style.display = 'none'; };
+      mitaToast.classList.add('show');
+      clearTimeout(window.mitaTimer);
+      window.mitaTimer = setTimeout(() => mitaToast.classList.remove('show'), 8000);
+    };
+    const startMita = () => {
+      const now = new Date();
+      const key = String(now.getDate()).padStart(2, '0') + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      let line = MITA_SPECIAL[key];
+      if (!line) {
+        let bday = '';
+        try { bday = localStorage.getItem('smoky-birthday') || ''; } catch {}
+        if (bday && bday === key) line = 'Alles Gute zum Geburtstag! 🎂 Heute ist dein Tag — ich halt dir den Rücken frei.';
+      }
+      mitaSay(line || MITA_LINES[Math.floor(Math.random() * MITA_LINES.length)]);
+    };
+    setTimeout(startMita, 2400); // nach dem Splash
+    // Geburtstag in Settings (Tag/Monat, gespeichert lokal)
+    const bdayDay = document.getElementById('birthdayDay');
+    const bdayMonth = document.getElementById('birthdayMonth');
+    const storedBday = (() => { try { return localStorage.getItem('smoky-birthday') || ''; } catch { return ''; } })();
+    const [sd, sm] = storedBday ? storedBday.split('-') : ['', ''];
+    for (let d = 1; d <= 31; d++) {
+      const o = document.createElement('option');
+      o.value = String(d).padStart(2, '0'); o.textContent = d;
+      if (o.value === sd) o.selected = true;
+      bdayDay.appendChild(o);
+    }
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    MONTHS.forEach((m, i) => {
+      const o = document.createElement('option');
+      o.value = String(i + 1).padStart(2, '0'); o.textContent = m;
+      if (o.value === sm) o.selected = true;
+      bdayMonth.appendChild(o);
+    });
+    const saveBday = () => { try { localStorage.setItem('smoky-birthday', bdayDay.value + '-' + bdayMonth.value); } catch {} };
+    bdayDay.addEventListener('change', saveBday);
+    bdayMonth.addEventListener('change', saveBday);
   </script>
 </body>
 </html>
