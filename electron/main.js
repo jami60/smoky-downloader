@@ -186,6 +186,19 @@ ipcMain.handle('dialog:chooseFile', async () => {
   return { path: result.canceled || !result.filePaths.length ? null : result.filePaths[0] };
 });
 
+ipcMain.handle('dialog:chooseFiles', async () => {
+  if (!win) return { paths: [] };
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Choose media files to convert',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Media', extensions: ['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4a', 'mp3', 'flac', 'wav', 'ogg', 'opus', 'aac', 'wma'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+  });
+  return { paths: result.canceled ? [] : result.filePaths };
+});
+
 ipcMain.handle('shell:openPath', async (_event, dir) => {
   try {
     if (!dir || !fs.existsSync(dir)) dir = require('node:path').dirname(dir || '') || '.';

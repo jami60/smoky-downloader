@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('smokyDesktopNative', {
     const r = await ipcRenderer.invoke('dialog:chooseFile');
     return r && r.path ? r.path : null;
   },
+  chooseFiles: async () => {
+    const r = await ipcRenderer.invoke('dialog:chooseFiles');
+    return r && r.paths ? r.paths : [];
+  },
   openFolder: (dir) => ipcRenderer.invoke('shell:openPath', dir),
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   checkForUpdates: () => ipcRenderer.invoke('updates:check'),

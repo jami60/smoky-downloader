@@ -63,6 +63,34 @@ window.smokyDesktop = (() => {
       }
     },
 
+    async chooseFiles() {
+      if (native && native.chooseFiles) {
+        return native.chooseFiles(); // multi-select native dialog
+      }
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      const files = await new Promise((resolve) => {
+        input.onchange = () => resolve(input.files ? [...input.files] : []);
+        input.click();
+      });
+      if (!files.length) return [];
+      const out = [];
+      for (const file of files) {
+        try {
+          const data = await api('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) },
+            body: file,
+          });
+          out.push(data.path);
+        } catch (e) {
+          window.smokyToast && window.smokyToast('Could not upload ' + esc(file.name) + ': ' + esc(e.message));
+        }
+      }
+      return out;
+    },
+
     async startDownload({ url, format, quality, outputDir, browserName }) {
       const data = await api('/api/download', {
         method: 'POST',
