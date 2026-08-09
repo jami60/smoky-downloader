@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld('smokyDesktopNative', {
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   checkForUpdates: () => ipcRenderer.invoke('updates:check'),
   applyUpdate: (url) => ipcRenderer.invoke('updates:apply', url),
+  // Clipboard-Erkennung: main.js meldet erkannte Download-Links an die Seite.
+  onClipboardUrl: (cb) => ipcRenderer.on('clipboard:url', (_e, url) => { try { cb(url); } catch {} }),
 });

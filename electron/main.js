@@ -1,6 +1,6 @@
 // Smoky — Electron main process.
 // Runs the local Node backend in-process and opens the UI in a frameless window.
-const { app, BrowserWindow, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, shell, ipcMain, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { startServer } = require('../server.js');
@@ -116,6 +116,23 @@ app.whenReady().then(async () => {
     return { action: 'deny' };
   });
   win.loadURL(`http://127.0.0.1:${port}`);
+
+  // Clipboard-Erkennung: kopierte Download-Links werden der Seite gemeldet.
+  // Nur neue URLs bekannte Plattformen — kein Spam, keine Tracking-Pfade.
+  const CLIP_RE = /(https?:\/\/[^\s"'<>]+)/i;
+  const CLIP_HOSTS = /(youtube\.com|youtu\.be|open\.spotify\.com|soundcloud\.com|twitter\.com|x\.com|instagram\.com|tiktok\.com|vimeo\.com|facebook\.com)/i;
+  let lastClipUrl = '';
+  setInterval(() => {
+    try {
+      const text = clipboard.readText();
+      const m = text.match(CLIP_RE);
+      if (!m) return;
+      const url = m[1].replace(/[),.;]+$/, '');
+      if (!CLIP_HOSTS.test(url) || url === lastClipUrl) return;
+      lastClipUrl = url;
+      if (win && !win.isDestroyed()) win.webContents.send('clipboard:url', url);
+    } catch {}
+  }, 2000);
 
   if (SMOKE) {
     win.webContents.once('did-finish-load', async () => {

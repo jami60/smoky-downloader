@@ -110,6 +110,11 @@ window.smokyDesktop = (() => {
 
     onDownloadUpdate(cb) { downloadListeners.push(cb); startPolling(); },
     onConvertUpdate(cb) { convertListeners.push(cb); startPolling(); },
+    onClipboardUrl(cb) {
+      if (native && native.onClipboardUrl) native.onClipboardUrl(cb);
+      // Dev-Hook für Tests ohne Electron
+      (window.__clipboardCbs = window.__clipboardCbs || []).push(cb);
+    },
   };
 
   // ---------------------------------------------- download event mapping --
