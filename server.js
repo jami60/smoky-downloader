@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 
 const PORT = process.env.PORT || 4173;
+const APP_VERSION = require('./package.json').version;
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
 // In the packaged app the code lives inside the read-only app.asar, so
@@ -523,6 +524,7 @@ async function statusPayload() {
   storage.percent = Math.min(100, Math.round((storage.bytes / VAULT_QUOTA) * 100));
   if (storage.bytes === 0) storage.percent = 0;
   return {
+    version: APP_VERSION,
     queue: queue.map(({ child, ...q }) => q),
     history,
     conversions: conversions.map((c) => c),
@@ -663,6 +665,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && p === '/api/history') {
       return sendJson(res, 200, { history });
+    }
+
+    if (req.method === 'GET' && p === '/api/version') {
+      return sendJson(res, 200, { version: APP_VERSION });
     }
 
     serveStatic(res, p);

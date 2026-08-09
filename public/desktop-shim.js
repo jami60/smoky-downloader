@@ -99,6 +99,15 @@ window.smokyDesktop = (() => {
       return { id: data.item.id };
     },
 
+    async checkForUpdates() {
+      if (native && native.checkForUpdates) return native.checkForUpdates();
+      return { error: 'Updates are only available in the desktop app.' };
+    },
+    async applyUpdate(url) {
+      if (native && native.applyUpdate) return native.applyUpdate(url);
+      return { error: 'Updates are only available in the desktop app.' };
+    },
+
     onDownloadUpdate(cb) { downloadListeners.push(cb); startPolling(); },
     onConvertUpdate(cb) { convertListeners.push(cb); startPolling(); },
   };

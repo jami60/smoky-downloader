@@ -17,4 +17,6 @@ contextBridge.exposeInMainWorld('smokyDesktopNative', {
   },
   openFolder: (dir) => ipcRenderer.invoke('shell:openPath', dir),
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  applyUpdate: (url) => ipcRenderer.invoke('updates:apply', url),
 });

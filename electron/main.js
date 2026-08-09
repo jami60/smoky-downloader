@@ -4,6 +4,13 @@ const { app, BrowserWindow, dialog, shell, ipcMain } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { startServer } = require('../server.js');
+const updater = require('./updater.js');
+
+// --------------------------------------------------------------------------
+// Updates — point this at your hosted update.json (see README → Updates).
+// The env override exists for testing and power users.
+const UPDATE_MANIFEST_URL = process.env.SMOKY_UPDATE_URL || 'https://example.com/smoky/update.json';
+const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return '0.0.0'; } })();
 
 const SMOKE = process.argv.includes('--smoke');
 let win = null;
@@ -26,6 +33,27 @@ app.whenReady().then(async () => {
   }
   if (!port) port = await startServer(0, true); // random free local port
   log('server on port', port);
+  // Silent auto-check a few seconds after launch; only interrupts when an
+  // update is actually available.
+  setTimeout(async () => {
+    if (!app.isPackaged) return;
+    try {
+      const r = await updater.checkForUpdates(UPDATE_MANIFEST_URL, APP_VERSION);
+      if (!r.available) return;
+      const choice = dialog.showMessageBoxSync(win, {
+        type: 'info',
+        title: 'Smoky update',
+        message: `Smoky ${r.version} is available`,
+        detail: (r.notes || 'A new version is ready.') + '\n\nCurrent: ' + APP_VERSION,
+        buttons: ['Update now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      });
+      if (choice === 0) await runUpdate(r.url);
+    } catch { /* offline / unreachable → stay silent */ }
+  }, 8000);
+
   win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -123,4 +151,56 @@ ipcMain.handle('fs:deleteFile', async (_event, filePath) => {
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }
+});
+
+// ------------------------------------------------------------------ updates --
+let updating = false;
+
+async function runUpdate(url) {
+  if (updating) return { ok: false, error: 'Update already in progress' };
+  updating = true;
+  try {
+    dialog.showMessageBoxSync(win, {
+      type: 'info',
+      title: 'Smoky update',
+      message: 'Downloading update…',
+      detail: 'Smoky will close itself, install the update and restart. This can take a few minutes.',
+      buttons: ['OK'],
+      noLink: true,
+    });
+    await updater.applyUpdate(url, {
+      appDir: path.dirname(process.execPath),
+      execPath: process.execPath,
+      log,
+    });
+    app.exit(0);
+    return { ok: true };
+  } catch (e) {
+    updating = false;
+    log('update failed:', e && e.stack || e);
+    dialog.showMessageBoxSync(win, {
+      type: 'error',
+      title: 'Smoky update',
+      message: 'The update could not be installed',
+      detail: String(e && e.message || e),
+      buttons: ['OK'],
+      noLink: true,
+    });
+    return { ok: false, error: String(e && e.message || e) };
+  }
+}
+
+ipcMain.handle('updates:check', async () => {
+  if (!app.isPackaged) return { error: 'Updates are only available in the desktop app.' };
+  try {
+    const r = await updater.checkForUpdates(UPDATE_MANIFEST_URL, APP_VERSION);
+    return r;
+  } catch (e) {
+    return { error: String(e && e.message || e) };
+  }
+});
+
+ipcMain.handle('updates:apply', async (_event, url) => {
+  if (!app.isPackaged) return { error: 'Updates are only available in the desktop app.' };
+  return runUpdate(url);
 });

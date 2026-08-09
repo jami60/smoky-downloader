@@ -1,6 +1,6 @@
 {
   "name": "smoky",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Smoky — multi media downloader. Dark, calm, private by default.",
   "main": "electron/main.js",
   "scripts": {
@@ -9,7 +9,9 @@
     "app:smoke": "electron . --smoke",
     "icon": "node scripts/make-icon.js",
     "dist": "electron-builder --win zip dir",
-    "dist:build": "electron-builder --win"
+    "dist:build": "electron-builder --win",
+    "update:package": "node scripts/make-update.js",
+    "update:dist": "npm run dist && npm run update:package"
   },
   "devDependencies": {
     "electron": "^43.3.0",

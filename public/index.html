@@ -197,7 +197,7 @@
       </section>
       <section class="page-view" id="settingsView">
         <div class="view-header"><div><div class="view-kicker">Settings</div><h2>Make Smoky yours.</h2><p>Everything here is saved locally in the app. There are no profiles or accounts to manage.</p></div></div>
-        <div class="workspace-card"><div class="settings-row"><div><strong>Theme</strong><p>Switch the accent without leaving the page.</p></div><div class="theme-choices"><button class="theme-choice active" data-set="midnight">Midnight</button><button class="theme-choice" data-set="aurora">Aurora</button><button class="theme-choice" data-set="ember">Ember</button><button class="theme-choice" data-set="ocean">Ocean</button><button class="theme-choice" data-set="rose">Rose</button><button class="theme-choice" data-set="cyber">Cyber</button><button class="theme-choice" data-set="forest">Forest</button><button class="theme-choice" data-set="slate">Slate</button><button class="theme-choice" data-set="solar">Solar</button><button class="theme-choice" data-set="rain">Rain</button><button class="theme-choice" data-set="horror">Horror</button><button class="theme-choice" data-set="light">Light</button></div></div><div class="settings-row"><div><strong id="ambientTitle">Ambient snow</strong><p id="ambientDescription">Keep the quiet animated snowfall in the background.</p></div><input id="snowToggleSettings" type="checkbox" checked></div><div class="settings-row"><div><strong>Browser session</strong><p>Choose which local browser may provide cookies for protected videos.</p></div><select class="format-select" id="browserSelect" aria-label="Browser session"><option value="none">Disabled</option><option value="chrome">Chrome</option><option value="edge">Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option><option value="vivaldi">Vivaldi</option><option value="opera">Opera</option><option value="opera-gx">Opera GX</option></select></div><div class="settings-row"><div><strong>Guide</strong><p>Open the Smoky walkthrough again whenever you need it.</p></div><button class="folder-btn" id="openGuide">Open guide</button></div><div class="settings-row"><div><strong>Download location</strong><p>Choose a folder from the Downloader panel before starting a job.</p></div><span class="status done">Local only</span></div></div>
+        <div class="workspace-card"><div class="settings-row"><div><strong>Theme</strong><p>Switch the accent without leaving the page.</p></div><div class="theme-choices"><button class="theme-choice active" data-set="midnight">Midnight</button><button class="theme-choice" data-set="aurora">Aurora</button><button class="theme-choice" data-set="ember">Ember</button><button class="theme-choice" data-set="ocean">Ocean</button><button class="theme-choice" data-set="rose">Rose</button><button class="theme-choice" data-set="cyber">Cyber</button><button class="theme-choice" data-set="forest">Forest</button><button class="theme-choice" data-set="slate">Slate</button><button class="theme-choice" data-set="solar">Solar</button><button class="theme-choice" data-set="rain">Rain</button><button class="theme-choice" data-set="horror">Horror</button><button class="theme-choice" data-set="light">Light</button></div></div><div class="settings-row"><div><strong id="ambientTitle">Ambient snow</strong><p id="ambientDescription">Keep the quiet animated snowfall in the background.</p></div><input id="snowToggleSettings" type="checkbox" checked></div><div class="settings-row"><div><strong>Browser session</strong><p>Choose which local browser may provide cookies for protected videos.</p></div><select class="format-select" id="browserSelect" aria-label="Browser session"><option value="none">Disabled</option><option value="chrome">Chrome</option><option value="edge">Edge</option><option value="firefox">Firefox</option><option value="brave">Brave</option><option value="vivaldi">Vivaldi</option><option value="opera">Opera</option><option value="opera-gx">Opera GX</option></select></div><div class="settings-row"><div><strong>Guide</strong><p>Open the Smoky walkthrough again whenever you need it.</p></div><button class="folder-btn" id="openGuide">Open guide</button></div><div class="settings-row"><div><strong>Updates</strong><p id="updateStatus">Smoky checks for updates on startup.</p></div><button class="folder-btn" id="checkUpdates">Check for updates</button></div><div class="settings-row"><div><strong>Download location</strong><p>Choose a folder from the Downloader panel before starting a job.</p></div><span class="status done">Local only</span></div></div>
       </section>
     </main>
   </div>
@@ -347,6 +347,33 @@
     guideOverlay.querySelectorAll('.guide-next').forEach(button => button.addEventListener('click', () => { if(guideIndex >= guideSteps.length - 1) closeGuide(); else { guideIndex += 1; renderGuide(); } }));
     document.addEventListener('keydown', event => { if(!guideOverlay.classList.contains('is-open')) return; if(event.key === 'Escape') closeGuide(); if(event.key === 'ArrowRight' && guideIndex < guideSteps.length - 1) { guideIndex += 1; renderGuide(); } if(event.key === 'ArrowLeft' && guideIndex > 0) { guideIndex -= 1; renderGuide(); } });
     document.getElementById('openGuide').addEventListener('click', openGuide);
+    // ------------------------------------------------------- auto updates --
+    const updateStatus = document.getElementById('updateStatus');
+    const checkUpdatesBtn = document.getElementById('checkUpdates');
+    let updateResult = null;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const showVersion = async () => {
+      try { const s = await fetch('/api/status').then(r => r.json()); if (s.version) updateStatus.textContent = `Smoky v${s.version} · checks for updates on startup.`; } catch {}
+    };
+    const runUpdateCheck = async () => {
+      if (!desktop || !desktop.checkForUpdates) { updateStatus.textContent = 'Updates are available in the desktop app.'; return; }
+      updateStatus.textContent = 'Checking for updates…';
+      updateResult = await desktop.checkForUpdates();
+      if (updateResult && updateResult.error) { updateStatus.textContent = `Update check failed: ${esc(updateResult.error)}`; return; }
+      if (!updateResult || !updateResult.available) { updateStatus.textContent = 'Smoky is up to date.'; return; }
+      updateStatus.textContent = `Smoky ${updateResult.version} is available`;
+      toast(`<b>Update ${esc(updateResult.version)} available.</b> ${esc(updateResult.notes || '')}`);
+      if (desktop.applyUpdate) {
+        const go = document.createElement('button');
+        go.className = 'folder-btn';
+        go.style.cssText = 'margin-left:8px;color:var(--mint)';
+        go.textContent = 'Install now';
+        go.addEventListener('click', async () => { go.disabled = true; go.textContent = 'Installing…'; await desktop.applyUpdate(updateResult.url); });
+        checkUpdatesBtn.replaceWith(go);
+      }
+    };
+    checkUpdatesBtn.addEventListener('click', runUpdateCheck);
+    showVersion();
     renderGuide();
     (async () => {
       let guideSeen = false;

@@ -56,6 +56,29 @@ install it once with `py -m pip install spotdl` (everything else works out of
 the box). The app still detects the newest system yt-dlp/ffmpeg if ever
 installed — bundled tools are used first.
 
+## Updates 🔄
+
+The desktop app checks for updates a few seconds after launch (silently — it
+only interrupts when a new version exists). Friends can also check manually in
+**Settings → Updates**.
+
+**How to publish a new version for your friends:**
+
+1. Bump the version in `package.json` (e.g. `1.1.0` → `1.2.0`)
+2. `npm run update:dist` — builds the app and creates
+   `dist/Smoky-<version>-update.zip` + `dist/update.json`
+3. Upload **both** files somewhere your friends can reach (GitHub Releases,
+   any static host, your own server…)
+4. Put the real download URL into `dist/update.json` (the `url` field)
+5. Point the app at it: set `UPDATE_MANIFEST_URL` at the top of
+   `electron/main.js` (or `SMOKY_UPDATE_URL` env var) to the hosted
+   `update.json`
+6. Rebuild + share once more — from then on everyone gets updates
+   automatically
+
+The updater downloads the zip, swaps the app folder and relaunches itself;
+settings/history live in `%APPDATA%\Smoky` and survive every update.
+
 ## Requirements (dev only — not needed for the packaged app)
 
 - Node.js 18+
