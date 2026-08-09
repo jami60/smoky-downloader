@@ -397,6 +397,7 @@ function launchItem(item) {
   child.on('error', (err) => {
     item.status = 'failed';
     item.error = String(err.message || err);
+    if (canAutoRetry(item)) { scheduleRetry(item); return; }
     finish(item);
   });
 
@@ -428,9 +429,32 @@ function launchItem(item) {
       item.status = 'failed';
       const last = tail.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ');
       item.error = last || `yt-dlp exited with code ${code}`;
+      if (canAutoRetry(item)) { scheduleRetry(item); return; }
     }
     finish(item);
   });
+}
+
+// Auto-Retry: fehlgeschlagene Downloads bis zu 2× automatisch erneut starten
+// (mit Backoff). Permanente Fehler (Login, Privat, Copyright, …) werden nie
+// wiederholt — nur flüchtige wie kurze Netzwerk-Aussetzer.
+function canAutoRetry(item) {
+  if ((item.retries || 0) >= 2) return false;
+  const msg = String(item.error || '').toLowerCase();
+  if (/not installed|sign in|signin|private|unavailable|removed|copyright|dpapi|decrypt|cookie database|unsupported url|geo-restricted|content is not available/i.test(msg)) return false;
+  return true;
+}
+
+function scheduleRetry(item) {
+  item.retries = (item.retries || 0) + 1;
+  const delay = item.retries * 3000 + 2000; // 5s, dann 8s
+  item.status = 'queued';
+  item.error = null;
+  item.percent = 0;
+  item.child = null;
+  const ri = running.indexOf(item);
+  if (ri !== -1) running.splice(ri, 1);
+  setTimeout(pump, delay);
 }
 
 function fileHasTag(file, name) {
