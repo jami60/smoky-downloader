@@ -39,6 +39,9 @@ const MIME = {
   '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.aac': 'audio/aac', '.webm': 'video/webm', '.mp4': 'video/mp4',
 };
 const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.aac']);
+// Formate, die spotDL selbst erzeugen kann (--format {mp3,flac,ogg,opus,m4a,wav}).
+// aac ist nicht dabei → fällt in launchItem auf mp3 zurück.
+const SPOT_FORMATS = new Set(['mp3', 'flac', 'ogg', 'opus', 'm4a', 'wav']);
 
 // ---------------------------------------------------------------- state ----
 const queue = [];            // active + waiting items (in memory)
@@ -263,6 +266,50 @@ async function newAudioFilesIn(dir, sinceMs) {
 }
 
 
+// Spotify-Re-Download: Existiert die Datei schon, überspringt spotDL sie
+// („Skipping … (file already exists)") und liefert Exit 0 — ohne neue Datei.
+// Die App darf das nicht als „failed“ werten: die vorhandene Datei wird als
+// Ergebnis übernommen. Die Namen aus der Skip-Zeile werden gegen die Dateien
+// im Zielordner gematcht.
+function findExistingSpotFiles(folder, tail) {
+  const names = [];
+  for (const line of String(tail || '').split(/\r?\n/)) {
+    let m = line.match(/Skipping\s+(.+?)\s+\(file already exists\)/i);
+    if (m) names.push(m[1].trim());
+    else {
+      m = line.match(/Skipping explicit song:\s*(.+)/i);
+      if (m) names.push(m[1].trim());
+    }
+  }
+  if (!names.length) return [];
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const wanted = names.map(norm).filter(Boolean);
+  const out = [];
+  try {
+    for (const f of fs.readdirSync(folder)) {
+      const p = path.join(folder, f);
+      if (!AUDIO_EXTS.has(path.extname(f).toLowerCase())) continue;
+      const stem = norm(f.slice(0, f.length - path.extname(f).length));
+      if (wanted.some((w) => stem === w || stem.includes(w) || w.includes(stem))) {
+        try { out.push({ path: p, mtime: fs.statSync(p).mtimeMs }); } catch {}
+      }
+    }
+  } catch {}
+  return out.sort((a, b) => b.mtime - a.mtime).map((x) => x.path);
+}
+
+// Verschiebt eine Datei — mit Fallback über Laufwerksgrenzen hinweg: renameSync
+// wirft EXDEV, wenn Quelle und Ziel auf verschiedenen Volumes liegen (z. B.
+// Download auf D:, Zielordner auf C:). Dann kopieren + löschen.
+function moveFile(src, dest) {
+  try { fs.renameSync(src, dest); return true; } catch {}
+  try {
+    fs.copyFileSync(src, dest);
+    fs.unlinkSync(src);
+    return true;
+  } catch { return false; }
+}
+
 // -------------------------------------------------------------- download ---
 function isPlaylistUrl(url) {
   // YouTube playlists carry a list= param (also /playlist?list= and /playlists/…);
@@ -270,6 +317,13 @@ function isPlaylistUrl(url) {
   if (/youtube\.com|youtu\.be/i.test(url)) return /[?&]list=[^&]+/.test(url);
   if (/open\.spotify\.com/i.test(url)) return /\/(playlist|album)\/[A-Za-z0-9]+/.test(url);
   return false;
+}
+
+// Anzeige-Titel aus einem Dateinamen: Endung und das yt-dlp-„[videoId]“-Suffix
+// entfernen (die Datei selbst behält den Suffix — die Cover-Nachrüstung braucht
+// ihn). Nur echte IDs ([A-Za-z0-9_-]{6,}) am Ende werden entfernt.
+function displayTitle(base) {
+  return String(base).replace(/\.[^.]+$/, '').replace(/\s*\[[A-Za-z0-9_-]{6,}\]\s*$/, '');
 }
 
 function parseProgress(line, item) {
@@ -285,7 +339,7 @@ function parseProgress(line, item) {
   if (m) {
     const base = path.basename(m[1].trim());
     item.file = m[1].trim();
-    item.title = base.replace(/\.[^.]+$/, '');
+    item.title = displayTitle(base);
   }
   // 2) percent / speed / ETA
   m = line.match(/\[download\]\s+(\d+(?:\.\d+)?)%\s+of\s+([^\s]+)/i);
@@ -414,7 +468,9 @@ function launchItem(item) {
     // Anzahl paralleler spotDL-PROZESSE wird unten trotzdem auf 1 begrenzt,
     // damit die gleichzeitigen YouTube-Suchen nicht gedrosselt werden.
     cmd = spotdl.cmd;
-    args = [...spotdl.args, 'download', ...(picked || [item.url]), '--output', folder, '--format', 'mp3', '--overwrite', 'skip', '--threads', '4'];
+    // Die Formatwahl der UI respektieren: spotDL kann mp3/flac/ogg/opus/m4a/wav.
+    // Nur nicht unterstützte Ziele (z. B. aac) fallen auf mp3 zurück.
+    args = [...spotdl.args, 'download', ...(picked || [item.url]), '--output', folder, '--format', spotFormatFor(item.formatKey), '--overwrite', 'skip', '--threads', '4'];
     if (picked) item.title = 'Spotify playlist…';
   } else {
     if (!YTDLP_OK) {
@@ -477,6 +533,19 @@ function launchItem(item) {
         const since = (item.startedAt || Date.now()) - 5000; // Puffer für mtime-Präzision
         const newFiles = await newAudioFilesIn(folder, since);
         if (!newFiles.length) {
+          // Nichts Neues, aber spotDL hat alle Tracks übersprungen, weil die
+          // Dateien bereits existieren → kein Fehler, Datei ist schon da.
+          const existing = findExistingSpotFiles(folder, tail);
+          if (existing.length) {
+            item.status = 'finished';
+            item.percent = 100;
+            item.speed = null;
+            item.eta = null;
+            item.file = existing[0]; // neueste Übereinstimmung
+            item.title = displayTitle(path.basename(item.file));
+            finish(item);
+            return;
+          }
           item.status = 'failed';
           item.error = extractSpotError(tail) || 'spotDL finished without downloading anything';
           finish(item);
@@ -497,7 +566,7 @@ function launchItem(item) {
             if (f === found && copy.file) item.file = copy.file;
           }
         } catch {}
-        item.title = path.basename(item.file).replace(/\.[^.]+$/, '');
+        item.title = displayTitle(path.basename(item.file));
         finish(item);
         return;
       }
@@ -512,7 +581,7 @@ function launchItem(item) {
         if (found) {
           item.file = found;
           if (!item.title || item.title === 'Resolving link…' || item.title === 'Spotify track…') {
-            item.title = path.basename(found).replace(/\.[^.]+$/, '');
+            item.title = displayTitle(path.basename(found));
           }
         }
       }
@@ -584,7 +653,8 @@ async function organizeIntoFolders(item) {
     let target = path.join(targetDir, base);
     if (path.normalize(target) === path.normalize(item.file)) return;
     if (fs.existsSync(target)) target = path.join(targetDir, item.id + '-' + base);
-    fs.renameSync(item.file, target);
+    // moveFile statt renameSync: scheitert nicht an Laufwerksgrenzen (EXDEV).
+    if (!moveFile(item.file, target)) return;
     item.file = target;
     item.folder = targetDir;
     // Passendes Schwester-Bild (Thumbnail) mit umziehen, falls vorhanden.
@@ -595,7 +665,7 @@ async function organizeIntoFolders(item) {
         const fStem = f.slice(0, f.length - path.extname(f).length);
         if (fStem === oldStem || fStem.startsWith(oldStem)) {
           const dest = path.join(targetDir, f);
-          if (!fs.existsSync(dest)) fs.renameSync(path.join(oldDir, f), dest);
+          if (!fs.existsSync(dest)) moveFile(path.join(oldDir, f), dest);
         }
       }
     } catch {}
@@ -1116,7 +1186,11 @@ function serveStatic(req, res, pathname) {
   let file = pathname === '/' ? '/index.html' : pathname;
   try { file = decodeURIComponent(file); } catch {}
   const full = path.normalize(path.join(PUBLIC, file));
-  if (!full.startsWith(PUBLIC)) { sendJson(res, 403, { error: 'forbidden' }); return; }
+  // Echter Pfad-Check statt startsWith: startsWith(PUBLIC) ließe Sibling-Ordner
+  // mit gleichem Präfix durch (z. B. „public2“). relative() kann nie "aus-
+  // brechen", ohne mit .. zu beginnen oder absolut zu werden.
+  const rel = path.relative(PUBLIC, full);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) { sendJson(res, 403, { error: 'forbidden' }); return; }
   fs.stat(full, (err, stat) => {
     if (err || !stat.isFile()) { sendJson(res, 404, { error: 'not found' }); return; }
     try { serveFile(req, res, full, MIME[path.extname(full)] || 'application/octet-stream'); }
@@ -1221,6 +1295,23 @@ function isValidImage(p) {
   } catch { return false; }
 }
 
+// Cover-Extraktion mit begrenzter Parallelität: Die Player-Liste feuert für
+// jeden Track ein <img> → ohne Limit würden beim ersten Öffnen Dutzende
+// ffmpeg-Prozesse gleichzeitig starten. Max. COVER_CONCURRENCY gleichzeitig,
+// der Rest wartet kurz in der Schlange.
+const COVER_CONCURRENCY = 3;
+let coverActive = 0;
+const coverWaiters = [];
+async function withCoverSlot(fn) {
+  if (coverActive >= COVER_CONCURRENCY) await new Promise((resolve) => coverWaiters.push(resolve));
+  coverActive++;
+  try { return await fn(); } finally {
+    coverActive--;
+    const next = coverWaiters.shift();
+    if (next) next();
+  }
+}
+
 // ffmpeg-Frame-Extraktion mit Timeout — ein hängender Prozess darf einen
 // Cover-Request nie endlos blockieren.
 function extractCoverFrame(file, out, codec) {
@@ -1274,10 +1365,10 @@ async function coverFor(file) {
   for (const stale of [outJpg, outPng]) {
     try { if (fs.existsSync(stale)) fs.unlinkSync(stale); } catch {}
   }
-  await extractCoverFrame(file, outJpg, 'mjpeg');
+  await withCoverSlot(() => extractCoverFrame(file, outJpg, 'mjpeg'));
   if (isValidImage(outJpg)) return outJpg;
   // Zweiter Versuch als PNG — verträgt Alpha- und WebP-Quellen zuverlässig.
-  await extractCoverFrame(file, outPng, 'png');
+  await withCoverSlot(() => extractCoverFrame(file, outPng, 'png'));
   if (isValidImage(outPng)) return outPng;
   // Kein eingebettetes Cover (z. B. WAV/AAC) → Schwester-Bild neben der Datei?
   const sibling = siblingCover(file);
@@ -1326,6 +1417,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/playlist') {
       const url = String(u.searchParams.get('url') || '');
       if (!url || !/^https?:\/\//i.test(url)) return sendJson(res, 400, { error: 'missing url' });
+      // Host-Whitelist: Der lokale Server soll keine beliebigen URLs fetchen
+      // (fremde Webseiten könnten ihn sonst als Proxy missbrauchen).
+      try {
+        const host = new URL(url).hostname;
+        if (!/^([^.]+\.)*(youtube\.com|youtu\.be|open\.spotify\.com|soundcloud\.com)$/i.test(host)) {
+          return sendJson(res, 400, { error: 'unsupported host' });
+        }
+      } catch {
+        return sendJson(res, 400, { error: 'invalid url' });
+      }
       try {
         const tracks = await listPlaylistTracks(url);
         return sendJson(res, 200, { tracks });
@@ -1605,7 +1706,13 @@ function startServer(port = PORT, silent = false) {
   });
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath };
+// Format, das spotDL für die gewählte UI-Format-Key erzeugen soll; nur
+// unterstützte Ziele durchreichen, sonst mp3 (aac, mp4, …).
+function spotFormatFor(formatKey) {
+  return SPOT_FORMATS.has(formatKey) ? formatKey : 'mp3';
+}
+
+module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile };
 
 if (require.main === module) {
   startServer();

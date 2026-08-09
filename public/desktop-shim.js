@@ -286,8 +286,18 @@ window.smokyDesktop = (() => {
         const meta = document.querySelector('.storage-meta span:last-child');
         if (meta && meta.textContent.trim().endsWith('%')) meta.textContent = pct + '%';
         // downloads + conversions
-        (s.queue || []).forEach((item) => { const u = mapDownload(item); if (u) emit(downloadListeners, u); });
+        (s.queue || []).forEach((item) => {
+          // Nach einem UI-Reload fehlende Queue-Einträge rekonstruieren, damit
+          // aktive Downloads nicht unsichtbar weiterlaufen.
+          if (window.__ensureQueueItem) { try { window.__ensureQueueItem(item); } catch {} }
+          const u = mapDownload(item); if (u) emit(downloadListeners, u);
+        });
         (s.conversions || []).forEach((c) => { const u = mapConvert(c); if (u) emit(convertListeners, u); });
+        // Dedup-Maps aufräumen, sobald ein Eintrag die Server-Queue verlassen hat
+        // (sonst wachsen sie über lange Sessions unbegrenzt).
+        const liveIds = new Set((s.queue || []).map((q) => q.id));
+        for (const id of [...terminalEmitted.keys()]) if (!liveIds.has(id)) terminalEmitted.delete(id);
+        for (const id of [...seenTitles.keys()]) if (!liveIds.has(id)) seenTitles.delete(id);
         // history views
         if (document.body.dataset.view === 'History') renderHistory(s.history || []);
         if (s.history && s.history.length) renderRecent(s.history);

@@ -71,6 +71,14 @@ async function json(base, path, opts) {
   check('GET /api/playlist mit Müll-URL → 400', pl.status === 400);
   const { res: pl2 } = await json(base, '/api/playlist');
   check('GET /api/playlist ohne URL → 400', pl2.status === 400);
+  // Bug-Hunt #6: Host-Whitelist — der lokale Server darf keine fremden URLs fetchen
+  const { res: plEvil } = await json(base, '/api/playlist?url=' + encodeURIComponent('https://evil.example.com/steal'));
+  check('GET /api/playlist mit fremdem Host → 400 (Whitelist)', plEvil.status === 400);
+  const { res: plOkHost, data: plOkData } = await json(base, '/api/playlist?url=' + encodeURIComponent('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123'));
+  // Netzwerk-robust: Entscheidend ist, dass die Whitelist den Host NICHT ablehnt
+  // (ein yt-dlp-Netzwerkfehler darf den Test nicht kippen lassen).
+  const whitelistRejected = plOkHost.status === 400 && /unsupported host/i.test(String((plOkData && plOkData.error) || ''));
+  check('GET /api/playlist mit erlaubtem Host → nicht von Whitelist blockiert', !whitelistRejected);
 
   // ------------------------------------------------------------- library ----
   const { res: lib, data: libData } = await json(base, '/api/library');
@@ -118,6 +126,13 @@ async function json(base, path, opts) {
   check('GET / → 200 + HTML mit #downloadPanel', idx.status === 200 && idxText.includes('downloadPanel'));
   const trav = await fetch(base + '/..%2f..%2fpackage.json');
   check('GET /..%2f..%2fpackage.json (Traversal) → nicht 200', trav.status !== 200);
+  // Bug-Hunt #5: Sibling-Prefix („public2“) darf NICHT durch den Guard rutschen
+  const trav2 = await fetch(base + '/..%2fpublic2%2fevil.js');
+  check('GET /..%2fpublic2%2fevil.js (Sibling-Prefix) → 403', trav2.status === 403, 'status=' + trav2.status);
+  const trav3 = await fetch(base + '/..%2f..%2fserver.js');
+  check('GET /..%2f..%2fserver.js (Traversal hoch) → 403', trav3.status === 403, 'status=' + trav3.status);
+  const okStatic = await fetch(base + '/desktop-shim.js');
+  check('GET /desktop-shim.js → 200 (legitime Datei bleibt erreichbar)', okStatic.status === 200);
 
   // ------------------------------------------------------------- clear -----
   const { res: hc } = await json(base, '/api/history-clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });

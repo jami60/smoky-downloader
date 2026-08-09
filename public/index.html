@@ -885,7 +885,25 @@
     const queueList = document.getElementById('queueList');
     const queueCount = document.getElementById('queueCount');
     queueListHost = queueList.parentElement;
-    const addQueueItem = (id, url, host, format, quality) => { const thumbnail=youtubeThumbnailFor(url); const thumbnailMarkup=thumbnail ? `<img src="${thumbnail}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div style="height:100%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent-soft),var(--surface-3));font-size:11px;color:var(--accent-2)">${escapeHtml(host)}</div>`; const item=document.createElement('div'); item.className='queue-item'; item.dataset.downloadId=id; item.dataset.url=url; item.dataset.format=format; item.dataset.quality=quality; item.dataset.browserName=browserSelect.value; item.innerHTML=`<div class="thumb">${thumbnailMarkup}</div><div class="item-details"><strong>${escapeHtml(url.replace(/^https?:\/\//,'').slice(0,44))}</strong><span>${format.toUpperCase()} · ${t('dl.preparing')}</span><div class="download-progress"><i style="width:0%"></i></div></div><div class="item-actions"><span class="status progress is-loading">${t('dl.starting')}</span><button class="download-mini" data-action="cancel" title="${t('dl.cancel')}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`; queueList.querySelector('.empty-state')?.remove(); queueList.prepend(item); refreshQueueCount(); return item; };
+    const addQueueItem = (id, url, host, format, quality) => { const thumbnail=youtubeThumbnailFor(url); const thumbnailMarkup=thumbnail ? `<img src="${thumbnail}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div style="height:100%;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent-soft),var(--surface-3));font-size:11px;color:var(--accent-2)">${escapeHtml(host)}</div>`; const item=document.createElement('div'); item.className='queue-item'; item.dataset.downloadId=id; item.dataset.url=url; item.dataset.format=format; item.dataset.quality=quality; item.dataset.browserName=browserSelect.value; item.innerHTML=`<div class="thumb">${thumbnailMarkup}</div><div class="item-details"><strong>${escapeHtml(url.replace(/^https?:\/\//,'').slice(0,44))}</strong><span>${format.toUpperCase()} · ${t('dl.preparing')}</span><div class="download-progress"><i style="width:0%"></i></div></div><div class="item-actions"><span class="status progress is-loading">${t('dl.starting')}</span><button class="download-mini" data-action="cancel" title="${t('dl.cancel')}"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`;      queueList.querySelector('.empty-state')?.remove(); queueList.prepend(item); refreshQueueCount(); return item; };
+    // Nach einem UI-Reload die Queue aus /api/status rekonstruieren: Die shim-Polling
+    // meldet nur Events, aber ohne DOM-Knoten laufen aktive Downloads unsichtbar weiter.
+    // Dieser Hook erzeugt fehlende Einträge nach (genutzt von desktop-shim.js).
+    window.__ensureQueueItem = (item) => {
+      try {
+        if (!item || !item.id || !item.url) return null;
+        if (document.querySelector(`[data-download-id="${item.id}"]`)) return null;
+        if (!['queued', 'downloading', 'processing'].includes(item.status)) return null;
+        const node = addQueueItem(item.id, item.url, platformFor(item.url), item.formatKey || 'mp4', item.quality || '1080');
+        if (item.status === 'queued') {
+          const status = node.querySelector('.status');
+          if (status) { status.classList.remove('is-loading'); status.textContent = t('dl.resolving'); }
+          const span = node.querySelector('.item-details span');
+          if (span) span.textContent = t('dl.fetching');
+        }
+        return node;
+      } catch { return null; }
+    };
     // Format-Auswahl merkt sich das zuletzt verwendete Format (bleibt über Neustarts erhalten).
     const AUDIO_FORMATS = ['mp3','m4a','flac','wav','ogg','opus','aac'];
     const formatSelectEl = document.getElementById('formatSelect');
@@ -1247,7 +1265,12 @@
         visLoop();
       }
     }
+    // Sequenz-Token gegen Waveform-Races: Lädt der Nutzer schnell einen anderen
+    // Track, darf der alte (langsamere) Fetch nicht mehr die Peaks des alten
+    // Tracks setzen.
+    let waveReqSeq = 0;
     async function loadWaveform(path) {
+      const mySeq = ++waveReqSeq;
       wavePeaks = null;
       drawWave(0);
       if (waveCache.has(path)) {
@@ -1264,6 +1287,7 @@
         let decoded;
         try { decoded = await ctx.decodeAudioData(buf); }
         finally { try { ctx.close(); } catch {} } // nie Contexts leaken (Browser-Limit ~6)
+        if (mySeq !== waveReqSeq) return; // inzwischen ein anderer Track gewählt
         const data = decoded.getChannelData(0);
         const bars = 110;
         const block = Math.max(1, Math.floor(data.length / bars));
@@ -1274,6 +1298,7 @@
           wavePeaks.push(max);
         }
         waveCache.set(path, wavePeaks);
+        if (waveCache.size > 500) waveCache.delete(waveCache.keys().next().value); // Cache begrenzen
         drawWave(playerAudio.duration ? playerAudio.currentTime / playerAudio.duration : 0);
       } catch { /* waveform not available */ }
     }

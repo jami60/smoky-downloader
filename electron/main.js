@@ -97,24 +97,31 @@ app.whenReady().then(async () => {
   win.once('ready-to-show', () => win.show());
 
   // Taskbar progress: the Windows icon shows a bar while a download runs.
-  let discordDlId = null, discordDlStart = null;
+  let discordDlId = null, discordDlStart = null, discordDlPct = -1;
   setInterval(async () => {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/status`);
       const s = await res.json();
       const active = (s.queue || []).find((q) => q.status === 'downloading' || q.status === 'processing' || q.status === 'queued');
-      if (!active) { win.setProgressBar(-1); discordDlId = null; discordDlStart = null; }
+      if (!active) { win.setProgressBar(-1); discordDlId = null; discordDlStart = null; discordDlPct = -1; }
       else if (active.status === 'queued') win.setProgressBar(0.05);
       else win.setProgressBar(Math.max(0.02, Math.min(1, (active.percent || 0) / 100)));
       // Discord Rich Presence: Download > laufender Track > Idle.
       if (active) {
-        if (discordDlId !== active.id) { discordDlId = active.id; discordDlStart = Date.now(); }
-        const track = active.trackIndex && active.trackCount ? `Track ${active.trackIndex} von ${active.trackCount} · ` : '';
-        discord.setActivity({
-          details: `⬇ ${active.title || 'Download läuft'}`,
-          state: `${track}${Math.round(active.percent || 0)}%`,
-          timestamps: { start: discordDlStart || Date.now() },
-        });
+        if (discordDlId !== active.id) { discordDlId = active.id; discordDlStart = Date.now(); discordDlPct = -1; }
+        // Nicht jede Sekunde einen neuen Frame an Discord schicken — nur wenn
+        // sich der Fortschritt sichtbar ändert (~5%-Schritte) oder der Track
+        // wechselt. Sonst droppt die Presence durchgehend neue Pakete.
+        const pct = Math.round((active.percent || 0) / 5) * 5;
+        if (pct !== discordDlPct) {
+          discordDlPct = pct;
+          const track = active.trackIndex && active.trackCount ? `Track ${active.trackIndex} von ${active.trackCount} · ` : '';
+          discord.setActivity({
+            details: `⬇ ${active.title || 'Download läuft'}`,
+            state: `${track}${pct}%`,
+            timestamps: { start: discordDlStart || Date.now() },
+          });
+        }
       } else if (s.player && s.player.playing && s.player.title) {
         discord.setActivity({
           details: `🎵 ${s.player.title}`,
@@ -161,7 +168,15 @@ app.whenReady().then(async () => {
           viewsInMain: [...document.querySelectorAll('.page-view')].filter(v => document.querySelector('main').contains(v)).length,
           mediaSession: typeof navigator.mediaSession === 'object',
           updateProgressEl: !!document.getElementById('updateProgress'),
-          updateProgressBridge: typeof (window.smokyDesktop && window.smokyDesktop.onUpdateProgress) === 'function'
+          updateProgressBridge: typeof (window.smokyDesktop && window.smokyDesktop.onUpdateProgress) === 'function',
+          ensureQueueItem: typeof window.__ensureQueueItem === 'function',
+          // Queue-Reload-Fix: der Hook muss fehlende Einträge wirklich ins DOM bauen
+          queueRebuild: (() => {
+            try {
+              window.__ensureQueueItem({ id: 'faketest1', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', status: 'downloading', formatKey: 'mp3', quality: '1080' });
+              return document.querySelectorAll('.queue-item[data-download-id="faketest1"]').length > 0 ? 'ok' : 'no-nodes';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })()
         })`);
         console.log('SMOKE_OK ' + JSON.stringify(result));
       } catch (err) {
