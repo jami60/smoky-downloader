@@ -51,6 +51,7 @@ let settings = {
 };
 let current = null;          // the download currently running
 let conversions = [];        // ffmpeg conversions (in memory)
+let playerState = null;      // { title, artist, playing, updatedAt } — für Discord Rich Presence
 
 function loadJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -787,6 +788,7 @@ async function statusPayload() {
     conversions: conversions.map((c) => c),
     settings,
     storage,
+    player: playerState,
     tools: { ytdlp: YTDLP_OK, spotdl: SPOTDL_OK, ffmpeg: FFMPEG_OK, ffprobe: FFPROBE_OK },
   };
 }
@@ -858,6 +860,17 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         return sendJson(res, 500, { error: String(e.message || e) });
       }
+    }
+
+    if (req.method === 'POST' && p === '/api/player-state') {
+      const body = await readBody(req);
+      playerState = {
+        title: String(body.title || '').slice(0, 120),
+        artist: String(body.artist || '').slice(0, 80),
+        playing: !!body.playing,
+        updatedAt: now(),
+      };
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && p === '/api/settings') {

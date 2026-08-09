@@ -776,6 +776,8 @@
         drawWave(playerAudio.duration ? playerAudio.currentTime / playerAudio.duration : 0);
       } catch { /* waveform not available */ }
     }
+    // Meldet den aktuellen Track an den Server — Discord Rich Presence zeigt ihn an.
+    const sendPlayerState = (playing) => { try { fetch('/api/player-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: playerTitleEl.textContent, artist: playerArtistEl.textContent, playing }) }).catch(() => {}); } catch {} };
     function playTrack(i) {
       if (i < 0 || i >= library.length) return;
       currentIndex = i;
@@ -791,6 +793,7 @@
       playerCoverImg.onerror = () => { playerCoverImg.style.display = 'none'; };
       renderLibrary();
       loadWaveform(t.path);
+      sendPlayerState(true);
       try { if (bgAudio && !bgAudio.paused) { bgAudio.pause(); if (musicToggle) musicToggle.setAttribute('aria-pressed', 'false'); } } catch {}
     }
     function nextTrack() {
@@ -814,8 +817,8 @@
         if (wavePeaks && !visAnalyser) drawWave(p);
       }
     });
-    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); });
-    playerAudio.addEventListener('pause', () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; });
+    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); sendPlayerState(true); });
+    playerAudio.addEventListener('pause', () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; sendPlayerState(false); });
     playerAudio.addEventListener('ended', () => { if (repeatOn) { playerAudio.currentTime = 0; playerAudio.play().catch(() => {}); } else nextTrack(); });
     playerSeek.addEventListener('input', () => { if (playerAudio.duration) playerAudio.currentTime = (playerSeek.value / 1000) * playerAudio.duration; });
     playerPlayBtn.addEventListener('click', () => { if (currentIndex < 0) { if (library.length) playTrack(0); } else if (playerAudio.paused) playerAudio.play().catch(() => {}); else playerAudio.pause(); });

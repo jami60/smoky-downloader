@@ -5,11 +5,17 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { startServer } = require('../server.js');
 const updater = require('./updater.js');
+const { DiscordRPC } = require('./discord-rpc.js');
 
 // --------------------------------------------------------------------------
 // Updates — checked against the latest GitHub release of this public repo.
 // The env override exists for testing and power users.
 const UPDATE_REPO = process.env.SMOKY_UPDATE_REPO || 'jami60/smoky-downloader';
+// Discord Rich Presence — träg deine App-ID hier ein (discord.com/developers).
+// Ohne gültige ID bleibt Smoky still und verbindet sich nicht.
+const DISCORD_CLIENT_ID = process.env.SMOKY_DISCORD_ID || 'DEINE_DISCORD_APP_ID';
+const discord = new DiscordRPC(DISCORD_CLIENT_ID);
+discord.start();
 const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return '0.0.0'; } })();
 
 const SMOKE = process.argv.includes('--smoke');
@@ -75,14 +81,32 @@ app.whenReady().then(async () => {
   win.once('ready-to-show', () => win.show());
 
   // Taskbar progress: the Windows icon shows a bar while a download runs.
+  let discordDlId = null, discordDlStart = null;
   setInterval(async () => {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/status`);
       const s = await res.json();
       const active = (s.queue || []).find((q) => q.status === 'downloading' || q.status === 'processing' || q.status === 'queued');
-      if (!active) { win.setProgressBar(-1); return; }
-      if (active.status === 'queued') win.setProgressBar(0.05);
+      if (!active) { win.setProgressBar(-1); discordDlId = null; discordDlStart = null; }
+      else if (active.status === 'queued') win.setProgressBar(0.05);
       else win.setProgressBar(Math.max(0.02, Math.min(1, (active.percent || 0) / 100)));
+      // Discord Rich Presence: Download > laufender Track > Idle.
+      if (active) {
+        if (discordDlId !== active.id) { discordDlId = active.id; discordDlStart = Date.now(); }
+        const track = active.trackIndex && active.trackCount ? `Track ${active.trackIndex} von ${active.trackCount} · ` : '';
+        discord.setActivity({
+          details: `⬇ ${active.title || 'Download läuft'}`,
+          state: `${track}${Math.round(active.percent || 0)}%`,
+          timestamps: { start: discordDlStart || Date.now() },
+        });
+      } else if (s.player && s.player.playing && s.player.title) {
+        discord.setActivity({
+          details: `🎵 ${s.player.title}`,
+          state: s.player.artist || 'Musik-Player',
+        });
+      } else {
+        discord.setActivity({ details: 'Smoky Desktop', state: 'Verwaltet seine Media-Bibliothek' });
+      }
     } catch { /* server briefly unreachable */ }
   }, 1000);
 
