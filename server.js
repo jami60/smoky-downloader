@@ -287,10 +287,12 @@ function parseProgress(line, item) {
   return false;
 }
 
-function enqueue(url, formatKey, quality, folder, browserName) {
+function enqueue(url, formatKey, quality, folder, browserName, tracks) {
+  const picked = Array.isArray(tracks) && tracks.length ? tracks.filter((t) => /^https?:\/\//i.test(t)) : null;
   const item = {
     id: crypto.randomBytes(4).toString('hex'),
     url,
+    tracks: picked,
     format: FORMATS[formatKey] ? FORMATS[formatKey].label : FORMATS['mp4-1080'].label,
     formatKey: FORMATS[formatKey] ? formatKey : 'mp4-1080',
     quality,
@@ -302,7 +304,7 @@ function enqueue(url, formatKey, quality, folder, browserName) {
     speed: null,
     eta: null,
     trackIndex: null,
-    trackCount: isPlaylistUrl(url) ? 0 : null,
+    trackCount: picked ? picked.length : (isPlaylistUrl(url) ? 0 : null),
     file: null,
     error: null,
     startedAt: null,
@@ -334,6 +336,9 @@ function launchItem(item) {
 
   const isSpot = isSpotify(item.url);
   const outTpl = path.join(folder, '%(title)s [%(id)s].%(ext)s');
+  // Track-Auswahl: Wenn konkrete Track-URLs gewaehlt wurden, werden genau die
+  // geladen statt der ganzen Playlist.
+  const picked = item.tracks;
 
   let cmd, args;
   if (isSpot) {
@@ -344,7 +349,8 @@ function launchItem(item) {
       return;
     }
     cmd = spotdl.cmd;
-    args = [...spotdl.args, item.url, '--output', folder, '--format', 'mp3', '--overwrite', 'skip'];
+    args = [...spotdl.args, ...(picked || [item.url]), '--output', folder, '--format', 'mp3', '--overwrite', 'skip'];
+    if (picked) item.title = 'Spotify playlist…';
   } else {
     if (!YTDLP_OK) {
       item.status = 'failed';
@@ -365,9 +371,9 @@ function launchItem(item) {
       ...fmt.args(item.quality),
       ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
       ...browserFlag(item.browserName),
-      item.url,
+      ...(picked || [item.url]),
     ];
-    if (playlist) item.title = 'Playlist…';
+    if (playlist && !picked) item.title = 'Playlist…';
   }
 
   const child = spawn(cmd, args, { windowsHide: true, env: TOOL_ENV });
@@ -452,6 +458,58 @@ async function ensureAlbumTag(file, title) {
       resolve();
     });
   });
+}
+
+// Fuehrt einen Befehl aus und liefert stdout zurueck (mit Timeout).
+function runCmdOut(cmd, args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let out = '', err = '';
+    const p = spawn(cmd, args, { windowsHide: true, env: TOOL_ENV });
+    const timer = setTimeout(() => { try { p.kill(); } catch {} }, timeoutMs || 60000);
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', (e) => { clearTimeout(timer); reject(e); });
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(out);
+      else reject(new Error((err.trim() || out.trim()).split(/\r?\n/).slice(-2).join(' | ') || `exit ${code}`));
+    });
+  });
+}
+
+// Listet die Tracks einer Playlist auf (Titel/Artist/URL) — ohne sie zu laden.
+// Spotify nutzt spotDL save, alles andere yt-dlp --flat-playlist (schnell).
+async function listPlaylistTracks(url) {
+  if (isSpotify(url)) {
+    if (!SPOTDL_OK) throw new Error('spotDL is not installed. Run: py -m pip install -U spotdl');
+    const tmp = path.join(os.tmpdir(), 'smoky-playlist-' + crypto.randomBytes(4).toString('hex') + '.spotdl');
+    try {
+      await runCmdOut(spotdl.cmd, [...spotdl.args, 'save', url, '--save-file', tmp], 120000);
+      const raw = fs.readFileSync(tmp, 'utf8');
+      const tracks = JSON.parse(raw);
+      return (Array.isArray(tracks) ? tracks : []).map((t, i) => ({
+        index: i + 1,
+        title: t.name || ('Track ' + (i + 1)),
+        artist: t.artist || (Array.isArray(t.artists) ? t.artists.join(', ') : ''),
+        url: t.url || '',
+      })).filter((t) => /^https?:\/\//i.test(t.url));
+    } finally {
+      try { fs.unlinkSync(tmp); } catch {}
+    }
+  }
+  if (!YTDLP_OK) throw new Error('yt-dlp is not installed. Run: py -m pip install -U yt-dlp');
+  const json = await runCmdOut(ytdlp.cmd, [...ytdlp.args, '--flat-playlist', '--no-warnings', '-J', url], 60000);
+  const parsed = JSON.parse(json);
+  const entries = (parsed && parsed.entries) || [];
+  return entries.map((e, i) => {
+    const id = e.id;
+    return {
+      index: i + 1,
+      title: e.title || ('Track ' + (i + 1)),
+      artist: e.channel || e.uploader || '',
+      url: e.url || (id ? `https://www.youtube.com/watch?v=${id}` : ''),
+    };
+  }).filter((t) => /^https?:\/\//i.test(t.url));
 }
 
 function finish(item) {
@@ -806,6 +864,17 @@ const server = http.createServer(async (req, res) => {
   const p = u.pathname;
 
   try {
+    if (req.method === 'GET' && p === '/api/playlist') {
+      const url = String(u.searchParams.get('url') || '');
+      if (!url || !/^https?:\/\//i.test(url)) return sendJson(res, 400, { error: 'missing url' });
+      try {
+        const tracks = await listPlaylistTracks(url);
+        return sendJson(res, 200, { tracks });
+      } catch (e) {
+        return sendJson(res, 400, { error: String(e.message || e) });
+      }
+    }
+
     if (req.method === 'POST' && p === '/api/download') {
       const body = await readBody(req);
       if (!body.url || !/^https?:\/\//i.test(body.url)) return sendJson(res, 400, { error: 'Please paste a valid link.' });
@@ -814,7 +883,7 @@ const server = http.createServer(async (req, res) => {
       settings.format = body.format || settings.format;
       settings.quality = body.quality || settings.quality;
       saveJson(SETTINGS_FILE, settings);
-      const item = enqueue(body.url, body.format || 'mp4', body.quality || '1080', folder, body.browserName || 'none');
+      const item = enqueue(body.url, body.format || 'mp4', body.quality || '1080', folder, body.browserName || 'none', body.tracks);
       const { child, ...safe } = item;
       return sendJson(res, 200, { item: safe });
     }
