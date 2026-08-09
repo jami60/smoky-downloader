@@ -1230,6 +1230,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { tracks: await scanLibrary() });
     }
 
+    if (req.method === 'GET' && p === '/api/stats') {
+      const h = history;
+      const total = h.length;
+      const bytes = h.reduce((a, x) => a + (x.size || 0), 0);
+      const weekAgo = Date.now() - 7 * 864e5;
+      const week = h.filter(x => x.finishedAt >= weekAgo);
+      const weekBytes = week.reduce((a, x) => a + (x.size || 0), 0);
+      const hosts = {};
+      for (const x of h) { let host = ''; try { host = new URL(x.url).hostname.replace(/^www\./, ''); } catch {} if (host) hosts[host] = (hosts[host] || 0) + 1; }
+      const topHost = Object.entries(hosts).sort((a, b) => b[1] - a[1])[0] || null;
+      const fmt = (n) => n >= 1e9 ? (n / 1e9).toFixed(2) + ' GB' : n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : n >= 1e3 ? (n / 1e3).toFixed(0) + ' KB' : n + ' B';
+      return sendJson(res, 200, { total, bytesFmt: fmt(bytes), weekCount: week.length, weekBytesFmt: fmt(weekBytes), topHost: topHost ? { host: topHost[0], count: topHost[1] } : null, avgFmt: total ? fmt(bytes / total) : '—' });
+    }
+
     if (req.method === 'GET' && p === '/api/playlist-export') {
       const tracks = await scanLibrary();
       if (!tracks.length) return sendJson(res, 404, { error: 'no tracks' });
