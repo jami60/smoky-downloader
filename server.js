@@ -983,6 +983,14 @@ function sendJson(res, code, obj) {
   // dann darf hier nichts mehr werfen — ein Fehler in diesem Pfad würde die
   // Exception aus dem Handler-Catch entkommen lassen und den Server crashen.
   try {
+    // 204 hat keinen Body — JSON.stringify(undefined) wäre undefined und
+    // Buffer.byteLength würde werfen; die Response müsste dann nie gesendet
+    // werden und der Client (z. B. ein <img> mit Cover-URL) hinge ewig.
+    if (code === 204 || obj === undefined) {
+      res.writeHead(204, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end();
+      return;
+    }
     const body = JSON.stringify(obj);
     res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
     res.end(body);
@@ -1101,6 +1109,16 @@ async function scanLibrary() {
 }
 
 const coverDir = path.join(DATA_DIR, 'covers');
+// Einmalige Migration: vor 1.8.3 wurde das .done-Flag auch bei fehlgeschlagenem
+// Backfill geschrieben und blockierte die Cover-Nachrüstung dauerhaft. Neue
+// Flags entstehen nur noch bei Erfolg — alte werden hier entfernt.
+try {
+  if (fs.existsSync(coverDir)) {
+    for (const f of fs.readdirSync(coverDir)) {
+      if (f.endsWith('.done')) { try { fs.unlinkSync(path.join(coverDir, f)); } catch {} }
+    }
+  }
+} catch {}
 const SIBLING_IMG_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.bmp'];
 // Sucht ein Bild mit gleichem Basisnamen neben der Audiodatei (yt-dlp
 // --write-thumbnail legt z. B. "Titel [id].webp" neben "Titel [id].wav").
@@ -1119,6 +1137,30 @@ function siblingCover(file) {
   return null;
 }
 
+// Echte Bilddatei? (JPEG/PNG/WebP) — verhindert, dass kaputte Cache-Einträge
+// (0 Bytes, abgeschnitten) dauerhaft als Cover ausgeliefert werden.
+function isValidImage(p) {
+  try {
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size < 12) return false;
+    const b = fs.readFileSync(p).subarray(0, 4);
+    return (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) ||                    // JPEG
+           (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) ||  // PNG
+           (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46);    // WebP (RIFF)
+  } catch { return false; }
+}
+
+// ffmpeg-Frame-Extraktion mit Timeout — ein hängender Prozess darf einen
+// Cover-Request nie endlos blockieren.
+function extractCoverFrame(file, out, codec) {
+  return new Promise((resolve) => {
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-an', '-c:v', codec, '-frames:v', '1', out], { windowsHide: true });
+    const timer = setTimeout(() => { try { p.kill(); } catch {} }, 15000);
+    p.on('error', () => { clearTimeout(timer); resolve(); });
+    p.on('close', () => { clearTimeout(timer); resolve(); });
+  });
+}
+
 // Bestehende Downloads nachrüsten: Video-ID aus dem Dateinamen ([id]) holen
 // und das YouTube-Thumbnail einmalig neben die Datei schreiben. Seriell, damit
 // nicht 14 yt-dlp-Prozesse gleichzeitig auf YouTube hämmern.
@@ -1135,31 +1177,41 @@ async function backfillCover(file) {
   const dir = path.dirname(file);
   const run = () => new Promise((resolve) => {
     const p = spawn(ytdlp.cmd, [...ytdlp.args, '--skip-download', '--write-thumbnail', '--no-warnings', '-o', path.join(dir, '%(title)s [%(id)s].%(ext)s'), `https://www.youtube.com/watch?v=${id}`], { windowsHide: true, env: TOOL_ENV });
-    p.on('error', () => resolve());
-    p.on('close', () => resolve());
+    const timer = setTimeout(() => { try { p.kill(); } catch {} }, 30000);
+    p.on('error', () => { clearTimeout(timer); resolve(); });
+    p.on('close', () => { clearTimeout(timer); resolve(); });
   });
   coverBackfillChain = coverBackfillChain.then(run, run);
   await coverBackfillChain;
-  try { fs.writeFileSync(doneFlag, '1'); } catch {}
-  return siblingCover(file);
+  // doneFlag nur bei Erfolg setzen — sonst bliebe der Track nach einem einzigen
+  // fehlgeschlagenen Versuch (z. B. Netz-Aussetzer) dauerhaft ohne Cover.
+  const found = siblingCover(file);
+  if (found) { try { fs.writeFileSync(doneFlag, '1'); } catch {} }
+  return found;
 }
 
 async function coverFor(file) {
   if (!ffmpegCmd) return null;
   const hash = crypto.createHash('md5').update(file).digest('hex');
-  const out = path.join(coverDir, hash + '.jpg');
-  if (fs.existsSync(out)) return out;
+  const outJpg = path.join(coverDir, hash + '.jpg');
+  const outPng = path.join(coverDir, hash + '.png');
+  // Cache-Treffer nur, wenn wirklich ein gültiges Bild vorliegt.
+  if (isValidImage(outJpg)) return outJpg;
+  if (isValidImage(outPng)) return outPng;
   try { fs.mkdirSync(coverDir, { recursive: true }); } catch { return null; }
-  await new Promise((resolve) => {
-    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-an', '-c:v', 'mjpeg', '-frames:v', '1', out], { windowsHide: true });
-    p.on('error', () => resolve());
-    p.on('close', () => resolve());
-  });
-  if (fs.existsSync(out)) return out;
+  // Kaputte Cache-Einträge entfernen, damit sie nie wieder als Cover dienen.
+  for (const stale of [outJpg, outPng]) {
+    try { if (fs.existsSync(stale)) fs.unlinkSync(stale); } catch {}
+  }
+  await extractCoverFrame(file, outJpg, 'mjpeg');
+  if (isValidImage(outJpg)) return outJpg;
+  // Zweiter Versuch als PNG — verträgt Alpha- und WebP-Quellen zuverlässig.
+  await extractCoverFrame(file, outPng, 'png');
+  if (isValidImage(outPng)) return outPng;
   // Kein eingebettetes Cover (z. B. WAV/AAC) → Schwester-Bild neben der Datei?
   const sibling = siblingCover(file);
   if (sibling) return sibling;
-  // Sonst einmalig per yt-dlp nachrüsten (nur wenn eine Video-ID im Namen steckt).
+  // Sonst per yt-dlp nachrüsten (nur wenn eine Video-ID im Namen steckt).
   return backfillCover(file);
 }
 
@@ -1482,7 +1534,7 @@ function startServer(port = PORT, silent = false) {
   });
 }
 
-module.exports = { startServer, settings, queue, history, conversions };
+module.exports = { startServer, settings, queue, history, conversions, server };
 
 if (require.main === module) {
   startServer();

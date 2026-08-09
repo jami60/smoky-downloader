@@ -1,7 +1,11 @@
 // Smoky — API-Smoke-Test (läuft ohne GUI, ohne echte Downloads).
 // Startet den Server auf einem zufälligen Port und prüft alle kritischen
 // Endpoints auf korrekte Antworten. Ausführen: node scripts/smoke-test.js
-const { startServer } = require('../server.js');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const { startServer, settings } = require('../server.js');
 const APP_VERSION = require('../package.json').version;
 
 let passed = 0;
@@ -21,6 +25,9 @@ async function json(base, path, opts) {
 }
 
 (async () => {
+  // Testordner statt des echten Download-Ordners — keine Nebenwirkungen.
+  const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-smoke-'));
+  settings.folder = testDir;
   const port = await startServer(0, true);
   const base = `http://127.0.0.1:${port}`;
   console.log('Server auf Port ' + port + ' gestartet\n');
@@ -73,6 +80,16 @@ async function json(base, path, opts) {
   // ------------------------------------------------------------- files -----
   const { res: cover } = await json(base, '/api/cover?file=' + encodeURIComponent('C:/does/not/exist.mp3'));
   check('GET /api/cover mit fehlender Datei → 404', cover.status === 404);
+  // Cover-Regression: echte Audiodatei OHNE Cover → 204 schnell (kein Endlos-Hang)
+  const ffmpegBin = path.join(__dirname, '..', 'tools', 'ffmpeg.exe');
+  if (fs.existsSync(ffmpegBin)) {
+    const probe = path.join(testDir, 'cover-no-cover.mp3');
+    spawnSync(ffmpegBin, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'libmp3lame', probe], { stdio: 'ignore', windowsHide: true });
+    const t0 = Date.now();
+    const cov = await fetch(base + '/api/cover?file=' + encodeURIComponent(probe));
+    const dt = Date.now() - t0;
+    check('GET /api/cover ohne Cover → 204 schnell (kein Hang)', cov.status === 204 && dt < 4000, 'status=' + cov.status + ' dauer=' + dt + 'ms');
+  }
   const { res: play } = await json(base, '/api/play?file=' + encodeURIComponent('C:/does/not/exist.mp3'));
   check('GET /api/play mit fehlender Datei → 404', play.status === 404);
   const { res: playTraversal } = await json(base, '/api/play?file=' + encodeURIComponent('..\\..\\package.json'));
@@ -111,5 +128,6 @@ async function json(base, path, opts) {
     process.exit(1);
   }
   console.log('Smoke-Test bestanden ✅');
+  try { fs.rmSync(testDir, { recursive: true, force: true }); } catch {}
   process.exit(0);
 })().catch((e) => { console.error('Smoke-Test abgestürzt:', e); process.exit(1); });
