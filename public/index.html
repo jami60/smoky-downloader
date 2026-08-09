@@ -1197,7 +1197,7 @@
         return `
         <div class="player-track ${i === currentIndex ? 'playing' : ''}" data-index="${i}">
           <div class="pt-cover"><img src="${coverUrl(tr.path)}" alt="" loading="lazy" onerror="this.remove()"><span>♪</span></div>
-          <div class="pt-meta"><b>${escapeHtml(tr.title)}</b><span>${escapeHtml(tr.artist || t('player.unknown'))}${tr.album ? ' · ' + escapeHtml(tr.album) : ''}</span></div>
+          <div class="pt-meta"><b>${escapeHtml(tr.title)}</b><span>${escapeHtml(tr.artist || t('player.unknown'))}${(tr.album && tr.album.trim().toLowerCase() !== String(tr.title || '').trim().toLowerCase()) ? ' · ' + escapeHtml(tr.album) : ''}</span></div>
           <span class="pt-dur">${tr.duration ? fmtDur(tr.duration) : ''}</span>
         </div>`;
       }).join('');
