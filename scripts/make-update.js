@@ -20,20 +20,30 @@ if (!fs.existsSync(path.join(unpacked, 'Smoky.exe'))) {
 const zip = path.join(dist, `Smoky-${version}-update.zip`);
 if (fs.existsSync(zip)) fs.rmSync(zip, { force: true });
 
-console.log('Zipping', unpacked, '→', zip, '…');
+// Everything we ever change (UI, server, updater) lives inside app.asar — so
+// an update is just that one file: ~45 MB instead of 330 MB. Small enough for
+// any free host (Google Drive, MEGA, OneDrive, Dropbox, GitHub Releases…).
+const staging = path.join(dist, '.update-staging');
+fs.rmSync(staging, { recursive: true, force: true });
+fs.mkdirSync(path.join(staging, 'resources'), { recursive: true });
+fs.copyFileSync(path.join(unpacked, 'resources', 'app.asar'), path.join(staging, 'resources', 'app.asar'));
+
+console.log('Zipping app.asar →', zip, '…');
 const r = spawnSync('powershell', [
   '-NoProfile', '-NonInteractive', '-Command',
-  `Compress-Archive -Path '${path.join(unpacked, '*')}' -DestinationPath '${zip}' -CompressionLevel Optimal -Force`,
+  `Compress-Archive -Path '${path.join(staging, '*')}' -DestinationPath '${zip}' -CompressionLevel Optimal -Force`,
 ], { stdio: 'inherit' });
+fs.rmSync(staging, { recursive: true, force: true });
 if (r.status !== 0) {
   console.error('Compress-Archive failed (exit ' + r.status + ')');
   process.exit(1);
 }
 
 const size = fs.statSync(zip).size;
+const host = process.env.SMOKY_UPDATE_BASE_URL || 'https://example.com/smoky';
 const manifest = {
   version,
-  url: `https://example.com/smoky/Smoky-${version}-update.zip`, // ← replace with your host
+  url: `${host}/Smoky-${version}-update.zip`,
   notes: '',
   size,
 };

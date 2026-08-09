@@ -67,20 +67,24 @@ only interrupts when a new version exists). Friends can also check manually in
 
 **How to publish a new version for your friends:**
 
-1. Bump the version in `package.json` (e.g. `1.1.0` → `1.2.0`)
+1. Bump the version in `package.json` (e.g. `1.2.0` → `1.2.1`)
 2. `npm run update:dist` — builds the app and creates
-   `dist/Smoky-<version>-update.zip` + `dist/update.json`
+   `dist/Smoky-<version>-update.zip` (**~40 MB — just the app code**)
+   + `dist/update.json`
 3. Upload **both** files somewhere your friends can reach (GitHub Releases,
-   any static host, your own server…)
-4. Put the real download URL into `dist/update.json` (the `url` field)
-5. Point the app at it: set `UPDATE_MANIFEST_URL` at the top of
-   `electron/main.js` (or `SMOKY_UPDATE_URL` env var) to the hosted
-   `update.json`
-6. Rebuild + share once more — from then on everyone gets updates
-   automatically
+   Google Drive, MEGA, OneDrive, Dropbox — the update zip is small enough for
+   any free host)
+4. Put the real base URL into the manifest: `SMOKY_UPDATE_BASE_URL` env var
+   when building, or edit the `url` field in `dist/update.json` directly
+5. Set `UPDATE_MANIFEST_URL` at the top of `electron/main.js` (or
+   `SMOKY_UPDATE_URL` env var) to the hosted `update.json`
+6. Rebuild + share the full install zip once more — from then on everyone
+   gets updates automatically
 
-The updater downloads the zip, swaps the app folder and relaunches itself;
-settings/history live in `%APPDATA%\Smoky` and survive every update.
+The update contains only `resources/app.asar` (all code lives there), so
+updates are tiny and the swap is a single-file copy — bundled tools, settings
+and history (`%APPDATA%\Smoky`) are never touched. Note: friends on an older
+app need the new full install zip once; after that the updater takes over.
 
 ## Requirements (dev only — not needed for the packaged app)
 

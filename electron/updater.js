@@ -81,17 +81,19 @@ function unzip(zipFile, dest) {
   });
 }
 
-// Find the folder that actually contains Smoky.exe (tolerates zips that have
-// a top-level folder like `win-unpacked/` and contents-only zips).
+// Find the resources/ folder inside the extracted update (the zip contains
+// just resources/app.asar).
 function contentRoot(staging) {
-  let src = staging;
-  const entries = fs.readdirSync(staging, { withFileTypes: true });
-  const dirs = entries.filter((e) => e.isDirectory());
-  if (dirs.length === 1 && entries.length === 1) {
-    const nested = path.join(staging, dirs[0].name);
-    if (fs.existsSync(path.join(nested, 'Smoky.exe'))) src = nested;
+  const candidates = [
+    staging,
+    ...fs.readdirSync(staging, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => path.join(staging, e.name)),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'resources', 'app.asar'))) return dir;
   }
-  return src;
+  return staging;
 }
 
 // applyUpdate(url, { appDir, execPath, log }) → downloads, extracts and
@@ -110,22 +112,26 @@ async function applyUpdate(url, { appDir, execPath, log = () => {} }) {
   await unzip(zip, staging);
 
   const src = contentRoot(staging);
-  if (!fs.existsSync(path.join(src, 'Smoky.exe'))) {
+  if (!fs.existsSync(path.join(src, 'resources', 'app.asar'))) {
     fs.rmSync(tmp, { recursive: true, force: true });
-    throw new Error('The update package does not contain Smoky.exe');
+    throw new Error('The update package does not contain resources/app.asar');
   }
 
   log('installing…');
-  // The batch lives in %TEMP% (outside the download dir it later deletes, and
-  // outside the app dir that robocopy /mir mirrors).
+  // The update is a single-file swap (copy resources/app.asar over the old
+  // one) — the friend's bundled tools, locales and everything else stay as is.
+  // NOTE: build the paths with path.join — inline backslashes in a template
+  // literal would be eaten as escape sequences (\r, \u…) and corrupt the batch.
+  const newAsar = path.join(src, 'resources', 'app.asar');
+  const targetAsar = path.join(appDir, 'resources', 'app.asar');
+  const failedFile = path.join(appDir, 'update-failed.txt');
   const bat = path.join(os.tmpdir(), 'smoky-update.bat');
   const body = [
     '@echo off',
     'taskkill /f /im Smoky.exe >nul 2>&1',
     'timeout /t 1 /nobreak >nul',
-    `robocopy "${src}" "${appDir}" /mir /r:2 /w:1 /nfl /ndl /njh /njs >nul`,
-    'set rc=%errorlevel%',
-    'if %rc% GEQ 8 ( echo Update copy failed (robocopy %rc%) > "%appDir%\\update-failed.txt" & timeout /t 3 /nobreak >nul & exit /b 1 )',
+    `copy /y "${newAsar}" "${targetAsar}" >nul`,
+    `if errorlevel 1 ( echo Update copy failed > "${failedFile}" & timeout /t 3 /nobreak >nul & exit /b 1 )`,
     `rmdir /s /q "${tmp}"`,
     'start "" "' + execPath + '"',
     'del "%~f0"',
