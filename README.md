@@ -24,11 +24,14 @@ verifies the UI + bridge, and quits.
   thumbnails, speed and ETA. Spotify links use spotDL.
 - **Converter** — pick a local file, choose a target container; ffmpeg converts
   it on-device into `<Downloads>/Smoky/Converted`.
-- **12 themes** — Midnight, Aurora, Ember, Ocean, Rose, Cyber, Forest, Slate,
-  Solar, Rain, Horror, Light (topbar dots + Settings).
+- **15 themes** — the four seasons (Winter, Spring, Summer, Autumn, each with
+  its own ambient: snow, blossom petals, sunshine, falling leaves) plus Aurora,
+  Ember, Ocean, Rose, Cyber, Forest, Slate, Solar, Rain, Horror, Light
+  (topbar dots + Settings).
 - **Mita guide** — a walkthrough overlay with local artwork.
 - **Background music** — plays a local track, volume persisted per browser.
-- **Ambient snow** — canvas snowfall (rain/notes variants per theme).
+- **Ambient seasons** — canvas snowfall (winter), blossom petals (spring),
+  sun-dust + glow (summer), falling leaves (autumn); rain/notes variants per theme.
 - **Queue / History** — jobs with cancel/retry/open/delete; a local history
   that stays on this device.
 

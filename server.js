@@ -35,7 +35,7 @@ const MIME = {
 // ---------------------------------------------------------------- state ----
 const queue = [];            // active + waiting items (in memory)
 let history = [];            // persisted finished items
-const THEMES = ['smoky', 'midnight', 'aurora', 'ember', 'ocean', 'rose', 'cyber', 'forest', 'slate', 'solar', 'rain', 'horror', 'light'];
+const THEMES = ['smoky', 'midnight', 'aurora', 'ember', 'ocean', 'rose', 'cyber', 'forest', 'slate', 'solar', 'rain', 'horror', 'light', 'spring', 'summer', 'autumn'];
 let settings = {
   folder: path.join(process.env.USERPROFILE || process.env.HOME || '.', 'Downloads', 'Smoky'),
   format: 'mp4-1080',
