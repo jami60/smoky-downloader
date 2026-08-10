@@ -42,6 +42,10 @@ const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.
 // Formate, die spotDL selbst erzeugen kann (--format {mp3,flac,ogg,opus,m4a,wav}).
 // aac ist nicht dabei → fällt in launchItem auf mp3 zurück.
 const SPOT_FORMATS = new Set(['mp3', 'flac', 'ogg', 'opus', 'm4a', 'wav']);
+// execFileSync darf nie endlos blockieren — weder beim Boot (Tool-Erkennung)
+// noch beim Tools-Update. 8 s reichen für --version weit (yt-dlp braucht hier
+// ~2 s, mit Defender-Erstscan deutlich länger, aber endlich).
+const TOOL_TIMEOUT = 8000;
 
 // ---------------------------------------------------------------- state ----
 const queue = [];            // active + waiting items (in memory)
@@ -161,7 +165,7 @@ function bundledCmd(name) {
   // flag and exits 2) — try both forms so every bundled tool is recognised.
   for (const flag of ['-version', '--version']) {
     try {
-      require('node:child_process').execFileSync(p, [flag], { stdio: 'ignore', windowsHide: true });
+      require('node:child_process').execFileSync(p, [flag], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
       return { cmd: p, args: [] };
     } catch { /* try next flag */ }
   }
@@ -175,7 +179,7 @@ function resolveYtdlp() {
   const bundled = bundledCmd('yt-dlp.exe');
   if (bundled) return bundled;
   try {
-    require('node:child_process').execFileSync('py', ['-m', 'yt_dlp', '--version'], { stdio: 'ignore', windowsHide: true });
+    require('node:child_process').execFileSync('py', ['-m', 'yt_dlp', '--version'], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
     return { cmd: 'py', args: ['-m', 'yt_dlp'] };
   } catch {}
   if (hasCommand('yt-dlp')) return { cmd: 'yt-dlp', args: [] };
@@ -185,8 +189,20 @@ function resolveYtdlp() {
 function cmdVersion(cmd, flag) {
   if (!cmd) return null;
   try {
-    return require('node:child_process').execFileSync(cmd.cmd, [flag], { encoding: 'utf8', windowsHide: true }).trim().split(/\r?\n/)[0];
+    return require('node:child_process').execFileSync(cmd.cmd, [flag], { encoding: 'utf8', windowsHide: true, timeout: TOOL_TIMEOUT }).trim().split(/\r?\n/)[0];
   } catch { return null; }
+}
+
+// Tool-Versionen werden NUR beim Start (und nach einem Tools-Update) ermittelt
+// und gecacht — niemals im /api/status-Hot-Path. Ein einziger execFileSync pro
+// Poll (yt-dlp --version dauert hier ~2 s, mit Windows-Defender-Erstscan des
+// neuen Binaries deutlich länger) blockiert die komplette Server-Event-Loop:
+// die App friert ein, sobald der Renderer im Sekundentakt /api/status pollt
+// (Regression aus v1.8.6 — in v1.8.5 gab es keine Versionen im Status).
+let toolVersions = { ytdlp: null, ffmpeg: null };
+function refreshToolVersions() {
+  toolVersions = { ytdlp: cmdVersion(ytdlp, '--version'), ffmpeg: cmdVersion(ffmpegCmd, '-version') };
+  return toolVersions;
 }
 
 // ------------------------------------------------ bundled tools update -----
@@ -278,6 +294,9 @@ async function updateBundledTools() {
     try { fs.unlinkSync(zip); } catch {}
     try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
   }
+  // Nach dem Austausch der Binaries den gecachten Stand aktualisieren, damit
+  // /api/status die neuen Versionen meldet (ohne erneuten execFileSync pro Poll).
+  try { refreshToolVersions(); } catch {}
   out.ok = !out.error;
   return out;
 }
@@ -285,7 +304,7 @@ async function updateBundledTools() {
 // Same idea for spotDL: prefer the pip-installed `py -m spotdl`, fall back to PATH.
 function resolveSpotdl() {
   try {
-    require('node:child_process').execFileSync('py', ['-m', 'spotdl', '--version'], { stdio: 'ignore', windowsHide: true });
+    require('node:child_process').execFileSync('py', ['-m', 'spotdl', '--version'], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
     return { cmd: 'py', args: ['-m', 'spotdl'] };
   } catch {}
   if (hasCommand('spotdl')) return { cmd: 'spotdl', args: [] };
@@ -314,6 +333,8 @@ const YTDLP_OK = !!ytdlp;
 const SPOTDL_OK = !!spotdl;
 const FFMPEG_OK = !!ffmpegCmd;
 const FFPROBE_OK = !!ffprobeCmd;
+// Einmalig beim Start ermitteln (danach nur noch nach einem Tools-Update).
+refreshToolVersions();
 
 async function dirSize(dir) {
   let total = 0;
@@ -1564,7 +1585,7 @@ async function statusPayload() {
     settings,
     storage,
     player: playerState,
-    tools: { ytdlp: YTDLP_OK, spotdl: SPOTDL_OK, ffmpeg: FFMPEG_OK, ffprobe: FFPROBE_OK, versions: { ytdlp: cmdVersion(ytdlp, '--version'), ffmpeg: cmdVersion(ffmpegCmd, '-version') } },
+    tools: { ytdlp: YTDLP_OK, spotdl: SPOTDL_OK, ffmpeg: FFMPEG_OK, ffprobe: FFPROBE_OK, versions: toolVersions },
   };
 }
 
@@ -1762,7 +1783,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       // dryRun: nur Versionen melden, nichts herunterladen (Tests, UI-Vorschau).
       if (body && body.dryRun) {
-        return sendJson(res, 200, { ok: true, dryRun: true, ytdlp: cmdVersion(ytdlp, '--version'), ffmpeg: cmdVersion(ffmpegCmd, '-version') });
+        return sendJson(res, 200, { ok: true, dryRun: true, ytdlp: toolVersions.ytdlp, ffmpeg: toolVersions.ffmpeg });
       }
       const result = await updateBundledTools();
       return sendJson(res, 200, result);

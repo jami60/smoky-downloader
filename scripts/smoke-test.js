@@ -43,6 +43,14 @@ async function json(base, path, opts) {
   check('  settings + storage vorhanden', !!st.settings && !!st.storage);
   check('  tools-Map (ytdlp/ffmpeg) vorhanden', typeof st.tools === 'object' && 'ytdlp' in st.tools && 'ffmpeg' in st.tools);
   check('  player-State vorhanden', 'player' in st);
+  // Regression v1.8.6: /api/status durfte pro Poll NICHT execFileSync laufen
+  // lassen (yt-dlp --version = ~2 s blockierte die Event-Loop → App-Frierer).
+  // Die Versionen kommen aus dem Cache → der Call muss schnell sein.
+  const t0 = Date.now();
+  const { data: stFast } = await json(base, '/api/status');
+  const statusMs = Date.now() - t0;
+  check('  /api/status schnell (< 1500 ms, keine execFileSync pro Poll)', statusMs < 1500, statusMs + 'ms');
+  check('  Tool-Versionen gecacht (ytdlp/ffmpeg Strings)', typeof stFast.tools.versions === 'object' && typeof stFast.tools.versions.ytdlp === 'string' && stFast.tools.versions.ytdlp.length > 0 && typeof stFast.tools.versions.ffmpeg === 'string' && stFast.tools.versions.ffmpeg.length > 0, JSON.stringify(stFast.tools.versions));
 
   // ------------------------------------------------------------- version ----
   const { data: ver } = await json(base, '/api/version');
