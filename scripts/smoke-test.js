@@ -138,6 +138,29 @@ async function json(base, path, opts) {
   const { res: conv } = await json(base, '/api/convert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'C:/does/not/exist.mp3', format: 'mp3' }) });
   check('POST /api/convert mit fehlender Datei → 404', conv.status === 404);
 
+  // ------------------------------------------------------------- clips -----
+  // Schnelle Validierungsfälle OHNE Netzwerk — echte Downloads testen wir
+  // nicht im Smoke-Test.
+  const { res: clipNoUrl } = await json(base, '/api/clip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ start: '0:00', end: '0:05' }) });
+  check('POST /api/clip ohne URL → 400', clipNoUrl.status === 400);
+  const { res: clipRev, data: clipRevData } = await json(base, '/api/clip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', start: '0:10', end: '0:05' }) });
+  const revId = clipRevData && clipRevData.item ? clipRevData.item.id : null;
+  check('POST /api/clip mit umgekehrtem Zeitfenster → 200 + Job angelegt', clipRev.status === 200 && !!revId, 'status=' + clipRev.status);
+  const { res: clipLong, data: clipLongData } = await json(base, '/api/clip', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', start: '0:00', end: '16:00' }) });
+  const longId = clipLongData && clipLongData.item ? clipLongData.item.id : null;
+  check('POST /api/clip über 15 min → 200 + Job angelegt', clipLong.status === 200 && !!longId, 'status=' + clipLong.status);
+  // Async-Validierung abwarten — die Jobs scheitern OHNE Netzwerk sofort.
+  await new Promise((r) => setTimeout(r, 600));
+  const { data: clipCheck } = await json(base, '/api/clips');
+  check('GET /api/clips → 200 + Array', Array.isArray(clipCheck.clips));
+  const revItem = (clipCheck.clips || []).find((c) => c.id === revId);
+  const longItem = (clipCheck.clips || []).find((c) => c.id === longId);
+  check('Clip mit umgekehrtem Zeitfenster scheitert mit klarer Meldung', !!revItem && revItem.status === 'failed' && /Invalid time range/.test(revItem.error || ''));
+  check('Clip über 15 min scheitert mit klarer Meldung', !!longItem && longItem.status === 'failed' && /15 minutes/.test(longItem.error || ''));
+  const { res: clipDel } = await json(base, '/api/clips-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [revId, longId] }) });
+  const { data: clipListAfter } = await json(base, '/api/clips');
+  check('POST /api/clips-delete → 200 + Einträge entfernt', clipDel.status === 200 && !clipListAfter.clips.some((c) => c.id === revId || c.id === longId));
+
   // ------------------------------------------------------------- upload ----
   const { res: up } = await json(base, '/api/upload', { method: 'POST', headers: { 'X-File-Name': 'test.txt' }, body: 'hallo' });
   check('POST /api/upload → 200 + Pfad', up.status === 200);

@@ -1072,10 +1072,11 @@
       const row = btn.closest('.queue-item');
       const id = row.dataset.clipId;
       if (btn.dataset.clipAction === 'open') {
-        const out = row.querySelector('.item-details span').textContent;
         fetch('/api/status').then((r) => r.json()).then(({ clips }) => {
           const c = clips.find((x) => x.id === id);
-          if (c && c.output) desktop?.openFolder(c.output);
+          // Ordner öffnen (wie beim Download-Button) — nicht die Datei selbst,
+          // sonst startet stattdessen der Standard-Videoplayer.
+          if (c && c.output) desktop?.openFolder(String(c.output).replace(/[\\/][^\\/]*$/, ''));
         });
       } else {
         fetch('/api/clips-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [id] }) }).then(renderClips);

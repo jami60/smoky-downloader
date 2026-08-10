@@ -8,7 +8,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const assert = require('node:assert');
 
-const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive } = require('../server.js');
+const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath } = require('../server.js');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -111,6 +111,33 @@ check('findFileRecursive: null bei fehlender Datei', () => {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-find-'));
   fs.writeFileSync(path.join(d, 'nope.txt'), 'x');
   assert.strictEqual(findFileRecursive(d, 'ffmpeg.exe'), null);
+  fs.rmSync(d, { recursive: true, force: true });
+});
+
+// ----------------------------------------------------------- clipOutPath ----
+check('clipOutPath: frischer Pfad ohne Suffix', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-clipout-'));
+  const p = clipOutPath(d, 'Song', '0-00', '0-04', 'mp4');
+  assert.strictEqual(p, path.join(d, 'Song (0-00-0-04).mp4'));
+  fs.rmSync(d, { recursive: true, force: true });
+});
+check('clipOutPath: Kollision bekommt (2)-Suffix statt Überschreiben', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-clipout-'));
+  const p1 = clipOutPath(d, 'Song', '0-00', '0-04', 'mp4');
+  fs.writeFileSync(p1, 'x');
+  const p2 = clipOutPath(d, 'Song', '0-00', '0-04', 'mp4');
+  assert.strictEqual(p2, path.join(d, 'Song (0-00-0-04) (2).mp4'));
+  fs.writeFileSync(p2, 'x');
+  const p3 = clipOutPath(d, 'Song', '0-00', '0-04', 'mp4');
+  assert.strictEqual(p3, path.join(d, 'Song (0-00-0-04) (3).mp4'));
+  fs.rmSync(d, { recursive: true, force: true });
+});
+check('clipOutPath: anderes Zeitfenster bleibt unberührt', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-clipout-'));
+  const p1 = clipOutPath(d, 'Song', '0-00', '0-04', 'mp4');
+  fs.writeFileSync(p1, 'x');
+  const p2 = clipOutPath(d, 'Song', '0-05', '0-10', 'mp4');
+  assert.strictEqual(p2, path.join(d, 'Song (0-05-0-10).mp4'));
   fs.rmSync(d, { recursive: true, force: true });
 });
 

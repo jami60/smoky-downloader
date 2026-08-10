@@ -1119,7 +1119,7 @@ function startClipJob(body) {
       // Ausgabepfaden — daher Zeitstempel mit Bindestrichen statt m:ss.
       const t1 = `${Math.floor(item.start / 60)}-${String(Math.floor(item.start % 60)).padStart(2, '0')}`;
       const t2 = `${Math.floor(item.end / 60)}-${String(Math.floor(item.end % 60)).padStart(2, '0')}`;
-      const outPath = path.join(outDir, `${base} (${t1}-${t2}).${item.format}`);
+      const outPath = clipOutPath(outDir, base, t1, t2, item.format);
 
       // Text für den Caption-Overlay (falls gewünscht): als Datei, damit auch
       // Sonderzeichen wie Doppelpunkte sicher durchkommen.
@@ -1942,7 +1942,20 @@ function spotFormatFor(formatKey) {
   return SPOT_FORMATS.has(formatKey) ? formatKey : 'mp3';
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive };
+// Eindeutiger Clip-Ausgabepfad: derselbe Titel + dasselbe Zeitfenster erneut
+// schneiden überschreibt die fertige Datei nicht stillschweigend, sondern
+// bekommt einen Aufzählungs-Suffix („… (0-00-0-04) (2).mp4").
+function clipOutPath(outDir, base, t1, t2, format) {
+  let out = path.join(outDir, `${base} (${t1}-${t2}).${format}`);
+  let n = 2;
+  while (fs.existsSync(out)) {
+    out = path.join(outDir, `${base} (${t1}-${t2}) (${n}).${format}`);
+    n++;
+  }
+  return out;
+}
+
+module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath };
 
 if (require.main === module) {
   startServer();
