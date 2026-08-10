@@ -210,8 +210,11 @@ window.smokyDesktop = (() => {
 
   // ----------------------------------------------------- history rendering --
   const historyCard = () => {
+    // Gezielt die History-Liste ansteuern — nicht die erste .workspace-card
+    // (das wäre die Statistik-Karte, die dadurch überschrieben und als
+    // Duplikat des Empty-States sichtbar wurde).
     const view = document.getElementById('historyView');
-    return view ? view.querySelector('.workspace-card') : null;
+    return view ? view.querySelector('#historyListCard') : null;
   };
   const recentCard = () => {
     const side = document.querySelector('.side-stack');

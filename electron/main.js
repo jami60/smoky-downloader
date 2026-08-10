@@ -160,7 +160,20 @@ app.whenReady().then(async () => {
   if (SMOKE) {
     win.webContents.once('did-finish-load', async () => {
       try {
-        const result = await win.webContents.executeJavaScript(`({
+        const result = await win.webContents.executeJavaScript(`(async () => {
+          const historySingleCard = await (async () => {
+            try {
+              document.querySelector('.nav-item[data-view="History"]').click();
+              await new Promise((r) => setTimeout(r, 1600));
+              const cards = [...document.querySelectorAll('#historyView .workspace-card')];
+              const stats = cards[0];
+              const statsIntact = stats && stats.id === 'statsCard' && stats.textContent.includes('Download statistics');
+              const list = document.getElementById('historyListCard');
+              const ok = statsIntact && !!list && cards.length === 2 && cards[1] === list;
+              return ok ? 'ok' : 'fail(cards=' + cards.length + ',stats=' + !!statsIntact + ',list=' + !!list + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })();
+          return {
           title: document.title,
           bridge: typeof window.smokyDesktop === 'object',
           nativeBridge: typeof window.smokyDesktopNative === 'object',
@@ -224,8 +237,10 @@ app.whenReady().then(async () => {
               el.classList.remove('show');
               return ok ? 'ok' : 'fail';
             } catch (e) { return 'err-' + String(e && e.message || e); }
-          })()
-        })`);
+          })(),
+          historySingleCard
+        };
+        })()`);
         console.log('SMOKE_OK ' + JSON.stringify(result));
       } catch (err) {
         console.log('SMOKE_FAIL ' + String(err && err.message || err));
