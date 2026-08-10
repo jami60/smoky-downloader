@@ -109,6 +109,20 @@ async function json(base, path, opts) {
     const dt = Date.now() - t0;
     check('GET /api/cover ohne Cover → 204 schnell (kein Hang)', cov.status === 204 && dt < 4000, 'status=' + cov.status + ' dauer=' + dt + 'ms');
   }
+  // Cover-Regression (16:9-Fix): Ein MP3 mit eingebettetem 1280x720-Cover
+  // muss ein QUADRATISCHES Cover liefern (Player zeigt Quadrate, nicht
+  // letterboxte YouTube-Thumbnails).
+  if (fs.existsSync(ffmpegBin)) {
+    const probeCov = path.join(testDir, 'cover-square.mp3');
+    const thumb16x9 = path.join(testDir, 'thumb-16x9.jpg');
+    spawnSync(ffmpegBin, ['-y', '-f', 'lavfi', '-i', 'color=c=0x3355ff:s=1280x720', '-frames:v', '1', thumb16x9], { stdio: 'ignore', windowsHide: true });
+    spawnSync(ffmpegBin, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-i', thumb16x9, '-map', '0:a', '-map', '1:v', '-c:a', 'libmp3lame', '-c:v', 'mjpeg', '-id3v2_version', '3', '-metadata:s:v', 'title=Album cover', '-metadata:s:v', 'comment=Cover (front)', probeCov], { stdio: 'ignore', windowsHide: true });
+    const covResp = await fetch(base + '/api/cover?file=' + encodeURIComponent(probeCov));
+    const covBuf = Buffer.from(await covResp.arrayBuffer());
+    const jpegDims = (buf) => { let i = 2; while (i < buf.length) { if (buf[i] !== 0xff) { i++; continue; } const m = buf[i + 1]; if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5) }; const len = buf.readUInt16BE(i + 2); i += 2 + len; } return null; };
+    const dims = covResp.status === 200 ? jpegDims(covBuf) : null;
+    check('GET /api/cover mit 16:9-Cover → quadratisches JPEG (720x720)', covResp.status === 200 && dims && dims.w === dims.h && dims.w <= 720, 'status=' + covResp.status + ' dims=' + (dims ? dims.w + 'x' + dims.h : 'n/a'));
+  }
   const { res: play } = await json(base, '/api/play?file=' + encodeURIComponent('C:/does/not/exist.mp3'));
   check('GET /api/play mit fehlender Datei → 404', play.status === 404);
   const { res: playTraversal } = await json(base, '/api/play?file=' + encodeURIComponent('..\\..\\package.json'));

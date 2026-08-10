@@ -1441,6 +1441,9 @@ try {
   if (fs.existsSync(coverDir)) {
     for (const f of fs.readdirSync(coverDir)) {
       if (f.endsWith('.done')) { try { fs.unlinkSync(path.join(coverDir, f)); } catch {} }
+      // Legacy-Cover-Caches aus der Zeit vor dem Quadrat-Fix (16:9) — sie
+      // regenerieren sich lazy und quadratisch beim nächsten Request.
+      else if (!f.includes('.sq.') && /\.(jpe?g|png|webp|bmp)$/i.test(f)) { try { fs.unlinkSync(path.join(coverDir, f)); } catch {} }
     }
   }
 } catch {}
@@ -1493,10 +1496,24 @@ async function withCoverSlot(fn) {
 }
 
 // ffmpeg-Frame-Extraktion mit Timeout — ein hängender Prozess darf einen
-// Cover-Request nie endlos blockieren.
+// Cover-Request nie endlos blockieren. Das Ergebnis wird immer quadratisch
+// zentriert: YouTube-Thumbnails sind 16:9, Player/Bibliothek zeigen aber
+// Quadrate (Spotify-Optik) — ein quadratischer Crop in der Quelle verhindert
+// Letterboxing und das „♪"-Fallback im Player.
 function extractCoverFrame(file, out, codec) {
   return new Promise((resolve) => {
-    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-an', '-c:v', codec, '-frames:v', '1', out], { windowsHide: true });
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', file, '-an', '-c:v', codec, '-vf', 'crop=min(iw\\,ih):min(iw\\,ih)', '-frames:v', '1', out], { windowsHide: true });
+    const timer = setTimeout(() => { try { p.kill(); } catch {} }, 15000);
+    p.on('error', () => { clearTimeout(timer); resolve(); });
+    p.on('close', () => { clearTimeout(timer); resolve(); });
+  });
+}
+
+// Beliebige Bilddatei quadratisch zentriert zuschneiden (z. B. das 16:9-WebP,
+// das yt-dlp als Schwester-Datei neben WAV/AAC schreibt).
+function squareCrop(src, out) {
+  return new Promise((resolve) => {
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-i', src, '-vf', 'crop=min(iw\\,ih):min(iw\\,ih)', '-c:v', 'mjpeg', '-q:v', '4', '-frames:v', '1', out], { windowsHide: true });
     const timer = setTimeout(() => { try { p.kill(); } catch {} }, 15000);
     p.on('error', () => { clearTimeout(timer); resolve(); });
     p.on('close', () => { clearTimeout(timer); resolve(); });
@@ -1535,14 +1552,17 @@ async function backfillCover(file) {
 async function coverFor(file) {
   if (!ffmpegCmd) return null;
   const hash = crypto.createHash('md5').update(file).digest('hex');
-  const outJpg = path.join(coverDir, hash + '.jpg');
-  const outPng = path.join(coverDir, hash + '.png');
+  // Quadrat-Cache: seit dem 16:9-Fix (v1.8.8) heißen Caches .sq.* — alte
+  // 16:9-Caches (ohne Marker) werden beim Regenerieren entfernt.
+  const outJpg = path.join(coverDir, hash + '.sq.jpg');
+  const outPng = path.join(coverDir, hash + '.sq.png');
   // Cache-Treffer nur, wenn wirklich ein gültiges Bild vorliegt.
   if (isValidImage(outJpg)) return outJpg;
   if (isValidImage(outPng)) return outPng;
   try { fs.mkdirSync(coverDir, { recursive: true }); } catch { return null; }
-  // Kaputte Cache-Einträge entfernen, damit sie nie wieder als Cover dienen.
-  for (const stale of [outJpg, outPng]) {
+  // Kaputte ODER veraltete (16:9) Cache-Einträge entfernen, damit sie nie
+  // wieder als Cover dienen.
+  for (const stale of [outJpg, outPng, path.join(coverDir, hash + '.jpg'), path.join(coverDir, hash + '.png')]) {
     try { if (fs.existsSync(stale)) fs.unlinkSync(stale); } catch {}
   }
   await withCoverSlot(() => extractCoverFrame(file, outJpg, 'mjpeg'));
@@ -1551,10 +1571,16 @@ async function coverFor(file) {
   await withCoverSlot(() => extractCoverFrame(file, outPng, 'png'));
   if (isValidImage(outPng)) return outPng;
   // Kein eingebettetes Cover (z. B. WAV/AAC) → Schwester-Bild neben der Datei?
-  const sibling = siblingCover(file);
-  if (sibling) return sibling;
-  // Sonst per yt-dlp nachrüsten (nur wenn eine Video-ID im Namen steckt).
-  return backfillCover(file);
+  let sibling = siblingCover(file);
+  if (!sibling) sibling = await backfillCover(file);
+  if (sibling) {
+    // Auch das Schwester-Bild (yt-dlp-Thumbnail, 16:9) quadratisch croppen,
+    // damit Player/Bibliothek überall Spotify-Optik zeigen.
+    await withCoverSlot(() => squareCrop(sibling, outJpg));
+    if (isValidImage(outJpg)) return outJpg;
+    return sibling;
+  }
+  return null;
 }
 
 // Ordner-Größe wird max. alle 10 s neu berechnet — /api/status wird von
