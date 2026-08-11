@@ -151,9 +151,121 @@ function contentRoot(staging) {
   return staging;
 }
 
-// applyUpdate(url, { appDir, execPath, log }) → downloads, extracts and
-// hands over to a batch that swaps the app folder and relaunches.
-async function applyUpdate(url, { appDir, execPath, log = () => {}, onProgress = null }) {
+// buildUpdateBat(paths) → erzeugt den Inhalt des Update-Batches als String.
+// Der Batch ist bewusst robust gegen die zwei häufigsten Update-Fehler:
+//   1. app.asar ist noch vom laufenden Prozess gesperrt (taskkill braucht
+//      länger als 1 s, AV-Scans halten die Datei fest) → Copy-Retry-Loop.
+//   2. Install-Ordner ist geschützt (Program Files) → UAC-Elevation-Fallback.
+// Und er garantiert: egal ob Erfolg oder Fehler, die App wird NEU GESTARTET
+// (alter Stand bleibt beim Fehler intakt — nichts bleibt tot liegen).
+function buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFile, processName = 'Smoky.exe', elevation = true, maxCopyTries = 10 }) {
+  const base = [
+    '@echo off',
+    'setlocal EnableDelayedExpansion',
+    'echo Smoky update — installing…',
+    `set "NEW=${newAsar}"`,
+    `set "TARGET=${targetAsar}"`,
+    `set "TMP=${tmp}"`,
+    `set "EXEC=${execPath}"`,
+    `set "MARK=${markerBase}"`,
+    `set "FAIL=${failFile}"`,
+    `set "PROC=${processName}"`,
+    'if "%~1"=="elevated" goto :elev',
+    '',
+    'REM ---- 1) App beenden und WIRKLICH warten, bis sie weg ist ----',
+    'taskkill /f /im "!PROC!" >nul 2>&1',
+    'set /a w=0',
+    ':waitkill',
+    'tasklist /fi "imagename eq !PROC!" | findstr /i "!PROC!" >nul 2>&1',
+    'if errorlevel 1 goto :killed',
+    'set /a w+=1',
+    'if !w! geq 15 goto :killed',
+    'timeout /t 1 /nobreak >nul 2>&1',
+    'goto :waitkill',
+    ':killed',
+    '',
+    'REM ---- 2) Copy mit Retries (Dateisperre / AV-Scan) ----',
+    'set /a n=0',
+    ':copy1',
+    `copy /y "!NEW!" "!TARGET!" >nul 2>&1`,
+    'if not errorlevel 1 goto :done',
+    'set /a n+=1',
+    `if !n! geq ${maxCopyTries} goto :elevate`,
+    'timeout /t 1 /nobreak >nul 2>&1',
+    'goto :copy1',
+    '',
+    'REM ---- 3) Geschützter Ordner (Program Files) → UAC-Elevation ----',
+    ':elevate',
+  ];
+
+  const elev = elevation === false ? ['goto :give_up'] : [
+    'del "!MARK!-*" >nul 2>&1',
+    'echo Smoky update — requesting administrator rights…',
+    'powershell -NoProfile -Command "Start-Process -FilePath \'%~f0\' -ArgumentList \'elevated\' -Verb RunAs -WindowStyle Hidden" >nul 2>&1',
+    'if errorlevel 1 goto :give_up',
+    'set /a w2=0',
+    ':waitelev',
+    'if exist "!MARK!-ok" goto :elev_ok',
+    'if exist "!MARK!-fail" goto :give_up',
+    'set /a w2+=1',
+    'if !w2! geq 90 goto :give_up',
+    'timeout /t 1 /nobreak >nul 2>&1',
+    'goto :waitelev',
+  ];
+
+  // WICHTIG: Der Batch löscht sich NICHT selbst (del "%~f0" würde cmd zum
+  // Hängen bringen — nach dem Löschen der noch laufenden Datei findet cmd
+  // keine weitere Zeile und endet nie). Stattdessen räumt die App beim
+  // nächsten Start alte smoky-update*.bat aus dem Temp auf.
+  const tail = [
+    '',
+    ':done',
+    'echo Smoky update — done, relaunching…',
+    'rmdir /s /q "!TMP!" >nul 2>&1',
+    'del "!MARK!-*" >nul 2>&1',
+    'start "" "!EXEC!"',
+    'exit /b 0',
+    '',
+    ':elev_ok',
+    'echo Smoky update — done (elevated), relaunching…',
+    'rmdir /s /q "!TMP!" >nul 2>&1',
+    'del "!MARK!-*" >nul 2>&1',
+    'start "" "!EXEC!"',
+    'exit /b 0',
+    '',
+    ':give_up',
+    'echo Smoky update — failed, keeping current version.',
+    'echo %date% %time% update failed > "!FAIL!"',
+    'start "" "!EXEC!"',
+    'del "!MARK!-*" >nul 2>&1',
+    'exit /b 1',
+    '',
+    'REM ---- 4) Elevated-Instanz (gleicher Benutzer, Admin-Rechte) ----',
+    ':elev',
+    'set /a n=0',
+    ':copy2',
+    `copy /y "!NEW!" "!TARGET!" >nul 2>&1`,
+    'if not errorlevel 1 goto :done_elev',
+    'set /a n+=1',
+    'if !n! geq 15 goto :fail_elev',
+    'timeout /t 1 /nobreak >nul 2>&1',
+    'goto :copy2',
+    ':done_elev',
+    'echo ok > "!MARK!-ok"',
+    'exit /b 0',
+    ':fail_elev',
+    'echo fail > "!MARK!-fail"',
+    'exit /b 1',
+  ];
+
+  return base.concat(elev, tail).join('\r\n');
+}
+
+// applyUpdate(url, { appDir, execPath, userData, log, onProgress }) →
+// downloads, extracts and hands over to a batch that swaps the app folder
+// and relaunches. Der Batch startet die App in JEDEM Fall neu (Erfolg oder
+// Fehler) — der alte Stand bleibt beim Fehler unangetastet erhalten.
+async function applyUpdate(url, { appDir, execPath, userData, log = () => {}, onProgress = null }) {
   if (!appDir || !execPath) throw new Error('applyUpdate needs appDir + execPath');
   const tmp = path.join(os.tmpdir(), 'smoky-update-' + Date.now());
   fs.mkdirSync(tmp, { recursive: true });
@@ -181,22 +293,16 @@ async function applyUpdate(url, { appDir, execPath, log = () => {}, onProgress =
   // literal would be eaten as escape sequences (\r, \u…) and corrupt the batch.
   const newAsar = path.join(src, 'resources', 'app.asar');
   const targetAsar = path.join(appDir, 'resources', 'app.asar');
-  const failedFile = path.join(appDir, 'update-failed.txt');
+  // Fehlerdatei IMMER in userData (immer beschreibbar), nie im appDir —
+  // das kann bei Program-Files-Installationen selbst geschützt sein.
+  const failFile = path.join(userData || os.tmpdir(), 'update-failed.txt');
+  const markerBase = path.join(os.tmpdir(), 'smoky-update-' + Date.now());
   const bat = path.join(os.tmpdir(), 'smoky-update.bat');
-  const body = [
-    '@echo off',
-    'taskkill /f /im Smoky.exe >nul 2>&1',
-    'timeout /t 1 /nobreak >nul',
-    `copy /y "${newAsar}" "${targetAsar}" >nul`,
-    `if errorlevel 1 ( echo Update copy failed > "${failedFile}" & timeout /t 3 /nobreak >nul & exit /b 1 )`,
-    `rmdir /s /q "${tmp}"`,
-    'start "" "' + execPath + '"',
-    'del "%~f0"',
-  ].join('\r\n');
+  const body = buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFile });
   fs.writeFileSync(bat, body);
 
   spawn('cmd', ['/c', 'start', '', bat], { detached: true, stdio: 'ignore' }).unref();
   return true;
 }
 
-module.exports = { parseVersion, isNewer, fetchManifest, checkForUpdates, checkForGitHubUpdate, download, unzip, applyUpdate };
+module.exports = { parseVersion, isNewer, fetchManifest, checkForUpdates, checkForGitHubUpdate, download, unzip, buildUpdateBat, applyUpdate };

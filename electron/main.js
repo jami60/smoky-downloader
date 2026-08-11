@@ -3,6 +3,7 @@
 const { app, BrowserWindow, dialog, shell, ipcMain, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 const { startServer } = require('../server.js');
 const updater = require('./updater.js');
 const { DiscordRPC } = require('./discord-rpc.js');
@@ -95,6 +96,34 @@ app.whenReady().then(async () => {
   });
 
   win.once('ready-to-show', () => win.show());
+
+  // Fehlgeschlagenes Update melden: Der Update-Batch schreibt bei einem Fehler
+  // update-failed.txt in userData und startet die App (alter Stand) neu.
+  // Beim nächsten Start sagen wir hier Bescheid — und der Auto-Check bietet
+  // das Update danach erneut an (self-healing).
+  try {
+    const failFile = path.join(app.getPath('userData'), 'update-failed.txt');
+    if (fs.existsSync(failFile)) {
+      fs.rmSync(failFile, { force: true });
+      dialog.showMessageBoxSync(win, {
+        type: 'warning',
+        title: 'Smoky update',
+        message: 'The last update could not be installed',
+        detail: 'The previous version is still working. Smoky will offer the update again shortly — if it fails repeatedly, install the latest Setup from the GitHub releases page instead.',
+        buttons: ['OK'],
+        noLink: true,
+      });
+    }
+    // Alte Update-Batches aufräumen: Der Update-Batch löscht sich bewusst
+    // nicht selbst (cmd hängt, wenn ein laufender Batch sich selbst löscht) —
+    // stattdessen räumen wir hier beim Start auf.
+    const tmpDir = os.tmpdir();
+    for (const f of fs.readdirSync(tmpDir)) {
+      if (/^smoky-update.*\.bat$/i.test(f)) {
+        try { fs.rmSync(path.join(tmpDir, f), { force: true }); } catch {}
+      }
+    }
+  } catch { /* userData / tmp not readable — ignore */ }
 
   // Taskbar progress: the Windows icon shows a bar while a download runs.
   let discordDlId = null, discordDlStart = null, discordDlPct = -1;
@@ -335,6 +364,7 @@ async function runUpdate(url) {
     await updater.applyUpdate(url, {
       appDir: path.dirname(process.execPath),
       execPath: process.execPath,
+      userData: app.getPath('userData'),
       log,
       onProgress: sendUpdateProgress,
     });
