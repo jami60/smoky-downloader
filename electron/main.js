@@ -495,6 +495,27 @@ app.whenReady().then(async () => {
               const ok = gridOk && singlesHas2 && drillOk && rowsOk && queueOk && backOk && filteredOk;
               return ok ? 'ok' : 'fail(grid=' + gridOk + ',singles=' + singlesHas2 + ',drill=' + drillOk + ',rows=' + rowsOk + ',queue=' + queueOk + ',back=' + backOk + ',filter=' + filteredOk + ',names=' + names + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // Hintergrundmusik: 5 Tracks im Shuffle (3 bestehende + 2 neue:
+          // Piedkies – landfall, leadwave – memories). Zufälliger Start, beim
+          // Trackende ein zufälliger Nächster — nie zweimal derselbe direkt.
+          bgmusic: (() => {
+            try {
+              const list = typeof bgTracks !== 'undefined' ? bgTracks : [];
+              const hasAll = list.length === 5
+                && list.includes('assets/bg-music.wav') && list.includes('assets/bg-2.wav') && list.includes('assets/bg-3.wav')
+                && list.includes('assets/bg-4.mp3') && list.includes('assets/bg-5.mp3');
+              const srcName = (typeof bgAudio !== 'undefined' && bgAudio.src) ? bgAudio.src.split('/').pop() : null;
+              const srcOk = srcName !== null && list.some((t) => t.endsWith(srcName));
+              let shuffleOk = typeof pickNextBgTrack === 'function';
+              if (shuffleOk) {
+                for (let cur = 0; cur < list.length && shuffleOk; cur++) {
+                  for (let i = 0; i < 200; i++) { if (pickNextBgTrack(cur) === cur) { shuffleOk = false; break; } }
+                }
+              }
+              const ok = hasAll && srcOk && shuffleOk;
+              return ok ? 'ok' : 'fail(list=' + list.length + ',src=' + srcName + ',shuffle=' + shuffleOk + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };
         })()`);

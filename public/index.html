@@ -670,12 +670,15 @@
     const musicVolumeValue = document.getElementById('musicVolumeValue');
     const storedMusicVolume = (() => { try { const v = localStorage.getItem('smoky-music-volume'); return v === null || v === '' ? null : Number(v); } catch { return null; } })();
     const initialMusicVolume = storedMusicVolume !== null && Number.isFinite(storedMusicVolume) && storedMusicVolume >= 0 && storedMusicVolume <= 100 ? storedMusicVolume : 22;
-    // Hintergrund-Tracks, die sich beim Abspielen abwechseln (1 → 2 → 3 → 1 → …)
-    const bgTracks = ['assets/bg-music.wav', 'assets/bg-2.wav', 'assets/bg-3.wav'];
+    // Hintergrund-Tracks, die sich beim Abspielen im Shuffle abwechseln
+    // (3 bestehende + 2 neue: Piedkies – landfall = bg-4, leadwave – memories = bg-5).
+    const bgTracks = ['assets/bg-music.wav', 'assets/bg-2.wav', 'assets/bg-3.wav', 'assets/bg-4.mp3', 'assets/bg-5.mp3'];
+    // Nächster Track: zufällig, aber nie zweimal direkt hintereinander (echter Shuffle).
+    const pickNextBgTrack = (current) => { const r = Math.floor(Math.random() * (bgTracks.length - 1)); return r >= current ? r + 1 : r; };
     let bgTrack = Math.floor(Math.random() * bgTracks.length);
     bgAudio.loop = false;
     bgAudio.src = bgTracks[bgTrack];
-    bgAudio.addEventListener('ended', () => { bgTrack = (bgTrack + 1) % bgTracks.length; bgAudio.src = bgTracks[bgTrack]; bgAudio.play().catch(() => {}); });
+    bgAudio.addEventListener('ended', () => { bgTrack = pickNextBgTrack(bgTrack); bgAudio.src = bgTracks[bgTrack]; bgAudio.play().catch(() => {}); });
     bgAudio.volume = initialMusicVolume / 100;
     musicVolume.value = initialMusicVolume;
     musicVolumeValue.textContent = `${initialMusicVolume}%`;
