@@ -1298,6 +1298,140 @@ function convertFile(id, srcPath, origName, format) {
   return item;
 }
 
+// --------------------------------------------------------- Empfehlungen ----
+// Variante A: Der „Empfehlungen“-Tab generiert Vorschläge aus der eigenen
+// Download-History — ganz ohne API-Key. yt-dlp (gebündelt) liefert pro Seed
+// die Top-Treffer (ytsearch + --flat-playlist = schnell, lädt nichts herunter),
+// die Thumbnails kommen direkt von i.ytimg.com. Ergebnisse werden 30 Minuten
+// gecacht, damit der Tab nicht bei jedem Öffnen Netzwerk-Anfragen feuert.
+const REC_SEEDS_MAX = 4;      // Seeds (Titel aus der History)
+const REC_PER_SEED = 6;       // Treffer pro Seed
+const REC_RESULTS_MAX = 18;   // Gesamtzahl nach Dedupe
+const REC_CACHE_MS = 30 * 60 * 1000;
+
+// Seeds aus der Download-History (zuletzt zuerst, dedupliziert, > 2 Zeichen).
+// Wichtig: displayTitle() entfernt den [videoId]-Suffix — bliebe er im Query,
+// liefert yt-dlp oft nur exakt das Originalvideo zurück, das dann als „schon
+// geladen“ gefiltert würde (→ leere Empfehlungen).
+function recommendationSeeds() {
+  const seen = new Set();
+  const out = [];
+  for (const h of history) {
+    if (!h || !h.title) continue;
+    const q = displayTitle(String(h.title)).replace(/\s+/g, ' ').trim();
+    if (q.length < 3 || seen.has(q.toLowerCase())) continue;
+    seen.add(q.toLowerCase());
+    out.push(q);
+    if (out.length >= REC_SEEDS_MAX) break;
+  }
+  return out;
+}
+
+// Einen Suchlauf ausführen → Treffer-Liste (Titel/Channel/URL/ID/Thumb/Dauer).
+// `fetcher` ist ein Test-Hook (Unit-Tests stuben den Netzwerk-Teil).
+async function recSearch(query, fetcher) {
+  if (fetcher) return fetcher(query);
+  if (!YTDLP_OK) throw new Error('yt-dlp is not installed');
+  const json = await runCmdOut(ytdlp.cmd, [...ytdlp.args, '--flat-playlist', '--no-warnings', '-J', `ytsearch${REC_PER_SEED}:${query}`], 30000);
+  const parsed = JSON.parse(json);
+  const entries = (parsed && parsed.entries) || [];
+  return entries.map((e) => {
+    const id = e.id;
+    let thumb = '';
+    try { const t = (e.thumbnails || []).find((x) => x && x.url); if (t) thumb = t.url; } catch {}
+    if (id && /^[A-Za-z0-9_-]{6,}$/.test(id) && !thumb) thumb = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    return {
+      title: e.title || '',
+      channel: e.channel || e.uploader || '',
+      url: e.url || (id ? `https://www.youtube.com/watch?v=${id}` : ''),
+      id: id || '',
+      duration: e.duration ? parseFloat(e.duration) : 0,
+      thumb,
+    };
+  }).filter((t) => /^https?:\/\//i.test(t.url) && !/\/playlist\?/i.test(t.url));
+}
+
+// Empfehlungen aus den Seeds bauen — parallel (max. 4 gleichzeitig), dedupliziert
+// nach Video-ID, bereits bekannte Einträge (History) werden herausgefiltert.
+// Ein fehlschlagender Seed (Netzwerk/yt-dlp) überspringt nur diesen Seed.
+async function buildRecommendations(seeds, fetcher) {
+  const known = new Set();
+  for (const h of history) {
+    if (!h) continue;
+    const m = h.url && String(h.url).match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{6,})/);
+    if (m) known.add(m[1]);
+    if (h.title) known.add('t:' + String(h.title).toLowerCase().trim());
+  }
+  const results = await Promise.all(seeds.slice(0, REC_SEEDS_MAX).map(async (seed) => {
+    try { return { seed, hits: await recSearch(seed, fetcher) }; }
+    catch { return { seed, hits: [] }; }
+  }));
+  const items = [];
+  const seen = new Set();
+  for (const { seed, hits } of results) {
+    for (const hit of hits) {
+      const key = hit.id || hit.url;
+      const titleKey = 't:' + String(hit.title).toLowerCase().trim();
+      if (seen.has(key) || known.has(hit.id) || known.has(titleKey)) continue;
+      seen.add(key);
+      items.push({ ...hit, seed });
+      if (items.length >= REC_RESULTS_MAX) break;
+    }
+    if (items.length >= REC_RESULTS_MAX) break;
+  }
+  return items;
+}
+
+// Server-seitiger Cache (30 min): der Tab fragt nicht bei jedem Öffnen Netzwerk
+// an; ?refresh=1 erzwingt einen neuen Lauf. Fehler werden als leere Liste mit
+// Meldung geliefert — der Tab bleibt bedienbar, statt zu crashen.
+let recCache = { at: 0, payload: null };
+async function recommendationsPayload(force) {
+  if (!force && recCache.payload && Date.now() - recCache.at < REC_CACHE_MS) return recCache.payload;
+  const seeds = recommendationSeeds();
+  if (!seeds.length) return { items: [], reason: 'no-history' };
+  try {
+    const items = await buildRecommendations(seeds);
+    recCache = { at: Date.now(), payload: { items, seeds: seeds.length, generatedAt: Date.now() } };
+    return recCache.payload;
+  } catch (e) {
+    return { items: [], reason: 'error', message: String(e && e.message || e).slice(0, 200) };
+  }
+}
+
+// Eigenes Cover beim Tag-Editor: base64-Bild → temporäre Datei → mit ffmpeg in
+// die Audiodatei einbetten. Nur Container mit Cover-Slot unterstützen das —
+// verifiziert per ffmpeg: MP3 (ID3-APIC), M4A und FLAC (attached_pic) gehen,
+// OGG/OPUS schlagen im Copy-Pfad fehl und sind bewusst NICHT dabei.
+const COVER_SLOT_EXTS = new Set(['.mp3', '.m4a', '.flac']);
+const COVER_MAX_BYTES = 8 * 1024 * 1024;
+
+function writeCoverTemp(cover) {
+  try {
+    let b64 = String(cover || '');
+    const m = b64.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/s);
+    if (m) b64 = m[1];
+    b64 = b64.replace(/\s+/g, '');
+    const buf = Buffer.from(b64, 'base64');
+    if (!buf.length || buf.length > COVER_MAX_BYTES) return null;
+    const tmpDir = path.join(DATA_DIR, 'cover-in');
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const tmp = path.join(tmpDir, `cover-${crypto.randomBytes(4).toString('hex')}.img`);
+    fs.writeFileSync(tmp, buf);
+    if (!isValidImage(tmp)) { try { fs.unlinkSync(tmp); } catch {} return null; }
+    return tmp;
+  } catch { return null; }
+}
+
+// Square-Cover-Cache der Datei verwerfen → /api/cover regeneriert aus dem
+// neuen eingebetteten Bild (statt des alten Caches oder Schwester-Thumbnails).
+function invalidateCoverCache(file) {
+  const hash = crypto.createHash('md5').update(file).digest('hex');
+  for (const f of [hash + '.sq.jpg', hash + '.sq.png', hash + '.jpg', hash + '.png', hash + '.done']) {
+    try { const p = path.join(coverDir, f); if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+  }
+}
+
 // ------------------------------------------------------------- HTTP app ----
 function sendJson(res, code, obj) {
   // Defensiv: Der Request kann schon zerstört sein (z. B. „body too large"),
@@ -1843,25 +1977,53 @@ const server = http.createServer(async (req, res) => {
       const title = String(body.title || '').trim();
       const artist = String(body.artist || '').trim();
       const album = String(body.album || '').trim();
-      const ext = path.extname(file);
+      const ext = path.extname(file).toLowerCase();
+      // Eigenes Cover (optional): base64-Bild → Temp-Datei → mit ffmpeg einbetten.
+      let coverTmp = null;
+      if (body.cover) {
+        if (!COVER_SLOT_EXTS.has(ext)) {
+          return sendJson(res, 400, { error: `no cover slot for ${ext}` });
+        }
+        coverTmp = writeCoverTemp(body.cover);
+        if (!coverTmp) return sendJson(res, 400, { error: 'invalid cover image' });
+      }
       const tmp = file.slice(0, -ext.length) + '.tagfix' + ext;
-      const args = ['-y', '-i', file, '-c', 'copy'];
+      const args = ['-y', '-i', file];
+      if (coverTmp) args.push('-i', coverTmp);
+      args.push('-map', '0:a');
+      if (coverTmp) args.push('-map', '1:v');
+      args.push('-c', 'copy');
+      if (coverTmp) {
+        if (ext === '.mp3') {
+          args.push('-id3v2_version', '3', '-metadata:s:v', 'title=Album cover', '-metadata:s:v', 'comment=Cover (front)');
+        } else {
+          args.push('-disposition:v', 'attached_pic');
+        }
+      }
       if (title) args.push('-metadata', `title=${title}`);
       if (artist) args.push('-metadata', `artist=${artist}`);
       if (album) args.push('-metadata', `album=${album}`);
       args.push(tmp);
+      let ok = false;
       await new Promise((resolve) => {
         const p = spawn(ffmpegCmd.cmd, args, { windowsHide: true });
         p.on('error', () => resolve());
         p.on('close', (code) => {
           try {
-            if (code === 0 && fs.existsSync(tmp)) fs.renameSync(tmp, file);
+            if (code === 0 && fs.existsSync(tmp)) { fs.renameSync(tmp, file); ok = true; }
             else fs.rmSync(tmp, { force: true });
           } catch { try { fs.rmSync(tmp, { force: true }); } catch {} }
           resolve();
         });
       });
-      return sendJson(res, 200, { ok: true });
+      try { if (coverTmp) fs.unlinkSync(coverTmp); } catch {}
+      if (ok && coverTmp) invalidateCoverCache(file);
+      return sendJson(res, ok ? 200 : 500, ok ? { ok: true, coverEmbedded: !!coverTmp } : { error: 'ffmpeg failed' });
+    }
+
+    if (req.method === 'GET' && p === '/api/recommendations') {
+      const force = u.searchParams.get('refresh') === '1';
+      return sendJson(res, 200, await recommendationsPayload(force));
     }
 
     if (req.method === 'GET' && p === '/api/stats') {
@@ -1955,7 +2117,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath };
+module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch };
 
 if (require.main === module) {
   startServer();

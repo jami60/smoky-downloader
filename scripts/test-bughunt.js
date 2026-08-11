@@ -3,12 +3,14 @@
 //  - spotFormatFor: Formatwahl der UI → spotDL-Format (aac → mp3)
 //  - displayTitle: [videoId]-Suffix aus dem Anzeige-Titel entfernen
 //  - moveFile: Verschieben (auch über den Copy-Fallback)
+//  - recommendationSeeds/buildRecommendations/recSearch (Fake-Fetcher)
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const assert = require('node:assert');
 
-const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath } = require('../server.js');
+const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch } = require('../server.js');
+const { history } = require('../server.js');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -139,6 +141,98 @@ check('clipOutPath: anderes Zeitfenster bleibt unberührt', () => {
   const p2 = clipOutPath(d, 'Song', '0-05', '0-10', 'mp4');
   assert.strictEqual(p2, path.join(d, 'Song (0-05-0-10).mp4'));
   fs.rmSync(d, { recursive: true, force: true });
+});
+
+// ------------------------------------------------------ Empfehlungen ----
+// Seeds: aus der History (zuletzt zuerst, dedupliziert, min. 3 Zeichen, max. 4)
+check('recommendationSeeds: leere History → leere Seeds', () => {
+  const saved = history.splice(0);
+  assert.deepStrictEqual(recommendationSeeds(), []);
+  history.push(...saved);
+});
+check('recommendationSeeds: Reihenfolge (neueste zuerst) + Dedupe', () => {
+  const saved = history.splice(0);
+  // history ist neueste-zuerst (unshift) — Index 0 = zuletzt geladen
+  history.push({ title: 'Neuer Titel' }, { title: 'Älterer Titel' }, { title: 'Neuer Titel' }, { title: 'xy' });
+  assert.deepStrictEqual(recommendationSeeds(), ['Neuer Titel', 'Älterer Titel']);
+  history.push(...saved);
+});
+check('recommendationSeeds: max. 4 Seeds', () => {
+  const saved = history.splice(0);
+  for (let i = 0; i < 8; i++) history.push({ title: 'Track Nummer ' + i });
+  const seeds = recommendationSeeds();
+  assert.strictEqual(seeds.length, 4);
+  history.push(...saved);
+});
+check('recommendationSeeds: [videoId]-Suffix wird entfernt (sonst leere Treffer)', () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Song Name [abc123XYZ_9]' }, { title: 'Anderer [XYZ9999999]' });
+  assert.deepStrictEqual(recommendationSeeds(), ['Song Name', 'Anderer']);
+  history.push(...saved);
+});
+
+// buildRecommendations mit Fake-Fetcher (kein Netzwerk)
+const fakeHit = (id, title, channel, extra = {}) => ({ id, title, channel, url: 'https://www.youtube.com/watch?v=' + id, duration: 200, thumb: '', ...extra });
+
+check('buildRecommendations: baut Items + dedupliziert nach ID', async () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Seed Eins' }, { title: 'Seed Zwei' });
+  const items = await buildRecommendations(['Seed Eins', 'Seed Zwei'], async (q) => {
+    if (q === 'Seed Eins') return [fakeHit('aaa111', 'Titel A', 'Kanal A'), fakeHit('bbb222', 'Titel B', 'Kanal B')];
+    return [fakeHit('aaa111', 'Titel A (duplikat)', 'Kanal A'), fakeHit('ccc333', 'Titel C', 'Kanal C')];
+  });
+  assert.strictEqual(items.length, 3);
+  assert.deepStrictEqual(items.map((i) => i.id).sort(), ['aaa111', 'bbb222', 'ccc333']);
+  history.push(...saved);
+});
+
+check('buildRecommendations: filtert bereits geladene Videos (URL-ID)', async () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Seed', url: 'https://www.youtube.com/watch?v=known12345' });
+  const items = await buildRecommendations(['Seed'], async () => [fakeHit('known12345', 'Schon geladen', 'K'), fakeHit('fresh99999', 'Frisch', 'K')]);
+  assert.strictEqual(items.length, 1);
+  assert.strictEqual(items[0].id, 'fresh99999');
+  history.push(...saved);
+});
+
+check('buildRecommendations: filtert bereits geladene Titel (Case-insensitiv)', async () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Schon Da' });
+  const items = await buildRecommendations(['Seed'], async () => [fakeHit('aaa111', 'SCHON DA', 'K')]);
+  assert.strictEqual(items.length, 0);
+  history.push(...saved);
+});
+
+check('buildRecommendations: fehlschlagender Seed bricht nichts', async () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Gut' }, { title: 'Kaputt' });
+  const items = await buildRecommendations(['Gut', 'Kaputt'], async (q) => {
+    if (q === 'Kaputt') throw new Error('netzwerk weg');
+    return [fakeHit('aaa111', 'Titel A', 'K')];
+  });
+  assert.strictEqual(items.length, 1);
+  assert.strictEqual(items[0].id, 'aaa111');
+  history.push(...saved);
+});
+
+check('buildRecommendations: Ergebnis-Cap wird eingehalten', async () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Seed' });
+  const many = Array.from({ length: 30 }, (_, i) => fakeHit('id' + String(i).padStart(6, '0'), 'Titel ' + i, 'K'));
+  const items = await buildRecommendations(['Seed'], async () => many);
+  assert.ok(items.length <= 18, 'mehr als 18 Items: ' + items.length);
+  history.push(...saved);
+});
+
+// recSearch: Roh-Treffer → sauberes Item-Mapping (Thumb-Fallback, Playlist-Filter)
+check('recSearch: Thumb-Fallback aus ID + Playlist-URLs rausgefiltert', async () => {
+  const items = await recSearch('q', async () => [
+    { id: 'abc123XYZ', title: 'Song', channel: 'Chan' },
+    { id: 'pl9999999', title: 'Playlist', url: 'https://www.youtube.com/playlist?list=x' },
+  ]);
+  assert.strictEqual(items.length, 1);
+  assert.strictEqual(items[0].thumb, 'https://i.ytimg.com/vi/abc123XYZ/hqdefault.jpg');
+  assert.strictEqual(items[0].url, 'https://www.youtube.com/watch?v=abc123XYZ');
 });
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');

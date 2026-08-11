@@ -133,6 +133,24 @@ async function json(base, path, opts) {
   check('POST /api/edit-tags mit fehlender Datei → 400', tags.status === 400);
   const { res: tagsOut } = await json(base, '/api/edit-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: '../outside.mp3' }) });
   check('POST /api/edit-tags außerhalb des Ordners → 400', tagsOut.status === 400);
+  // Eigenes Cover: Validierungsfälle ohne echte Einbettung (kein Netzwerk nötig)
+  const fakeMp3 = path.join(testDir, 'fake-track.mp3');
+  fs.writeFileSync(fakeMp3, 'kein echtes audio');
+  const { res: tgCoverGarbage } = await json(base, '/api/edit-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: fakeMp3, cover: 'kein-base64' }) });
+  check('POST /api/edit-tags mit Müll-Cover → 400', tgCoverGarbage.status === 400, String(tgCoverGarbage.status));
+  const fakeWav = path.join(testDir, 'fake-track.wav');
+  fs.writeFileSync(fakeWav, 'kein echtes audio');
+  const { res: tgCoverWav } = await json(base, '/api/edit-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: fakeWav, cover: 'aGVsbG8=' }) });
+  check('POST /api/edit-tags mit WAV + Cover → 400 (kein Cover-Slot)', tgCoverWav.status === 400, String(tgCoverWav.status));
+
+  // ------------------------------------------------------ Empfehlungen ----
+  // Ohne History → deterministisch leer (kein Netzwerk). Die Logik selbst
+  // testen die Unit-Tests mit Fake-Fetcher (test-bughunt.js).
+  const { res: rec1, data: recD1 } = await json(base, '/api/recommendations');
+  check('GET /api/recommendations → 200', rec1.status === 200, String(rec1.status));
+  check('  ohne History → leere Items + reason', Array.isArray(recD1.items) && recD1.items.length === 0 && recD1.reason === 'no-history', JSON.stringify(recD1));
+  const { res: rec2 } = await json(base, '/api/recommendations?refresh=1');
+  check('GET /api/recommendations?refresh=1 → 200', rec2.status === 200, String(rec2.status));
 
   // ------------------------------------------------------------- convert ----
   const { res: conv } = await json(base, '/api/convert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'C:/does/not/exist.mp3', format: 'mp3' }) });

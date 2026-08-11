@@ -27,6 +27,7 @@ const ffmpegReady = fs.existsSync(ffmpeg);
     spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'libmp3lame', tone], { stdio: 'ignore', windowsHide: true });
     spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'color=c=red:s=64x64', '-frames:v', '1', art], { stdio: 'ignore', windowsHide: true });
     spawnSync(ffmpeg, ['-y', '-i', tone, '-i', art, '-map', '0:a', '-map', '1:v', '-c:a', 'copy', '-c:v', 'copy', '-id3v2_version', '3', '-metadata:s:v', 'title=Album cover', path.join(testDir, 'with-cover.mp3')], { stdio: 'ignore', windowsHide: true });
+    spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'color=c=blue:s=48x48', '-frames:v', '1', path.join(testDir, '_art2.jpg')], { stdio: 'ignore', windowsHide: true });
     try { fs.rmSync(tone, { force: true }); fs.rmSync(art, { force: true }); } catch {}
     // 2) MP3 ohne Cover
     spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'libmp3lame', path.join(testDir, 'no-cover.mp3')], { stdio: 'ignore', windowsHide: true });
@@ -62,6 +63,42 @@ const ffmpegReady = fs.existsSync(ffmpeg);
 
   const missing = await get(path.join(testDir, 'gibt-es-nicht.mp3'));
   check('fehlende Datei → 404', missing.status === 404, String(missing.status));
+
+  // ------------------------------------------- eigenes Cover einbetten ----
+  if (ffmpegReady) {
+    const artB64 = fs.readFileSync(path.join(testDir, '_art2.jpg'), 'base64');
+    const post = async (file, body) => {
+      const res = await fetch(base + '/api/edit-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file, title: 'Neuer Titel', artist: 'Neuer Artist', cover: body }) });
+      let data = null; try { data = await res.json(); } catch {}
+      return { status: res.status, data };
+    };
+    const cases = [
+      ['mp3', 'libmp3lame'],
+      ['m4a', 'aac'],
+      ['flac', 'flac'],
+    ];
+    for (const [ext, codec] of cases) {
+      const f = path.join(testDir, 'custom-' + ext + '.' + ext);
+      spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', codec, f], { stdio: 'ignore', windowsHide: true });
+      const r = await post(f, 'data:image/jpeg;base64,' + artB64);
+      check('eigenes Cover einbetten (' + ext + ') → 200 + coverEmbedded', r.status === 200 && r.data && r.data.coverEmbedded === true, r.status + ' ' + JSON.stringify(r.data));
+      const cov = await get(f);
+      check('  /api/cover nach Einbettung (' + ext + ') → 200 + JPEG (Cache regeneriert)', cov.status === 200 && cov.magic === 'ffd8ff', cov.status + ' ' + cov.magic);
+    }
+    // Tags + Cover zusammen: Titel muss im Ergebnis stecken
+    const tagf = path.join(testDir, 'custom-tags.mp3');
+    spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'libmp3lame', tagf], { stdio: 'ignore', windowsHide: true });
+    await post(tagf, 'data:image/jpeg;base64,' + artB64);
+    const pt = spawnSync('tools/ffprobe.exe', ['-v', 'error', '-show_entries', 'format_tags', '-of', 'json', tagf], { windowsHide: true });
+    let titleOk = false;
+    try { const j = JSON.parse(pt.stdout.toString()); titleOk = j.format && j.format.tags && j.format.tags.title === 'Neuer Titel'; } catch {}
+    check('  Titel-Tag bleibt beim Cover-Einbetten erhalten', titleOk, String(pt.stdout));
+    // Ungültiges Cover → 400
+    const bad = await post(path.join(testDir, 'custom-mp3.mp3'), 'kein-basis64');
+    check('ungültiges Cover (Müll) → 400', bad.status === 400, String(bad.status));
+  } else {
+    console.log('  (ffmpeg fehlt — Einbett-Tests übersprungen)');
+  }
 
   try { fs.rmSync(testDir, { recursive: true, force: true }); } catch {}
   console.log(failed ? `\n${failed} Test(s) fehlgeschlagen` : '\nAlle Cover-Tests bestanden ✅');

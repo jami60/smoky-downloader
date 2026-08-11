@@ -218,7 +218,9 @@ app.whenReady().then(async () => {
               await new Promise((r) => setTimeout(r, 1600));
               const cards = [...document.querySelectorAll('#historyView .workspace-card')];
               const stats = cards[0];
-              const statsIntact = stats && stats.id === 'statsCard' && stats.textContent.includes('Download statistics');
+              // Sprachunabhängig prüfen: Stats-Karte ist sichtbar (loadStats lief)
+              // und hat ihr Statistik-Grid — kein Text-Vergleich nötig.
+              const statsIntact = stats && stats.id === 'statsCard' && stats.style.display !== 'none' && !!document.getElementById('statTotal');
               const list = document.getElementById('historyListCard');
               const ok = statsIntact && !!list && cards.length === 2 && cards[1] === list;
               return ok ? 'ok' : 'fail(cards=' + cards.length + ',stats=' + !!statsIntact + ',list=' + !!list + ')';
@@ -244,6 +246,33 @@ app.whenReady().then(async () => {
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })();
           return {
+          // Alle Seiten durchklicken: jede View muss aktiv werden, Home zeigt
+          // die Sektionen, und die neuen Elemente (Empfehlungen, Cover-Picker)
+          // müssen existieren.
+          pages: await (async () => {
+            try {
+              const failures = [];
+              for (const nav of [...document.querySelectorAll('.nav-item')]) {
+                const v = nav.dataset.view;
+                nav.click();
+                await new Promise((r) => setTimeout(r, 90));
+                if (v === 'Home') {
+                  const grid = document.getElementById('homeGrid');
+                  const anyView = document.querySelectorAll('.page-view.active').length;
+                  if (!grid || grid.style.display === 'none' || anyView > 0) failures.push(v + ':home');
+                } else {
+                  const view = document.getElementById(v.toLowerCase() + 'View');
+                  if (!view) { failures.push(v + ':missing'); continue; }
+                  if (!view.classList.contains('active')) failures.push(v + ':not-active');
+                }
+              }
+              if (!document.getElementById('recList') || !document.getElementById('recRefresh')) failures.push('rec:missing');
+              for (const id of ['tagCoverPick', 'tagCoverFile', 'tagCoverPreview', 'tagCoverClear', 'tagCoverName']) {
+                if (!document.getElementById(id)) failures.push('tag:' + id);
+              }
+              return failures.length ? 'fail(' + failures.join(',') + ')' : 'ok';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
           title: document.title,
           bridge: typeof window.smokyDesktop === 'object',
           nativeBridge: typeof window.smokyDesktopNative === 'object',
