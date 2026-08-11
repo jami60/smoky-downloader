@@ -442,6 +442,59 @@ app.whenReady().then(async () => {
               const ok = okEl && !!disc && !!cover && !!info && controls && wiring && spinOn && spinOff && hadTitle && regOk && closed;
               return ok ? 'ok' : 'fail(el=' + !!okEl + ',disc=' + !!disc + ',cover=' + !!cover + ',info=' + !!info + ',ctrls=' + !!controls + ',wire=' + wiring + ',spinOn=' + spinOn + ',spinOff=' + spinOff + ',title=' + !!hadTitle + ',reg=' + regOk + ',closed=' + closed + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // Alben-Ansicht: Toggle Songs/Alben, Cover-Grid gruppiert nach Album-Tag,
+          // Drill-Down mit Back + Play-Album, Einzeltracks-Gruppe (Album == Titel
+          // bzw. fehlender Album-Tag) und die Album-Queue (Next/Prev bleiben im Album).
+          albums: await (async () => {
+            try {
+              const oLib = library, oQuery = playerQuery, oView = libraryView, oOpen = albumOpen, oQueue = playQueue, oIdx = currentIndex, oShuffle = shuffleOn;
+              library = [
+                { path: 'X:\\smoky-reg\\a1.mp3', title: 'Alpha One', artist: 'X', album: 'Greatest Hits' },
+                { path: 'X:\\smoky-reg\\a2.mp3', title: 'Alpha Two', artist: 'X', album: 'Greatest Hits' },
+                { path: 'X:\\smoky-reg\\b1.mp3', title: 'Beta One', artist: 'Y', album: 'Other Side' },
+                { path: 'X:\\smoky-reg\\s1.mp3', title: 'Solo One', artist: 'Z', album: 'Solo One' },
+                { path: 'X:\\smoky-reg\\s2.mp3', title: 'Solo Two', artist: 'Z', album: '' },
+              ];
+              playerQuery = ''; currentIndex = -1; shuffleOn = false;
+              document.querySelector('#libraryViewToggle [data-mode="albums"]').click();
+              await new Promise((r) => setTimeout(r, 60));
+              const cards = [...document.querySelectorAll('.album-card')];
+              const info = (c) => (c.querySelector('.album-card-info b') || {}).textContent || '';
+              const names = cards.map(info).join('|');
+              const counts = cards.map((c) => (c.querySelector('.album-card-info span') || {}).textContent || '').join('|');
+              const gridOk = cards.length === 3 && names.includes('Greatest Hits') && names.includes('Other Side') && (names.includes('Einzeltracks') || names.includes('Singles'));
+              const singlesPos = names.split('|').indexOf('Einzeltracks') >= 0 ? names.split('|').indexOf('Einzeltracks') : names.split('|').indexOf('Singles');
+              const singlesHas2 = singlesPos >= 0 && counts.split('|')[singlesPos].startsWith('2');
+              const gh = cards.find((c) => info(c) === 'Greatest Hits');
+              gh.click();
+              await new Promise((r) => setTimeout(r, 60));
+              const drillOk = !!document.querySelector('.album-back-btn') && !!document.querySelector('.album-play-all') && (document.querySelector('.album-open-title') || {}).textContent === 'Greatest Hits';
+              const rows = [...document.querySelectorAll('.player-track')];
+              const rowsOk = rows.length === 2 && rows[0].textContent.includes('Alpha One') && rows[1].textContent.includes('Alpha Two');
+              const calls = [];
+              const oPT = playTrack;
+              playTrack = (i) => calls.push(i);
+              document.querySelector('.album-play-all').click();
+              nextTrack();
+              playTrack = oPT;
+              const queueOk = calls.length === 2 && calls[0] === 0 && calls[1] === 1;
+              document.querySelector('.album-back-btn').click();
+              await new Promise((r) => setTimeout(r, 60));
+              const backOk = !!document.querySelector('.album-grid');
+              const sInp = document.getElementById('playerSearch');
+              const oVal = sInp.value;
+              sInp.value = 'beta';
+              playerQuery = 'beta';
+              renderLibrary();
+              const filteredOk = document.querySelectorAll('.album-card').length === 1 && info(document.querySelector('.album-card')) === 'Other Side';
+              sInp.value = oVal;
+              document.querySelector('#libraryViewToggle [data-mode="songs"]').click();
+              library = oLib; playerQuery = oQuery; libraryView = oView; albumOpen = oOpen; playQueue = oQueue; playQueuePos = -1; currentIndex = oIdx; shuffleOn = oShuffle;
+              renderLibrary();
+              const ok = gridOk && singlesHas2 && drillOk && rowsOk && queueOk && backOk && filteredOk;
+              return ok ? 'ok' : 'fail(grid=' + gridOk + ',singles=' + singlesHas2 + ',drill=' + drillOk + ',rows=' + rowsOk + ',queue=' + queueOk + ',back=' + backOk + ',filter=' + filteredOk + ',names=' + names + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };
         })()`);

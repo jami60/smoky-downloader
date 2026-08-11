@@ -207,6 +207,7 @@ async function json(base, path, opts) {
   const idx = await fetch(base + '/');
   const idxText = await idx.text();
   check('GET / → 200 + HTML mit #downloadPanel', idx.status === 200 && idxText.includes('downloadPanel'));
+  check('GET / → Alben-Ansicht ausgeliefert (Toggle + Grid-CSS + i18n)', idx.status === 200 && idxText.includes('libraryViewToggle') && idxText.includes('.album-grid') && idxText.includes('player.viewAlbums') && idxText.includes('player.playAlbum') && idxText.includes('player.singles'));
   const trav = await fetch(base + '/..%2f..%2fpackage.json');
   check('GET /..%2f..%2fpackage.json (Traversal) → nicht 200', trav.status !== 200);
   // Bug-Hunt #5: Sibling-Prefix („public2“) darf NICHT durch den Guard rutschen
