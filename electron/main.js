@@ -383,6 +383,45 @@ app.whenReady().then(async () => {
               } catch (e) { page = 'err-' + String(e && e.message || e); }
               return { bridge, wiring, page };
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // Ambient-Player: großes Layout mit Schallplatte, Cover, Tags und
+          // Controls. Die Schallplatte dreht nur bei laufender Musik; die
+          // Buttons rufen die echten Player-Funktionen (stubbed).
+          ambient: await (async () => {
+            try {
+              const hook = window.__ambient;
+              if (!hook || typeof hook.open !== 'function') return 'fail(no-hook)';
+              hook.open();
+              await new Promise((r) => setTimeout(r, 200));
+              const el = document.querySelector('.ambient-mode');
+              const okEl = !!el;
+              const disc = hook.disc();
+              const cover = el && el.querySelector('#ambientCover');
+              const titleEl = el && document.getElementById('ambientTitle');
+              const info = el && el.querySelector('.ambient-info');
+              const controls = el && ['ambientPlay', 'ambientNext', 'ambientPrev', 'ambientSeek', 'ambientVolume'].every((id) => !!document.getElementById(id));
+              const calls = [];
+              const oT = togglePlay, oN = nextTrack, oP = prevTrack;
+              togglePlay = () => calls.push('toggle');
+              nextTrack = () => calls.push('next');
+              prevTrack = () => calls.push('prev');
+              document.getElementById('ambientPlay').click();
+              document.getElementById('ambientNext').click();
+              document.getElementById('ambientPrev').click();
+              togglePlay = oT; nextTrack = oN; prevTrack = oP;
+              const wiring = calls.join(',') === 'toggle,next,prev';
+              window.__ambientForcePlaying = true;
+              await new Promise((r) => setTimeout(r, 500));
+              const spinOn = disc && disc.classList.contains('spinning');
+              window.__ambientForcePlaying = false;
+              await new Promise((r) => setTimeout(r, 500));
+              const spinOff = disc && !disc.classList.contains('spinning');
+              const hadTitle = !!titleEl; // Element muss existieren (Inhalt hängt von der Bibliothek ab)
+              hook.close();
+              const closed = !document.querySelector('.ambient-mode');
+              const ok = okEl && !!disc && !!cover && !!info && controls && wiring && spinOn && spinOff && hadTitle && closed;
+              return ok ? 'ok' : 'fail(el=' + !!okEl + ',disc=' + !!disc + ',cover=' + !!cover + ',info=' + !!info + ',ctrls=' + !!controls + ',wire=' + wiring + ',spinOn=' + spinOn + ',spinOff=' + spinOff + ',title=' + !!hadTitle + ',closed=' + closed + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };
         })()`);

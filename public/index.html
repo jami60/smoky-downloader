@@ -160,7 +160,30 @@
     @keyframes guideFade{from{opacity:0}to{opacity:1}} @keyframes guideRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
     @media(max-width:720px){.guide-step{grid-template-columns:1fr}.guide-visual{display:none}.guide-content{padding:48px 28px 30px}.guide-content h2{font-size:26px}.credits-card{grid-template-columns:1fr}.credits-photo{min-height:260px}.credits-photo img{min-height:260px}.credits-content{padding:28px}}
     .toast { position:fixed; right:25px; bottom:25px; z-index:10; padding:13px 16px; border-radius:11px; background:var(--surface-3); border:1px solid var(--border-bright); box-shadow:var(--shadow); transform:translateY(100px); opacity:0; transition:all .4s cubic-bezier(.22,1,.36,1); font-size:12px }.toast.show{transform:translateY(0);opacity:1}.toast b{color:var(--accent-2)}
-    .ambient-mode { position:fixed; inset:0; z-index:80; background:var(--bg); cursor:pointer; } .ambient-mode canvas{width:100%;height:100%;display:block} .ambient-hint{position:fixed;bottom:18px;right:20px;font-size:10px;color:var(--muted-2);letter-spacing:.1em;text-transform:uppercase}
+    .ambient-mode { position:fixed; inset:0; z-index:80; background:var(--bg); overflow:hidden; } .ambient-mode canvas{position:absolute;inset:0;width:100%;height:100%;display:block} .ambient-hint{position:fixed;bottom:18px;right:20px;font-size:10px;color:var(--muted-2);letter-spacing:.1em;text-transform:uppercase;z-index:3}
+    .ambient-stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:clamp(28px,6vw,72px);padding:40px;z-index:2;cursor:default;flex-wrap:wrap}
+    .ambient-vinyl{position:relative;width:min(46vh,360px);height:min(46vh,360px);flex:none;filter:drop-shadow(0 34px 70px rgba(0,0,0,.6))}
+    .ambient-disc{position:absolute;inset:0;border-radius:50%;overflow:hidden;border:5px solid #151721;box-shadow:inset 0 0 0 2px #2a2e3f, inset 0 0 46px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.07)}
+    .ambient-disc img{width:100%;height:100%;object-fit:cover;display:block}
+    .ambient-disc::after{content:'';position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(circle at center,rgba(0,0,0,0) 0 3px,rgba(0,0,0,.20) 3px 4px);pointer-events:none}
+    .ambient-disc.spinning{animation:ambientSpin 9s linear infinite}
+    @keyframes ambientSpin{to{transform:rotate(360deg)}}
+    .ambient-hole{position:absolute;top:50%;left:50%;width:12px;height:12px;transform:translate(-50%,-50%);border-radius:50%;background:#0b0d14;border:2px solid rgba(255,255,255,.35);box-shadow:0 1px 4px rgba(0,0,0,.9);z-index:2}
+    .ambient-info{display:flex;flex-direction:column;gap:16px;max-width:440px;min-width:0;width:min(440px,90vw)}
+    .ambient-title{font:600 clamp(22px,4vw,34px) 'Space Grotesk';letter-spacing:-.03em;line-height:1.12;text-shadow:0 0 34px color-mix(in srgb,var(--accent) 45%,transparent)}
+    .ambient-artist{font-size:clamp(14px,2vw,18px);color:var(--accent-2);margin-top:5px}
+    .ambient-album{font-size:12px;color:var(--muted-2);margin-top:3px}
+    .ambient-progress{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted-2);font-variant-numeric:tabular-nums}
+    .ambient-progress input{flex:1;accent-color:var(--accent)}
+    .ambient-controls{display:flex;align-items:center;gap:16px;margin-top:2px}
+    .ambient-controls .icon-btn{width:46px;height:46px;border-radius:50%;border:1px solid var(--border-bright);background:rgba(255,255,255,.03);display:grid;place-items:center;color:var(--text);transition:all .2s;cursor:pointer}
+    .ambient-controls .icon-btn:hover{border-color:var(--accent);color:var(--accent-2);transform:scale(1.07)}
+    .ambient-controls .ambient-play{width:62px;height:62px;background:linear-gradient(145deg,var(--accent),var(--accent-2));border-color:transparent;color:#fff;box-shadow:0 8px 30px color-mix(in srgb,var(--accent) 40%,transparent)}
+    .ambient-controls .icon-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+    .ambient-controls .ambient-play svg{width:24px;height:24px}
+    .ambient-volume{display:flex;align-items:center;gap:9px;font-size:10px;color:var(--muted-2);letter-spacing:.14em;text-transform:uppercase}
+    .ambient-volume input{flex:1;accent-color:var(--accent)}
+    .ambient-volume span:last-child{min-width:38px;text-align:right;font-variant-numeric:tabular-nums}
     .ctx-menu { position:fixed; z-index:70; flex-direction:column; min-width:170px; padding:6px; border:1px solid var(--border-bright); border-radius:12px; background:var(--surface-2); box-shadow:0 18px 50px rgba(0,0,0,.4); } .ctx-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:9px 11px;border-radius:8px;background:transparent;color:var(--muted);font-size:12px;text-align:left;transition:all .15s} .ctx-menu button:hover{background:var(--accent-soft);color:var(--text)}
     .tag-overlay { position:fixed; inset:0; z-index:65; display:none; place-items:center; padding:24px; background:rgba(3,5,10,.66); backdrop-filter:blur(10px); } .tag-overlay.show{display:grid} .tag-modal{width:min(400px,100%);padding:24px;border:1px solid var(--border-bright);border-radius:18px;background:linear-gradient(145deg,var(--surface-2),var(--surface));box-shadow:0 30px 90px rgba(0,0,0,.4)} .tag-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px} .tag-modal-head h3{font:600 17px 'Space Grotesk'} .tag-field{margin-bottom:13px}    .tag-field label{display:block;font-size:10px;color:var(--muted-2);text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:6px} .tag-field input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-3);color:var(--text);outline:none;font-size:12px} .tag-field input:focus{border-color:var(--accent)} .tag-modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:20px} .tag-modal-foot .primary-btn{padding:10px 16px;font-size:12px}
     .tag-cover-row{display:flex;align-items:center;gap:10px}.tag-cover-row img{width:52px;height:52px;border-radius:9px;object-fit:cover;border:1px solid var(--border);flex:none;background:var(--surface-3)}.tag-cover-name{flex:1;min-width:0;font-size:10.5px;color:var(--muted-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tag-cover-hint{display:block;font-size:10px;color:var(--muted-2);margin-top:7px;line-height:1.5}
@@ -1526,13 +1549,40 @@
       else if (act === 'ambient') { if (playerAudio.paused && library[currentIndex] !== ctxTrack && currentIndex >= 0) playerAudio.pause(); openAmbient(); if (currentIndex < 0 || library[currentIndex]?.path !== ctxTrack.path) playTrack(library.indexOf(ctxTrack)); }
     });
     // Ambient-Modus: Vollbild-Visualizer mit Theme-Partikeln (wie ein Screensaver)
-    let ambientEl = null, ambientRaf = null;
+    // Ambient-Player: großes Fullscreen-Layout mit Theme-Partikeln, rotierender
+    // Schallplatte (Cover), Titel/Künstler/Album und voller Steuerung.
+    let ambientEl = null, ambientRaf = null, ambientTimer = null, ambientLastPath = null, ambientKeyHandler = null, ambientOnTime = null;
+    const closeAmbient = () => {
+      clearInterval(ambientTimer); ambientTimer = null;
+      cancelAnimationFrame(ambientRaf); ambientRaf = null;
+      if (ambientOnTime) { playerAudio.removeEventListener('timeupdate', ambientOnTime); ambientOnTime = null; }
+      if (ambientEl) { ambientEl.remove(); ambientEl = null; }
+      if (ambientKeyHandler) { window.removeEventListener('keydown', ambientKeyHandler); ambientKeyHandler = null; }
+      if (window.__ambientForcePlaying !== undefined) window.__ambientForcePlaying = undefined;
+    };
     const openAmbient = () => {
       if (ambientEl) return;
+      const cur = library[currentIndex];
       ambientEl = document.createElement('div');
       ambientEl.className = 'ambient-mode';
-      ambientEl.innerHTML = '<canvas></canvas><div class="ambient-hint">' + t('ambient.hint') + '</div>';
+      ambientEl.innerHTML =
+        '<canvas></canvas>' +
+        '<div class="ambient-stage">' +
+          '<div class="ambient-vinyl"><div class="ambient-disc"><img id="ambientCover" alt="" onerror="this.style.visibility=\'hidden\'"><i class="ambient-hole"></i></div></div>' +
+          '<div class="ambient-info">' +
+            '<div><div class="ambient-title" id="ambientTitle">' + (cur ? escapeHtml(cur.title) : '') + '</div><div class="ambient-artist" id="ambientArtist"></div><div class="ambient-album" id="ambientAlbum"></div></div>' +
+            '<div class="ambient-progress"><span id="ambientTime">0:00</span><input id="ambientSeek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="ambientDur">0:00</span></div>' +
+            '<div class="ambient-controls">' +
+              '<button class="icon-btn" id="ambientPrev" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-9 7 9 7z"/></svg></button>' +
+              '<button class="icon-btn ambient-play" id="ambientPlay" title="Play"><svg viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z"/></svg></button>' +
+              '<button class="icon-btn" id="ambientNext" title="Next"><svg viewBox="0 0 24 24"><path d="M6 5l9 7-9 7zM18 5v14"/></svg></button>' +
+            '</div>' +
+            '<div class="ambient-volume"><span>Vol</span><input id="ambientVolume" type="range" min="0" max="100" value="80" aria-label="Volume"><span id="ambientVolumeValue">80%</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ambient-hint">' + t('ambient.hint') + '</div>';
       document.body.appendChild(ambientEl);
+      // Partikel-Hintergrund (Theme-Farben) — wie zuvor, ohne Equalizer-Balken
       const canvas = ambientEl.querySelector('canvas');
       canvas.width = innerWidth; canvas.height = innerHeight;
       const ctx = canvas.getContext('2d');
@@ -1553,29 +1603,58 @@
           ctx.fill();
         }
         ctx.globalAlpha = 1;
-        const energy = window.musicEnergy || 0;
-        if (energy > 0.02) {
-          const n = 56, gap = 4, bw = (canvas.width - gap * (n - 1)) / n;
-          const baseY = canvas.height * 0.74;
-          const t = Date.now() * 0.004;
-          for (let i = 0; i < n; i++) {
-            const h = (Math.sin(i * 0.55 + t) * 0.3 + 0.7) * energy * canvas.height * 0.42 + 6;
-            const g = ctx.createLinearGradient(0, baseY, 0, baseY - h);
-            g.addColorStop(0, mint); g.addColorStop(1, accent);
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            if (ctx.roundRect) ctx.roundRect(i * (bw + gap), baseY - h, bw, h, Math.min(4, bw / 2)); else ctx.rect(i * (bw + gap), baseY - h, bw, h);
-            ctx.fill();
-          }
-        }
         ambientRaf = requestAnimationFrame(step);
       };
       step();
-      const close = () => { cancelAnimationFrame(ambientRaf); if (ambientEl) { ambientEl.remove(); ambientEl = null; } window.removeEventListener('keydown', onKey); };
-      const onKey = (e) => { if (e.key === 'Escape') close(); };
-      window.addEventListener('keydown', onKey);
-      ambientEl.addEventListener('click', close);
+      // Player-Bindung: Cover/Tags/Position/Spindelzustand live halten
+      const coverImg = document.getElementById('ambientCover');
+      const titleEl = document.getElementById('ambientTitle');
+      const artistEl = document.getElementById('ambientArtist');
+      const albumEl = document.getElementById('ambientAlbum');
+      const seekEl = document.getElementById('ambientSeek');
+      const timeEl = document.getElementById('ambientTime');
+      const durEl = document.getElementById('ambientDur');
+      const volEl = document.getElementById('ambientVolume');
+      const volOut = document.getElementById('ambientVolumeValue');
+      const discEl = ambientEl.querySelector('.ambient-disc');
+      const ambientPlaying = () => (window.__ambientForcePlaying !== undefined ? !!window.__ambientForcePlaying : !playerAudio.paused);
+      const syncAmbient = () => {
+        const t = library[currentIndex];
+        ambientLastPath = t ? t.path : null;
+        titleEl.textContent = t ? t.title : '';
+        artistEl.textContent = t ? (t.artist || '') : '';
+        albumEl.textContent = t ? (t.album || '') : '';
+        if (t) { coverImg.src = coverUrl(t.path) + '&t=' + Date.now(); coverImg.style.visibility = ''; }
+        durEl.textContent = fmtDur(playerAudio.duration);
+        syncPos();
+      };
+      const syncSpin = () => { if (discEl) discEl.classList.toggle('spinning', ambientPlaying()); };
+      const syncPos = () => {
+        if (!playerAudio.duration) return;
+        seekEl.value = String(Math.round((playerAudio.currentTime / playerAudio.duration) * 1000));
+        timeEl.textContent = fmtDur(playerAudio.currentTime);
+      };
+      const syncVol = () => { volEl.value = String(Math.round(playerAudio.volume * 100)); volOut.textContent = Math.round(playerAudio.volume * 100) + '%'; };
+      syncAmbient(); syncSpin(); syncVol();
+      seekEl.addEventListener('input', () => { if (playerAudio.duration) { try { playerAudio.currentTime = (Number(seekEl.value) / 1000) * playerAudio.duration; } catch {} } });
+      document.getElementById('ambientPlay').addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+      document.getElementById('ambientPrev').addEventListener('click', (e) => { e.stopPropagation(); prevTrack(); });
+      document.getElementById('ambientNext').addEventListener('click', (e) => { e.stopPropagation(); nextTrack(); });
+      volEl.addEventListener('input', () => { try { playerAudio.volume = Number(volEl.value) / 100; } catch {} syncVol(); });
+      ambientTimer = setInterval(() => {
+        const t = library[currentIndex];
+        if ((t ? t.path : null) !== ambientLastPath) syncAmbient();
+        syncSpin(); syncPos();
+      }, 400);
+      ambientOnTime = () => syncPos();
+      playerAudio.addEventListener('timeupdate', ambientOnTime);
+      ambientKeyHandler = (e) => { if (e.key === 'Escape') closeAmbient(); };
+      window.addEventListener('keydown', ambientKeyHandler);
+      const stage = ambientEl.querySelector('.ambient-stage');
+      ambientEl.addEventListener('click', (e) => { if (e.target === canvas || e.target === stage) closeAmbient(); });
     };
+    // Test-Hook für den Electron-Smoke (existiert von Anfang an)
+    window.__ambient = { open: openAmbient, close: closeAmbient, isOpen: () => !!ambientEl, disc: () => ambientEl ? ambientEl.querySelector('.ambient-disc') : null };
     document.querySelector('.nav-item[data-view="Player"]')?.addEventListener('click', loadLibrary);
     loadLibrary();
     // Audio-Tag-Editor: Titel/Künstler/Album + eigenes Cover direkt in der
