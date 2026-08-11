@@ -11,6 +11,7 @@ const assert = require('node:assert');
 
 const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar, settings } = require('../server.js');
 const { history } = require('../server.js');
+const { buildUpdateBat } = require('../electron/updater.js');
 const { spawnSync } = require('node:child_process');
 
 let failures = 0;
@@ -301,6 +302,30 @@ check('librarySeeds: baut artist - title Queries aus getaggten Dateien', async (
     settings.folder = oldFolder;
     fs.rmSync(d, { recursive: true, force: true });
   }
+});
+
+// --------------------------------------- Update-Relaunch (statische Checks) --
+// Regression: Nach dem Update-Relaunch konnte die allererste Navigation des
+// Fensters scheitern (ERR_EMPTY_RESPONSE) und blieb ohne Retry kaputt — der
+// Nutzer musste die App manuell neu starten. loadUI muss die URL mit Pause
+// wiederholen. Außerdem darf der Batch seine Staging-Variable NICHT "TMP"
+// nennen (PowerShell erbt %TMP% und legt seinen Temp-Ordner dort neu an).
+check('loadUI: UI wird mit Retry geladen (kein toter Relaunch)', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('function loadUI(win, port)'), 'loadUI fehlt in main.js');
+  assert.ok(main.includes('MAX_ATTEMPTS'), 'Retry-Limit fehlt');
+  assert.ok(main.includes('win.loadURL(`http://127.0.0.1:${port}`).catch('), 'Retry auf loadURL fehlt');
+});
+check('Update-Batch: Staging-Variable heißt UPDDIR (nicht TMP)', () => {
+  const body = buildUpdateBat({ newAsar: 'n', targetAsar: 't', tmp: 'x', execPath: 'e', markerBase: 'm', failFile: 'f' });
+  assert.ok(!body.includes('set "TMP='), 'Batch setzt TMP (PowerShell-Temp-Kollision)');
+  assert.ok(body.includes('set "UPDDIR='), 'Batch setzt UPDDIR nicht');
+  assert.ok(body.includes('rmdir /s /q "!UPDDIR!"'), 'rmdir nutzt !UPDDIR! nicht');
+});
+check('Update-Batch: Relaunch entkoppelt von der Konsole (Start-Process)', () => {
+  const body = buildUpdateBat({ newAsar: 'n', targetAsar: 't', tmp: 'x', execPath: 'e', markerBase: 'm', failFile: 'f' });
+  assert.strictEqual((body.match(/Start-Process -FilePath '!EXEC!'/g) || []).length, 3);
+  assert.strictEqual((body.match(/if errorlevel 1 start "" "!EXEC!"/g) || []).length, 3);
 });
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');

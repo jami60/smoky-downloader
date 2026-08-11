@@ -165,7 +165,10 @@ function buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFi
     'echo Smoky update — installing…',
     `set "NEW=${newAsar}"`,
     `set "TARGET=${targetAsar}"`,
-    `set "TMP=${tmp}"`,
+    // NICHT "TMP" nennen: PowerShell erbt %TMP% und legt seinen eigenen
+    // Temp-Ordner genau dort an — der rmdir unten würde den Ordner zwar
+    // löschen, PowerShell erstellt ihn beim Relaunch aber sofort wieder.
+    `set "UPDDIR=${tmp}"`,
     `set "EXEC=${execPath}"`,
     `set "MARK=${markerBase}"`,
     `set "FAIL=${failFile}"`,
@@ -213,6 +216,16 @@ function buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFi
     'goto :waitelev',
   ];
 
+  // Relaunch völlig entkoppelt vom Konsolen-Fenster des Batches: Start-Process
+  // startet die neue Instanz ohne Konsolen-Anhang. Der frühere
+  // `start "" "!EXEC!"` hing die App ans Batch-Fenster — schloss das Fenster
+  // (oder der Batch endete in einem Kontext, der CTRL_CLOSE sendet), konnte
+  // die frische Instanz mitten im Laden sterben. Fallback auf `start` nur,
+  // falls PowerShell fehlen sollte (kommt auf Win10/11 nicht vor).
+  const relaunch = [
+    'powershell -NoProfile -Command "Start-Process -FilePath \'!EXEC!\'" >nul 2>&1',
+    'if errorlevel 1 start "" "!EXEC!"',
+  ];
   // WICHTIG: Der Batch löscht sich NICHT selbst (del "%~f0" würde cmd zum
   // Hängen bringen — nach dem Löschen der noch laufenden Datei findet cmd
   // keine weitere Zeile und endet nie). Stattdessen räumt die App beim
@@ -221,22 +234,22 @@ function buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFi
     '',
     ':done',
     'echo Smoky update — done, relaunching…',
-    'rmdir /s /q "!TMP!" >nul 2>&1',
+    'rmdir /s /q "!UPDDIR!" >nul 2>&1',
     'del "!MARK!-*" >nul 2>&1',
-    'start "" "!EXEC!"',
+    ...relaunch,
     'exit /b 0',
     '',
     ':elev_ok',
     'echo Smoky update — done (elevated), relaunching…',
-    'rmdir /s /q "!TMP!" >nul 2>&1',
+    'rmdir /s /q "!UPDDIR!" >nul 2>&1',
     'del "!MARK!-*" >nul 2>&1',
-    'start "" "!EXEC!"',
+    ...relaunch,
     'exit /b 0',
     '',
     ':give_up',
     'echo Smoky update — failed, keeping current version.',
     'echo %date% %time% update failed > "!FAIL!"',
-    'start "" "!EXEC!"',
+    ...relaunch,
     'del "!MARK!-*" >nul 2>&1',
     'exit /b 1',
     '',

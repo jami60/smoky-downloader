@@ -76,11 +76,13 @@ const check = (name, ok) => { console.log((ok ? '✅' : '❌') + ' ' + name); if
   check('Batch enthält Kill-Wait-Loop (wartet bis Prozess weg ist)', body.includes(':waitkill') && body.includes('tasklist /fi "imagename eq !PROC!"'));
   check('Batch enthält Copy-Retry-Loop', body.includes(':copy1') && body.includes('goto :copy1'));
   check('Batch enthält UAC-Elevation (Program-Files-Fallback)', body.includes('-Verb RunAs'));
-  check('Batch startet App bei Erfolg neu (:done)', /:done[\s\S]*start "" "!EXEC!"/.test(body));
-  check('Batch startet App bei Erfolg neu (:elev_ok)', /:elev_ok[\s\S]*start "" "!EXEC!"/.test(body));
-  check('Batch startet App bei Fehler neu (:give_up)', /:give_up[\s\S]*start "" "!EXEC!"/.test(body));
+  check('Batch startet App bei Erfolg neu (:done)', /:done[\s\S]*Start-Process -FilePath '!EXEC!'/.test(body));
+  check('Batch startet App bei Erfolg neu (:elev_ok)', /:elev_ok[\s\S]*Start-Process -FilePath '!EXEC!'/.test(body));
+  check('Batch startet App bei Fehler neu (:give_up)', /:give_up[\s\S]*Start-Process -FilePath '!EXEC!'/.test(body));
   check('Fehlerdatei zeigt auf userData (immer beschreibbar)', body.includes(bp.failFile) && !body.includes('app.asar\\update-failed'));
-  check('Elevated-Instanz startet die App NICHT selbst (kein doppeltes Elevated-Start)', (body.match(/start "" "!EXEC!"/g) || []).length === 3);
+  check('Relaunch entkoppelt von der Konsole (Start-Process in allen 3 Pfaden)', (body.match(/Start-Process -FilePath '!EXEC!'/g) || []).length === 3 && (body.match(/start "" "!EXEC!"/g) || []).length === 3);
+  check('Fallback start "" "!EXEC!" nur bei PowerShell-Fehler (3×)', (body.match(/if errorlevel 1 start "" "!EXEC!"/g) || []).length === 3);
+  check('Elevated-Instanz startet die App NICHT selbst (kein doppeltes Elevated-Start)', (body.match(/Start-Process -FilePath '!EXEC!'/g) || []).length === 3);
   check('Batch löscht sich NICHT selbst (cmd-Hang vermieden)', !body.includes('del "%~f0"'));
   const noElev = buildUpdateBat({ ...bp, elevation: false });
   check('Ohne Elevation: kein -Verb RunAs, direkt :give_up', !noElev.includes('-Verb RunAs') && noElev.includes(':elevate\r\ngoto :give_up'));

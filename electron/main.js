@@ -193,7 +193,7 @@ app.whenReady().then(async () => {
     if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  win.loadURL(`http://127.0.0.1:${port}`);
+  loadUI(win, port);
 
   // Clipboard-Erkennung: kopierte Download-Links werden der Seite gemeldet.
   // Nur neue URLs bekannte Plattformen — kein Spam, keine Tracking-Pfade.
@@ -642,6 +642,36 @@ ipcMain.handle('fs:deleteFile', async (_event, filePath) => {
     return { ok: false, error: String(e.message || e) };
   }
 });
+
+// ------------------------------------------------------------------ window --
+// loadUI(win, port): UI robust laden. Nach einem Update-Relaunch kann der
+// allererste Navigationsversuch scheitern (ERR_EMPTY_RESPONSE — z. B. wenn
+// der alte Server-Socket die Verbindung noch schluckt oder der AV-Scan den
+// frischen Asar bremst). Statt das Fenster unsichtbar zu lassen (ready-to-show
+// feuert nie), wird die URL mit Pause wiederholt, bis die Seite wirklich lädt.
+// Retry ist bewusst zäh (25 × 800 ms ≈ 20 s), damit auch ein träger Start
+// nach dem Update-Relanch zuverlässig durchkommt.
+function loadUI(win, port) {
+  let attempts = 0;
+  const MAX_ATTEMPTS = 25;
+  const RETRY_MS = 800;
+  const attempt = () => {
+    if (attempts >= MAX_ATTEMPTS) {
+      log('loadUI: giving up after ' + MAX_ATTEMPTS + ' attempts');
+      return;
+    }
+    attempts++;
+    win.loadURL(`http://127.0.0.1:${port}`).catch(() => {
+      if (attempts < MAX_ATTEMPTS) {
+        log('loadUI: attempt ' + attempts + ' failed, retrying in ' + RETRY_MS + ' ms');
+        setTimeout(attempt, RETRY_MS);
+      } else {
+        log('loadUI: attempt ' + attempts + ' failed, giving up');
+      }
+    });
+  };
+  attempt();
+}
 
 // ------------------------------------------------------------------ updates --
 let updating = false;
