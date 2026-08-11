@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smoky Browser</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; background: #0b0e16; color: #e8eaf0; }
+  #toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #232838; background: #10131d; }
+  .btn { width: 30px; height: 30px; border: 1px solid #2a3047; border-radius: 8px; background: #171b29; color: #c9cede; font-size: 14px; cursor: pointer; display: grid; place-items: center; flex: none; }
+  .btn:hover { background: #232b40; color: #fff; }
+  .btn:disabled { opacity: .35; cursor: default; }
+  #addr { flex: 1; min-width: 0; height: 30px; padding: 0 12px; border: 1px solid #2a3047; border-radius: 15px; background: #171b29; color: #e8eaf0; font-size: 12.5px; outline: none; }
+  #addr:focus { border-color: #6558e8; }
+  #go { height: 30px; padding: 0 12px; border: none; border-radius: 8px; background: #6558e8; color: #fff; font-size: 12.5px; cursor: pointer; flex: none; }
+  #go:hover { background: #786cf5; }
+  #dl { height: 30px; padding: 0 12px; border: none; border-radius: 8px; background: #22c55e; color: #04150b; font-weight: 600; font-size: 12.5px; cursor: pointer; flex: none; display: flex; align-items: center; gap: 6px; }
+  #dl:hover { background: #2fdc70; }
+  #dl svg { width: 13px; height: 13px; }
+  #status { height: 24px; padding: 5px 12px; font-size: 10.5px; color: #7c8499; border-bottom: 1px solid #1a1f30; background: #0d1019; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  webview { position: absolute; inset: 62px 0 0 0; width: 100%; display: flex; }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button class="btn" id="back" title="Back">‹</button>
+    <button class="btn" id="fwd" title="Forward">›</button>
+    <button class="btn" id="reload" title="Reload">⟳</button>
+    <input id="addr" spellcheck="false" placeholder="https://www.youtube.com — search or paste a link">
+    <button id="go" title="Go">Go</button>
+    <button id="dl" title="Send this page to Smoky's downloader"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 19h16"/></svg>Download</button>
+  </div>
+  <div id="status">Smoky Browser — the download button sends the current page to Smoky's downloader.</div>
+  <webview id="view" src="https://www.youtube.com" partition="persist:smoky-browse" allowpopups></webview>
+  <script>
+    const view = document.getElementById('view');
+    const addr = document.getElementById('addr');
+    const status = document.getElementById('status');
+    const btn = (id) => document.getElementById(id);
+    const update = () => {
+      try {
+        const u = view.getURL();
+        if (u && /^https?:/i.test(u)) addr.value = u;
+        btn('back').disabled = !view.canGoBack();
+        btn('fwd').disabled = !view.canGoForward();
+      } catch {}
+    };
+    view.addEventListener('did-navigate', update);
+    view.addEventListener('did-navigate-in-page', update);
+    view.addEventListener('did-stop-loading', () => { update(); try { status.textContent = view.getURL() || status.textContent; } catch {} });
+    btn('back').addEventListener('click', () => { try { view.goBack(); } catch {} });
+    btn('fwd').addEventListener('click', () => { try { view.goForward(); } catch {} });
+    btn('reload').addEventListener('click', () => { try { view.reload(); } catch {} });
+    const go = () => {
+      let u = addr.value.trim();
+      if (!u) return;
+      if (!/^https?:\/\//i.test(u)) u = (/^[\w-]+(\.[\w-]+)+/.test(u) ? 'https://' : 'https://www.google.com/search?q=') + encodeURIComponent(u);
+      try { view.loadURL(u); } catch { status.textContent = 'Cannot open that URL'; }
+    };
+    btn('go').addEventListener('click', go);
+    addr.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    btn('dl').addEventListener('click', () => {
+      try {
+        const u = view.getURL();
+        if (!u || !/^https?:/i.test(u)) { status.textContent = 'Nothing to download yet.'; return; }
+        if (window.smokyBrowser && window.smokyBrowser.sendDownload) {
+          window.smokyBrowser.sendDownload(u);
+          status.textContent = 'Sent to Smoky: ' + u;
+        } else {
+          status.textContent = 'Download bridge not available.';
+        }
+      } catch (e) { status.textContent = 'Download failed: ' + (e && e.message || e); }
+    });
+    try { update(); } catch {}
+  </script>
+</body>
+</html>

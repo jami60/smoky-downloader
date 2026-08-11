@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('smokyDesktopNative', {
   // Globale Hotkeys (F4/F5/F6): main.js meldet Tastendrücke an die Seite —
   // funktionieren auch, wenn die App nicht im Fokus ist.
   onGlobalHotkey: (cb) => ipcRenderer.on('player:hotkey', (_e, action) => { try { cb(action); } catch {} }),
+  // In-App-Browser: Fenster öffnen + Downloads aus dem Browser-Fenster empfangen.
+  openBrowser: () => ipcRenderer.invoke('browser:open'),
+  onBrowserDownload: (cb) => ipcRenderer.on('browser:download', (_e, url) => { try { cb(url); } catch {} }),
+  browserTestFire: (url) => ipcRenderer.invoke('browser:test-fire', url),
   // Smoke/Dev: Registrierungsstatus der globalen Hotkeys + Test-Feuer über
   // denselben IPC-Pfad wie ein echter Tastendruck.
   hotkeyState: () => ipcRenderer.invoke('hotkeys:state'),

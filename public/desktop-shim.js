@@ -146,6 +146,13 @@ window.smokyDesktop = (() => {
       // Dev-Hook für Tests ohne Electron
       (window.__clipboardCbs = window.__clipboardCbs || []).push(cb);
     },
+    // In-App-Browser: Fenster öffnen + Downloads aus dem Browser-Fenster empfangen
+    openBrowser() { return native && native.openBrowser ? native.openBrowser() : false; },
+    onBrowserDownload(cb) {
+      if (native && native.onBrowserDownload) native.onBrowserDownload(cb);
+      (window.__browserCbs = window.__browserCbs || []).push(cb);
+    },
+    browserTestFire(url) { return native && native.browserTestFire ? native.browserTestFire(url) : null; },
     onUpdateProgress(cb) {
       if (native && native.onUpdateProgress) native.onUpdateProgress(cb);
     },

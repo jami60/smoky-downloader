@@ -9,8 +9,9 @@ const os = require('node:os');
 const fs = require('node:fs');
 const assert = require('node:assert');
 
-const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch } = require('../server.js');
+const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar, settings } = require('../server.js');
 const { history } = require('../server.js');
+const { spawnSync } = require('node:child_process');
 
 let failures = 0;
 const check = (name, fn) => {
@@ -233,6 +234,73 @@ check('recSearch: Thumb-Fallback aus ID + Playlist-URLs rausgefiltert', async ()
   assert.strictEqual(items.length, 1);
   assert.strictEqual(items[0].thumb, 'https://i.ytimg.com/vi/abc123XYZ/hqdefault.jpg');
   assert.strictEqual(items[0].url, 'https://www.youtube.com/watch?v=abc123XYZ');
+});
+
+// ------------------------------------------- Empfehlungen erweitert ----
+// mergeSeedLists: primär zuerst, dedupliziert, gedeckelt, min. 3 Zeichen
+check('mergeSeedLists: primär zuerst + Dedupe', () => {
+  assert.deepStrictEqual(mergeSeedLists(['Song A', 'Song B'], ['Song B', 'Song C'], 10), ['Song A', 'Song B', 'Song C']);
+});
+check('mergeSeedLists: Cap wird eingehalten', () => {
+  assert.strictEqual(mergeSeedLists(['Song Eins', 'Song Zwei', 'Song Drei'], ['Song Vier', 'Song Fünf'], 3).length, 3);
+});
+check('mergeSeedLists: zu kurze + leere Einträge raus', () => {
+  assert.deepStrictEqual(mergeSeedLists(['ab', '', '  '], ['Guter Seed'], 10), ['Guter Seed']);
+});
+check('mergeSeedLists: Case-insensitive Dedupe', () => {
+  assert.deepStrictEqual(mergeSeedLists(['Song X'], ['song x'], 10), ['Song X']);
+});
+
+// buildSimilar mit Fake-Fetcher: exkludiert die eigene ID + bekannte Einträge
+check('buildSimilar: exkludiert eigene ID + History-Treffer', async () => {
+  const saved = history.splice(0);
+  history.push({ title: 'Bekannt', url: 'https://www.youtube.com/watch?v=known99999' });
+  const items = await buildSimilar('Mein Titel', 'own1234567', async () => [
+    { id: 'own1234567', title: 'Das Original', channel: 'K' },
+    { id: 'known99999', title: 'Bekannt', channel: 'K' },
+    { id: 'fresh11111', title: 'Frischer Treffer', channel: 'K' },
+  ]);
+  assert.strictEqual(items.length, 1);
+  assert.strictEqual(items[0].id, 'fresh11111');
+  assert.strictEqual(items[0].similarOf, 'Mein Titel');
+  history.push(...saved);
+});
+check('buildSimilar: leerer Titel → leere Treffer (kein Netzwerk)', async () => {
+  assert.deepStrictEqual(await buildSimilar('  ', 'x'), []);
+});
+check('buildSimilar: fehlschlagender Suchlauf → leere Treffer', async () => {
+  assert.deepStrictEqual(await buildSimilar('Titel', 'x', async () => { throw new Error('offline'); }), []);
+});
+check('buildSimilar: Cap (12) wird eingehalten', async () => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: 'id' + String(i).padStart(6, '0'), title: 'T ' + i, channel: 'K' }));
+  const items = await buildSimilar('Titel', '', async () => many);
+  assert.strictEqual(items.length, 12);
+});
+
+// librarySeeds: echte Tags (Künstler + Titel) aus der Bibliothek → „artist - title"
+check('librarySeeds: baut artist - title Queries aus getaggten Dateien', async () => {
+  const ffmpeg = require('node:path').join(__dirname, '..', 'tools', 'ffmpeg.exe');
+  if (!require('node:fs').existsSync(ffmpeg)) { console.log('  (ffmpeg fehlt — übersprungen)'); return; }
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-libseeds-'));
+  const mk = (name, title, artist) => {
+    const f = path.join(d, name);
+    spawnSync(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:a', 'libmp3lame', '-metadata', 'title=' + title, '-metadata', 'artist=' + artist, f], { stdio: 'ignore', windowsHide: true });
+    return f;
+  };
+  mk('a.mp3', 'Song Eins', 'Künstler A');
+  mk('b.mp3', 'Song Zwei', 'Künstler B');
+  mk('c.mp3', 'Nur Titel');
+  const oldFolder = settings.folder;
+  settings.folder = d;
+  try {
+    const seeds = await librarySeeds();
+    assert.ok(seeds.includes('Künstler A - Song Eins'), JSON.stringify(seeds));
+    assert.ok(seeds.includes('Künstler B - Song Zwei'), JSON.stringify(seeds));
+    assert.ok(seeds.some((s) => s.includes('Nur Titel')), JSON.stringify(seeds));
+  } finally {
+    settings.folder = oldFolder;
+    fs.rmSync(d, { recursive: true, force: true });
+  }
 });
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');

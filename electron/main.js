@@ -21,6 +21,7 @@ const APP_VERSION = (() => { try { return require('../package.json').version; } 
 
 const SMOKE = process.argv.includes('--smoke');
 let win = null;
+let browserWin = null; // separates In-App-Browser-Fenster (Variante B)
 
 // Globale Player-Hotkeys (F4/F5/F6) — wie in Spotify, funktionieren auch,
 // wenn Smoky nicht im Fokus ist (Electron globalShortcut). Der Tastendruck
@@ -117,7 +118,10 @@ app.whenReady().then(async () => {
       }
     } catch (e) { log('globalShortcut error:', key, e && e.message || e); }
   }
-  app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch {} });
+  app.on('will-quit', () => {
+    try { globalShortcut.unregisterAll(); } catch {}
+    try { if (browserWin && !browserWin.isDestroyed()) browserWin.destroy(); } catch {}
+  });
 
   // Fehlgeschlagenes Update melden: Der Update-Batch schreibt bei einem Fehler
   // update-failed.txt in userData und startet die App (alter Stand) neu.
@@ -270,6 +274,7 @@ app.whenReady().then(async () => {
               for (const id of ['tagCoverPick', 'tagCoverFile', 'tagCoverPreview', 'tagCoverClear', 'tagCoverName']) {
                 if (!document.getElementById(id)) failures.push('tag:' + id);
               }
+              if (!document.getElementById('browserView') || !document.getElementById('browserOpen')) failures.push('browser:missing-view');
               return failures.length ? 'fail(' + failures.join(',') + ')' : 'ok';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })(),
@@ -357,7 +362,28 @@ app.whenReady().then(async () => {
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })(),
           historySingleCard,
-          globalHotkeys
+          globalHotkeys,
+          // In-App-Browser: Bridge vorhanden + IPC-Kette Main→Renderer (derselbe
+          // Pfad wie der echte „Download“-Knopf im Browser-Fenster), plus die
+          // Browser-Chrome-Seite mit <webview> wird vom Server ausgeliefert.
+          browserBridge: await (async () => {
+            try {
+              const native = window.smokyDesktopNative;
+              const bridge = native && typeof native.openBrowser === 'function' && typeof native.onBrowserDownload === 'function' && typeof native.browserTestFire === 'function';
+              const received = [];
+              window.smokyDesktop.onBrowserDownload((url) => received.push(url));
+              await native.browserTestFire('https://example.com/test-video-123');
+              await new Promise((r) => setTimeout(r, 300));
+              const wiring = received.includes('https://example.com/test-video-123') ? 'ok' : 'fail(received=' + received.join(',') + ')';
+              let page = null;
+              try {
+                const res = await fetch('/browser.html');
+                const html = await res.text();
+                page = (res.status === 200 && html.includes('<webview') && html.includes('sendDownload')) ? 'ok' : 'fail(status=' + res.status + ')';
+              } catch (e) { page = 'err-' + String(e && e.message || e); }
+              return { bridge, wiring, page };
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })()
         };
         })()`);
         console.log('SMOKE_OK ' + JSON.stringify(result));
@@ -373,7 +399,53 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => app.quit());
 
+// --------------------------------------------------- In-App-Browser ----
+// Variante B: ein separates Browser-Fenster mit Toolbar (zurück/vor/neu
+// laden, Adresszeile) und „Download“-Knopf. Der Knopf schickt die aktuelle
+// URL an das Hauptfenster → dort erscheint das bekannte Download-Banner
+// (derselbe Pfad wie die Clipboard-Erkennung).
+function openBrowser() {
+  if (browserWin && !browserWin.isDestroyed()) {
+    browserWin.show();
+    browserWin.focus();
+    return;
+  }
+  browserWin = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 640,
+    minHeight: 480,
+    title: 'Smoky Browser',
+    icon: path.join(__dirname, 'icon.png'),
+    backgroundColor: '#0b0e16',
+    webPreferences: {
+      preload: path.join(__dirname, 'browser-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: true,
+      spellcheck: false,
+    },
+  });
+  browserWin.loadFile(path.join(__dirname, '..', 'public', 'browser.html'));
+  browserWin.on('closed', () => { browserWin = null; });
+}
+
 // ------------------------------------------------------------- IPC --------
+ipcMain.handle('browser:open', () => { openBrowser(); return true; });
+
+// URL aus dem Browser-Fenster → Hauptfenster (Download-Banner).
+ipcMain.on('browser:download-url', (_event, url) => {
+  if (/^https?:/i.test(String(url || '')) && win && !win.isDestroyed()) {
+    win.webContents.send('browser:download', String(url));
+  }
+});
+
+// Smoke/Dev: denselben IPC-Pfad wie ein echter Download-Knopf testen.
+ipcMain.handle('browser:test-fire', (_event, url) => {
+  if (win && !win.isDestroyed()) win.webContents.send('browser:download', String(url || ''));
+  return true;
+});
+
 ipcMain.handle('win:minimize', () => win && win.minimize());
 ipcMain.handle('win:maximize', () => {
   if (!win) return;

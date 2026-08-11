@@ -1304,9 +1304,12 @@ function convertFile(id, srcPath, origName, format) {
 // die Top-Treffer (ytsearch + --flat-playlist = schnell, lädt nichts herunter),
 // die Thumbnails kommen direkt von i.ytimg.com. Ergebnisse werden 30 Minuten
 // gecacht, damit der Tab nicht bei jedem Öffnen Netzwerk-Anfragen feuert.
-const REC_SEEDS_MAX = 4;      // Seeds (Titel aus der History)
-const REC_PER_SEED = 6;       // Treffer pro Seed
-const REC_RESULTS_MAX = 18;   // Gesamtzahl nach Dedupe
+const REC_SEEDS_MAX = 6;            // Seeds gesamt (History + Bibliothek)
+const REC_HISTORY_SEEDS_MAX = 4;    // davon maximal aus der History
+const REC_LIBRARY_SEEDS_MAX = 2;    // davon maximal aus der Bibliothek
+const REC_PER_SEED = 6;             // Treffer pro Seed
+const REC_RESULTS_MAX = 18;         // Gesamtzahl nach Dedupe
+const REC_SIMILAR_MAX = 12;         // Treffer bei „Ähnliche Videos“
 const REC_CACHE_MS = 30 * 60 * 1000;
 
 // Seeds aus der Download-History (zuletzt zuerst, dedupliziert, > 2 Zeichen).
@@ -1322,7 +1325,7 @@ function recommendationSeeds() {
     if (q.length < 3 || seen.has(q.toLowerCase())) continue;
     seen.add(q.toLowerCase());
     out.push(q);
-    if (out.length >= REC_SEEDS_MAX) break;
+    if (out.length >= REC_HISTORY_SEEDS_MAX) break;
   }
   return out;
 }
@@ -1351,10 +1354,8 @@ async function recSearch(query, fetcher) {
   }).filter((t) => /^https?:\/\//i.test(t.url) && !/\/playlist\?/i.test(t.url));
 }
 
-// Empfehlungen aus den Seeds bauen — parallel (max. 4 gleichzeitig), dedupliziert
-// nach Video-ID, bereits bekannte Einträge (History) werden herausgefiltert.
-// Ein fehlschlagender Seed (Netzwerk/yt-dlp) überspringt nur diesen Seed.
-async function buildRecommendations(seeds, fetcher) {
+// Bereits bekannte Einträge (History) — IDs und Titel, case-insensitiv.
+function knownFromHistory() {
   const known = new Set();
   for (const h of history) {
     if (!h) continue;
@@ -1362,6 +1363,45 @@ async function buildRecommendations(seeds, fetcher) {
     if (m) known.add(m[1]);
     if (h.title) known.add('t:' + String(h.title).toLowerCase().trim());
   }
+  return known;
+}
+
+// Seeds aus der Bibliothek: echte Tags (Künstler + Titel) — ergänzt die
+// History-Seeds um die komplette Sammlung (artist - title = bessere Treffer).
+async function librarySeeds() {
+  const out = [];
+  try {
+    const tracks = await scanLibrary();
+    for (const t of tracks) {
+      if (!t) continue;
+      const q = [t.artist, t.title].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim();
+      if (q.length >= 3) out.push(q);
+      if (out.length >= REC_LIBRARY_SEEDS_MAX) break;
+    }
+  } catch {}
+  return out;
+}
+
+// Zwei Seed-Listen zu einer deduplizierten Liste der max. Länge zusammenführen
+// (Reihenfolge: primär zuerst). Rein — gut unit-testbar.
+function mergeSeedLists(primary, secondary, max) {
+  const seen = new Set();
+  const out = [];
+  for (const q of [...(primary || []), ...(secondary || [])]) {
+    const s = String(q || '').replace(/\s+/g, ' ').trim();
+    if (s.length < 3 || seen.has(s.toLowerCase())) continue;
+    seen.add(s.toLowerCase());
+    out.push(s);
+    if (out.length >= (max || REC_SEEDS_MAX)) break;
+  }
+  return out;
+}
+
+// Empfehlungen aus den Seeds bauen — parallel (max. 4 gleichzeitig), dedupliziert
+// nach Video-ID, bereits bekannte Einträge (History) werden herausgefiltert.
+// Ein fehlschlagender Seed (Netzwerk/yt-dlp) überspringt nur diesen Seed.
+async function buildRecommendations(seeds, fetcher) {
+  const known = knownFromHistory();
   const results = await Promise.all(seeds.slice(0, REC_SEEDS_MAX).map(async (seed) => {
     try { return { seed, hits: await recSearch(seed, fetcher) }; }
     catch { return { seed, hits: [] }; }
@@ -1382,17 +1422,40 @@ async function buildRecommendations(seeds, fetcher) {
   return items;
 }
 
+// „Ähnliche Videos“ zu einem Titel (aus einer Empfehlungs-Karte): ein Suchlauf
+// auf den Titel, ohne die Video-ID selbst und ohne bereits bekannte Einträge.
+async function buildSimilar(title, excludeId, fetcher) {
+  const q = String(title || '').replace(/\s+/g, ' ').trim();
+  if (q.length < 3) return [];
+  const known = knownFromHistory();
+  let hits = [];
+  try { hits = await recSearch(q, fetcher); } catch { return []; }
+  const items = [];
+  const seen = new Set();
+  for (const hit of hits) {
+    const key = hit.id || hit.url;
+    const titleKey = 't:' + String(hit.title).toLowerCase().trim();
+    if (hit.id === excludeId || seen.has(key) || known.has(hit.id) || known.has(titleKey)) continue;
+    seen.add(key);
+    items.push({ ...hit, similarOf: q });
+    if (items.length >= REC_SIMILAR_MAX) break;
+  }
+  return items;
+}
+
 // Server-seitiger Cache (30 min): der Tab fragt nicht bei jedem Öffnen Netzwerk
 // an; ?refresh=1 erzwingt einen neuen Lauf. Fehler werden als leere Liste mit
 // Meldung geliefert — der Tab bleibt bedienbar, statt zu crashen.
 let recCache = { at: 0, payload: null };
 async function recommendationsPayload(force) {
   if (!force && recCache.payload && Date.now() - recCache.at < REC_CACHE_MS) return recCache.payload;
-  const seeds = recommendationSeeds();
+  const hist = recommendationSeeds();
+  const lib = await librarySeeds();
+  const seeds = mergeSeedLists(hist, lib, REC_SEEDS_MAX);
   if (!seeds.length) return { items: [], reason: 'no-history' };
   try {
     const items = await buildRecommendations(seeds);
-    recCache = { at: Date.now(), payload: { items, seeds: seeds.length, generatedAt: Date.now() } };
+    recCache = { at: Date.now(), payload: { items, seeds: seeds.length, fromHistory: hist.length, fromLibrary: lib.length, generatedAt: Date.now() } };
     return recCache.payload;
   } catch (e) {
     return { items: [], reason: 'error', message: String(e && e.message || e).slice(0, 200) };
@@ -2026,6 +2089,13 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await recommendationsPayload(force));
     }
 
+    if (req.method === 'GET' && p === '/api/recommendations/similar') {
+      const title = u.searchParams.get('title') || '';
+      const exclude = u.searchParams.get('exclude') || '';
+      const items = await buildSimilar(title, exclude);
+      return sendJson(res, 200, { items });
+    }
+
     if (req.method === 'GET' && p === '/api/stats') {
       const h = history;
       const total = h.length;
@@ -2117,7 +2187,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch };
+module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
 
 if (require.main === module) {
   startServer();

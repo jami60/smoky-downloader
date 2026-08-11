@@ -142,15 +142,35 @@ async function json(base, path, opts) {
   fs.writeFileSync(fakeWav, 'kein echtes audio');
   const { res: tgCoverWav } = await json(base, '/api/edit-tags', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: fakeWav, cover: 'aGVsbG8=' }) });
   check('POST /api/edit-tags mit WAV + Cover → 400 (kein Cover-Slot)', tgCoverWav.status === 400, String(tgCoverWav.status));
+  // Fake-Dateien wieder entfernen — sonst erzeugen sie Library-Seeds und der
+  // Empfehlungs-Endpoint würde echte Netzwerk-Suchen ausführen (Test-Flake).
+  try { fs.rmSync(fakeMp3, { force: true }); fs.rmSync(fakeWav, { force: true }); } catch {}
 
   // ------------------------------------------------------ Empfehlungen ----
-  // Ohne History → deterministisch leer (kein Netzwerk). Die Logik selbst
-  // testen die Unit-Tests mit Fake-Fetcher (test-bughunt.js).
+  // Ohne Seeds → deterministisch leer (kein Netzwerk). Der Download-Ordner
+  // wird kurz über die API auf einen leeren Ordner umgestellt, damit keine
+  // Dateien aus anderen Smoke-Checks zu Library-Seeds werden (echte yt-dlp-
+  // Suchen wären langsam + flaky). Direktes settings.folder-Mutieren hilft
+  // hier nicht: POST /api/settings ersetzt das Objekt per Spread. Die Logik
+  // selbst testen die Unit-Tests mit Fake-Fetcher (test-bughunt.js).
+  const recFolder = (await json(base, '/api/status')).data.settings.folder;
+  const emptyFolder = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-rec-'));
+  await json(base, '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: emptyFolder }) });
   const { res: rec1, data: recD1 } = await json(base, '/api/recommendations');
   check('GET /api/recommendations → 200', rec1.status === 200, String(rec1.status));
-  check('  ohne History → leere Items + reason', Array.isArray(recD1.items) && recD1.items.length === 0 && recD1.reason === 'no-history', JSON.stringify(recD1));
+  check('  ohne Seeds → leere Items + reason', Array.isArray(recD1.items) && recD1.items.length === 0 && recD1.reason === 'no-history', JSON.stringify(recD1));
   const { res: rec2 } = await json(base, '/api/recommendations?refresh=1');
   check('GET /api/recommendations?refresh=1 → 200', rec2.status === 200, String(rec2.status));
+  // Similar-Endpoint: ohne Titel deterministisch leer (kein Netzwerk)
+  const { res: sim1, data: simD1 } = await json(base, '/api/recommendations/similar');
+  check('GET /api/recommendations/similar ohne Titel → 200 + leere Items', sim1.status === 200 && Array.isArray(simD1.items) && simD1.items.length === 0, sim1.status + ' ' + JSON.stringify(simD1));
+  const { res: sim2 } = await json(base, '/api/recommendations/similar?title=xx&exclude=');
+  check('GET /api/recommendations/similar mit kurzem Titel → 200', sim2.status === 200, String(sim2.status));
+  await json(base, '/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: recFolder }) });
+  // Browser-Chrome-Seite wird vom Server ausgeliefert (auch im Paket)
+  const browserPage = await fetch(base + '/browser.html');
+  const browserHtml = await browserPage.text();
+  check('GET /browser.html → 200 mit <webview> + Download-Knopf', browserPage.status === 200 && browserHtml.includes('<webview') && browserHtml.includes('Download'), browserPage.status);
 
   // ------------------------------------------------------------- convert ----
   const { res: conv } = await json(base, '/api/convert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'C:/does/not/exist.mp3', format: 'mp3' }) });
