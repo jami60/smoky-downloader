@@ -267,6 +267,25 @@ app.whenReady().then(async () => {
               return ok ? 'ok' : 'fail';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })(),
+          // Hotkeys wie Spotify/Browser: F4 zurück, F5 Play/Pause, F6 weiter.
+          // Stubt die drei Funktionen und prüft die Zuordnung per dispatchEvent,
+          // inkl. Ignorieren von unbekannten Tasten und Modifier-Kombis (Ctrl+F5).
+          hotkeys: (() => {
+            try {
+              const calls = [];
+              const oNext = nextTrack, oPrev = prevTrack, oToggle = togglePlay;
+              nextTrack = () => calls.push('next');
+              prevTrack = () => calls.push('prev');
+              togglePlay = () => calls.push('toggle');
+              const fire = (key, mods = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key, cancelable: true, bubbles: true, ...mods }));
+              fire('F6'); fire('F5'); fire('F4'); fire('F7'); fire('F5', { ctrlKey: true });
+              nextTrack = oNext; prevTrack = oPrev; togglePlay = oToggle;
+              const mapping = calls.join(',');
+              const settingsHint = [...document.querySelectorAll('#settingsView .kbd')].map(k => k.textContent).join(',');
+              const ok = mapping === 'next,toggle,prev' && settingsHint === 'F4,F5,F6';
+              return ok ? 'ok' : 'fail(calls=' + mapping + ',kbd=' + settingsHint + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
           historySingleCard
         };
         })()`);
