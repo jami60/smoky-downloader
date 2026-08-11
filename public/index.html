@@ -1440,6 +1440,16 @@
       else if (e.key === 'F5') { e.preventDefault(); togglePlay(); }
       else if (e.key === 'F6') { e.preventDefault(); nextTrack(); }
     });
+    // Globale Hotkeys (F4/F5/F6): kommen von Electron globalShortcut und
+    // funktionieren auch, wenn die App nicht im Fokus ist. Dieselben Aktionen
+    // wie die lokalen Tasten — nur ohne Fokus-Zwang.
+    if (window.smokyDesktop && window.smokyDesktop.onGlobalHotkey) {
+      window.smokyDesktop.onGlobalHotkey((action) => {
+        if (action === 'prev') prevTrack();
+        else if (action === 'toggle') togglePlay();
+        else if (action === 'next') nextTrack();
+      });
+    }
     playerAudio.addEventListener('timeupdate', () => {
       if (playerAudio.duration) {
         const p = playerAudio.currentTime / playerAudio.duration;

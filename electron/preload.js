@@ -27,4 +27,11 @@ contextBridge.exposeInMainWorld('smokyDesktopNative', {
   onClipboardUrl: (cb) => ipcRenderer.on('clipboard:url', (_e, url) => { try { cb(url); } catch {} }),
   // Update-Fortschritt: main.js meldet Download-% / Entpacken / Fehler an die Seite.
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, p) => { try { cb(p); } catch {} }),
+  // Globale Hotkeys (F4/F5/F6): main.js meldet Tastendrücke an die Seite —
+  // funktionieren auch, wenn die App nicht im Fokus ist.
+  onGlobalHotkey: (cb) => ipcRenderer.on('player:hotkey', (_e, action) => { try { cb(action); } catch {} }),
+  // Smoke/Dev: Registrierungsstatus der globalen Hotkeys + Test-Feuer über
+  // denselben IPC-Pfad wie ein echter Tastendruck.
+  hotkeyState: () => ipcRenderer.invoke('hotkeys:state'),
+  hotkeyTestFire: (actions) => ipcRenderer.invoke('hotkeys:test-fire', actions),
 });

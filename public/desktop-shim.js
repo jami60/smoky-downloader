@@ -149,6 +149,11 @@ window.smokyDesktop = (() => {
     onUpdateProgress(cb) {
       if (native && native.onUpdateProgress) native.onUpdateProgress(cb);
     },
+    onGlobalHotkey(cb) {
+      if (native && native.onGlobalHotkey) native.onGlobalHotkey(cb);
+      // Dev-Hook für Tests ohne Electron
+      (window.__hotkeyCbs = window.__hotkeyCbs || []).push(cb);
+    },
   };
 
   // ---------------------------------------------- download event mapping --

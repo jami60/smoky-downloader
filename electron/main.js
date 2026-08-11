@@ -1,6 +1,6 @@
 // Smoky — Electron main process.
 // Runs the local Node backend in-process and opens the UI in a frameless window.
-const { app, BrowserWindow, dialog, shell, ipcMain, clipboard } = require('electron');
+const { app, BrowserWindow, dialog, shell, ipcMain, clipboard, globalShortcut } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -21,6 +21,14 @@ const APP_VERSION = (() => { try { return require('../package.json').version; } 
 
 const SMOKE = process.argv.includes('--smoke');
 let win = null;
+
+// Globale Player-Hotkeys (F4/F5/F6) — wie in Spotify, funktionieren auch,
+// wenn Smoky nicht im Fokus ist (Electron globalShortcut). Der Tastendruck
+// wird per IPC an die Seite geschickt, die den Player steuert.
+const GLOBAL_HOTKEYS = { F4: 'prev', F5: 'toggle', F6: 'next' };
+const fireHotkey = (action) => {
+  if (win && !win.isDestroyed()) win.webContents.send('player:hotkey', action);
+};
 
 // Nur eine Instanz gleichzeitig: ein zweiter Start fokussiert das offene Fenster
 // statt ein zweites zu öffnen (der Update-Relaunch startet erst nach taskkill).
@@ -96,6 +104,20 @@ app.whenReady().then(async () => {
   });
 
   win.once('ready-to-show', () => win.show());
+
+  // Globale Hotkeys registrieren — funktionieren auch ohne App-Fokus.
+  // Scheitert eine einzelne Taste (von einer anderen App belegt), bleibt der
+  // Rest aktiv; das wird nur geloggt, nicht als Fehler behandelt.
+  for (const [key, action] of Object.entries(GLOBAL_HOTKEYS)) {
+    try {
+      if (globalShortcut.register(key, () => fireHotkey(action))) {
+        if (SMOKE) console.log('HOTKEY_REGISTERED ' + key);
+      } else {
+        log('globalShortcut register failed:', key);
+      }
+    } catch (e) { log('globalShortcut error:', key, e && e.message || e); }
+  }
+  app.on('will-quit', () => { try { globalShortcut.unregisterAll(); } catch {} });
 
   // Fehlgeschlagenes Update melden: Der Update-Batch schreibt bei einem Fehler
   // update-failed.txt in userData und startet die App (alter Stand) neu.
@@ -202,6 +224,25 @@ app.whenReady().then(async () => {
               return ok ? 'ok' : 'fail(cards=' + cards.length + ',stats=' + !!statsIntact + ',list=' + !!list + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })();
+          // Globale Hotkeys (F4/F5/F6): IPC-Kette Main→Renderer — derselbe
+          // Pfad wie ein echter Tastendruck, nur ohne die OS-Taste zu drücken.
+          // registered ist ein Report (kann je nach belegten Tasten auf dem
+          // Rechner variieren und darf deshalb nicht failen).
+          const globalHotkeys = await (async () => {
+            try {
+              const calls = [];
+              const oN = nextTrack, oP = prevTrack, oT = togglePlay;
+              nextTrack = () => calls.push('next');
+              prevTrack = () => calls.push('prev');
+              togglePlay = () => calls.push('toggle');
+              await window.smokyDesktopNative.hotkeyTestFire(['next', 'toggle', 'prev']);
+              await new Promise((r) => setTimeout(r, 300));
+              nextTrack = oN; prevTrack = oP; togglePlay = oT;
+              const wiring = calls.join(',') === 'next,toggle,prev' ? 'ok' : 'fail(calls=' + calls.join(',') + ')';
+              const registered = await window.smokyDesktopNative.hotkeyState();
+              return { wiring, registered };
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })();
           return {
           title: document.title,
           bridge: typeof window.smokyDesktop === 'object',
@@ -286,13 +327,15 @@ app.whenReady().then(async () => {
               return ok ? 'ok' : 'fail(calls=' + mapping + ',kbd=' + settingsHint + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })(),
-          historySingleCard
+          historySingleCard,
+          globalHotkeys
         };
         })()`);
         console.log('SMOKE_OK ' + JSON.stringify(result));
       } catch (err) {
         console.log('SMOKE_FAIL ' + String(err && err.message || err));
       }
+      try { globalShortcut.unregisterAll(); } catch {}
       app.exit(0);
     });
   }
@@ -418,4 +461,20 @@ ipcMain.handle('updates:check', async () => {
 ipcMain.handle('updates:apply', async (_event, url) => {
   if (!app.isPackaged) return { error: 'Updates are only available in the desktop app.' };
   return runUpdate(url);
+});
+
+// Registrierungsstatus der globalen Hotkeys (für Settings-UI/Smoke-Report).
+ipcMain.handle('hotkeys:state', () => {
+  try {
+    const out = {};
+    for (const key of Object.keys(GLOBAL_HOTKEYS)) out[key] = globalShortcut.isRegistered(key);
+    return out;
+  } catch { return {}; }
+});
+
+// Test-Hook für den Smoke-Test: feuert denselben Pfad wie ein echter globaler
+// Tastendruck (IPC an die Seite) — ohne wirklich F4/F5/F6 zu drücken.
+ipcMain.handle('hotkeys:test-fire', (_event, actions) => {
+  for (const a of actions || []) fireHotkey(a);
+  return true;
 });
