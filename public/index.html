@@ -1397,18 +1397,18 @@
       const i = library.findIndex((tr) => tr.path === savedPath);
       if (i < 0) return;
       playbackResumed = true;
-      const t = library[i];
+      const track = library[i];
       currentIndex = i;
-      playerAudio.src = playUrl(t.path);
+      playerAudio.src = playUrl(track.path);
       startVis();
-      playerTitleEl.textContent = t.title;
-      playerArtistEl.textContent = t.artist || t('player.unknown');
-      setPlayerAlbum(t.album);
-      playerCoverImg.src = coverUrl(t.path);
+      playerTitleEl.textContent = track.title;
+      playerArtistEl.textContent = track.artist || t('player.unknown');
+      setPlayerAlbum(track.album);
+      playerCoverImg.src = coverUrl(track.path);
       playerCoverImg.style.display = '';
       playerCoverImg.onerror = () => { playerCoverImg.style.display = 'none'; };
       renderLibrary();
-      loadWaveform(t.path);
+      loadWaveform(track.path);
       if (savedPos > 1) {
         playerAudio.addEventListener('loadedmetadata', () => {
           try { if (playerAudio.currentTime < 1 && playerAudio.duration) playerAudio.currentTime = Math.min(savedPos, Math.max(0, playerAudio.duration - 0.5)); } catch {}
@@ -1423,18 +1423,21 @@
     function playTrack(i) {
       if (i < 0 || i >= library.length) return;
       currentIndex = i;
-      const t = library[i];
-      playerAudio.src = playUrl(t.path);
+      // Nicht "t" nennen: das würde die globale Übersetzungsfunktion t()
+      // überdecken — bei Tracks ohne Künstler warf t.artist || t('player.unknown')
+      // einen TypeError und brach playTrack mitten ab (kein Render, kein Sync).
+      const track = library[i];
+      playerAudio.src = playUrl(track.path);
       startVis();
       playerAudio.play().catch(() => {});
-      playerTitleEl.textContent = t.title;
-      playerArtistEl.textContent = t.artist || t('player.unknown');
-      setPlayerAlbum(t.album);
-      playerCoverImg.src = coverUrl(t.path);
+      playerTitleEl.textContent = track.title;
+      playerArtistEl.textContent = track.artist || t('player.unknown');
+      setPlayerAlbum(track.album);
+      playerCoverImg.src = coverUrl(track.path);
       playerCoverImg.style.display = '';
       playerCoverImg.onerror = () => { playerCoverImg.style.display = 'none'; };
       renderLibrary();
-      loadWaveform(t.path);
+      loadWaveform(track.path);
       sendPlayerState(true);
       saveLastPlayback();
       updateMediaSession();
@@ -1458,13 +1461,13 @@
     const updateMediaSession = () => {
       if (!('mediaSession' in navigator)) return;
       try {
-        const t = currentIndex >= 0 ? library[currentIndex] : null;
-        if (!t) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; return; }
+        const track = currentIndex >= 0 ? library[currentIndex] : null;
+        if (!track) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; return; }
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: t.title || 'Smoky',
-          artist: t.artist || t('player.unknown'),
-          album: t.album || '',
-          artwork: [{ src: coverUrl(t.path), sizes: '512x512' }],
+          title: track.title || 'Smoky',
+          artist: track.artist || t('player.unknown'),
+          album: track.album || '',
+          artwork: [{ src: coverUrl(track.path), sizes: '512x512' }],
         });
         navigator.mediaSession.playbackState = playerAudio.paused ? 'paused' : 'playing';
       } catch { /* MediaSession nicht verfügbar */ }
@@ -1570,7 +1573,7 @@
         '<div class="ambient-stage">' +
           '<div class="ambient-vinyl"><div class="ambient-disc"><img id="ambientCover" alt="" onerror="this.style.visibility=\'hidden\'"><i class="ambient-hole"></i></div></div>' +
           '<div class="ambient-info">' +
-            '<div><div class="ambient-title" id="ambientTitle">' + (cur ? escapeHtml(cur.title) : '') + '</div><div class="ambient-artist" id="ambientArtist"></div><div class="ambient-album" id="ambientAlbum"></div></div>' +
+            '<div><div class="ambient-title" id="ambientTrackTitle">' + (cur ? escapeHtml(cur.title) : '') + '</div><div class="ambient-artist" id="ambientArtist"></div><div class="ambient-album" id="ambientAlbum"></div></div>' +
             '<div class="ambient-progress"><span id="ambientTime">0:00</span><input id="ambientSeek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="ambientDur">0:00</span></div>' +
             '<div class="ambient-controls">' +
               '<button class="icon-btn" id="ambientPrev" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 5v14M18 5l-9 7 9 7z"/></svg></button>' +
@@ -1608,7 +1611,10 @@
       step();
       // Player-Bindung: Cover/Tags/Position/Spindelzustand live halten
       const coverImg = document.getElementById('ambientCover');
-      const titleEl = document.getElementById('ambientTitle');
+      // Eindeutige ID — das Settings-Label trägt ebenfalls die ID "ambientTitle"
+      // (Theme-Code) und stünde sonst im DOM vor diesem Element, wodurch die
+      // Titel-Updates im Overlay nie ankamen (Titel blieb beim Öffnen stehen).
+      const titleEl = document.getElementById('ambientTrackTitle');
       const artistEl = document.getElementById('ambientArtist');
       const albumEl = document.getElementById('ambientAlbum');
       const seekEl = document.getElementById('ambientSeek');
@@ -1637,9 +1643,9 @@
       const syncVol = () => { volEl.value = String(Math.round(playerAudio.volume * 100)); volOut.textContent = Math.round(playerAudio.volume * 100) + '%'; };
       syncAmbient(); syncSpin(); syncVol();
       seekEl.addEventListener('input', () => { if (playerAudio.duration) { try { playerAudio.currentTime = (Number(seekEl.value) / 1000) * playerAudio.duration; } catch {} } });
-      document.getElementById('ambientPlay').addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
-      document.getElementById('ambientPrev').addEventListener('click', (e) => { e.stopPropagation(); prevTrack(); });
-      document.getElementById('ambientNext').addEventListener('click', (e) => { e.stopPropagation(); nextTrack(); });
+      document.getElementById('ambientPlay').addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); syncSpin(); });
+      document.getElementById('ambientPrev').addEventListener('click', (e) => { e.stopPropagation(); prevTrack(); syncAmbient(); });
+      document.getElementById('ambientNext').addEventListener('click', (e) => { e.stopPropagation(); nextTrack(); syncAmbient(); });
       volEl.addEventListener('input', () => { try { playerAudio.volume = Number(volEl.value) / 100; } catch {} syncVol(); });
       ambientTimer = setInterval(() => {
         const t = library[currentIndex];

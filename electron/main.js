@@ -397,7 +397,7 @@ app.whenReady().then(async () => {
               const okEl = !!el;
               const disc = hook.disc();
               const cover = el && el.querySelector('#ambientCover');
-              const titleEl = el && document.getElementById('ambientTitle');
+              const titleEl = el && document.getElementById('ambientTrackTitle');
               const info = el && el.querySelector('.ambient-info');
               const controls = el && ['ambientPlay', 'ambientNext', 'ambientPrev', 'ambientSeek', 'ambientVolume'].every((id) => !!document.getElementById(id));
               const calls = [];
@@ -417,10 +417,30 @@ app.whenReady().then(async () => {
               await new Promise((r) => setTimeout(r, 500));
               const spinOff = disc && !disc.classList.contains('spinning');
               const hadTitle = !!titleEl; // Element muss existieren (Inhalt hängt von der Bibliothek ab)
+              // Regression: Beim echten Skip muss der Overlay-Titel mitziehen.
+              // Früher kollidierte die id="ambientTitle" mit dem Settings-Label
+              // und die Titel-Updates landeten dort — der Overlay-Titel blieb
+              // beim Öffnen stehen. Das Settings-Label darf nie Track-Titel
+              // bekommen und die neue ID darf nur einmal existieren.
+              const oLib = library, oIdx = currentIndex, oShuffle = shuffleOn;
+              library = [
+                { path: 'X:\\smoky-reg\\a.mp3', title: 'Regression A', artist: 'A', album: 'A' },
+                { path: 'X:\\smoky-reg\\b.mp3', title: 'Regression B', artist: 'B', album: 'B' },
+              ];
+              currentIndex = 0; shuffleOn = false;
+              nextTrack();
+              await new Promise((r) => setTimeout(r, 700));
+              const ovTitle = document.querySelector('.ambient-mode #ambientTrackTitle');
+              const stLabel = document.querySelector('strong#ambientTitle');
+              const overlayText = ovTitle ? ovTitle.textContent : null;
+              const settingsText = stLabel ? stLabel.textContent : null;
+              const regOk = overlayText === 'Regression B' && settingsText !== 'Regression B' && document.querySelectorAll('#ambientTrackTitle').length === 1;
+              library = oLib; currentIndex = oIdx; shuffleOn = oShuffle;
+              renderLibrary();
               hook.close();
               const closed = !document.querySelector('.ambient-mode');
-              const ok = okEl && !!disc && !!cover && !!info && controls && wiring && spinOn && spinOff && hadTitle && closed;
-              return ok ? 'ok' : 'fail(el=' + !!okEl + ',disc=' + !!disc + ',cover=' + !!cover + ',info=' + !!info + ',ctrls=' + !!controls + ',wire=' + wiring + ',spinOn=' + spinOn + ',spinOff=' + spinOff + ',title=' + !!hadTitle + ',closed=' + closed + ')';
+              const ok = okEl && !!disc && !!cover && !!info && controls && wiring && spinOn && spinOff && hadTitle && regOk && closed;
+              return ok ? 'ok' : 'fail(el=' + !!okEl + ',disc=' + !!disc + ',cover=' + !!cover + ',info=' + !!info + ',ctrls=' + !!controls + ',wire=' + wiring + ',spinOn=' + spinOn + ',spinOff=' + spinOff + ',title=' + !!hadTitle + ',reg=' + regOk + ',closed=' + closed + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };
