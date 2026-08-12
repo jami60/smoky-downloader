@@ -47,7 +47,7 @@ jobs:
           fi
 
       - name: Build + publish macOS app (dmg + zip)
-        run: npx electron-builder --mac --publish always -c.publish.provider=github -c.publish.releaseType=release -c.publish.tag=${{ steps.release.outputs.tag }}
+        run: npx electron-builder --mac --publish always
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           GH_TOKEN: ${{ github.token }}

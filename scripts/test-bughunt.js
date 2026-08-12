@@ -384,7 +384,6 @@ check('.github/workflows/mac-release.yml: Mac-Build + Release-Upload', () => {
   assert.ok(wf.includes('make-icns.js'), 'Kein icns-Schritt');
   assert.ok(wf.includes('--publish always'), 'Kein Publish-Schritt (electron-builder)');
   assert.ok(wf.includes('GH_TOKEN'), 'GH_TOKEN fehlt für electron-builder publish');
-  assert.ok(wf.includes('publish.provider=github'), 'GitHub-Publish-Provider fehlt');
 });
 check('index.html: Video-Player (Toggle + <video> + currentMedia + Hotkeys)', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
