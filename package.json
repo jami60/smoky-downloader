@@ -17,6 +17,7 @@
     "test:bughunt": "node scripts/test-bughunt.js",
     "test": "npm run smoke:test && npm run test:updater && npm run test:covers && npm run test:organize && npm run test:bughunt",
     "icon": "node scripts/make-icon.js",
+    "icon:mac": "node scripts/make-icns.js",
     "dist": "electron-builder --win zip dir",
     "dist:build": "electron-builder --win",
     "update:package": "node scripts/make-update.js",
@@ -58,6 +59,22 @@
         },
         {
           "target": "nsis"
+        }
+      ]
+    },
+    "mac": {
+      "icon": "electron/icon.icns",
+      "category": "public.app-category.music",
+      "identity": null,
+      "files": [
+        "!tools/**/*.exe"
+      ],
+      "target": [
+        {
+          "target": "dmg"
+        },
+        {
+          "target": "zip"
         }
       ]
     },

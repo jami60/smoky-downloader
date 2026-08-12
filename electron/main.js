@@ -580,6 +580,33 @@ app.whenReady().then(async () => {
               return ok ? 'ok' : 'fail(audioOnly=' + audioOnly + ',albumToggle=' + albumToggleVisible + ',videoOnly=' + videoOnly + ',albumHidden=' + albumToggleHidden + ',videoShown=' + videoShown + ',mediaVideo=' + mediaIsVideo + ',audioShown=' + audioShown + ',mediaAudio=' + mediaIsAudio + ',nextVideo=' + nextStayedVideo + ',rows=' + videoRows.length + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })(),
+          mita: (() => {
+            try {
+              const sticker = document.getElementById('mitaSticker');
+              const toastEl = document.getElementById('mitaToast');
+              const toggle = document.getElementById('mitaToggle');
+              const before = localStorage.getItem('smoky-mita-disabled');
+              // User-Flow: Toggle in Settings aktivieren → Change-Event →
+              // Storage gesetzt, Sticker versteckt, mitaSay ist no-op
+              toggle.checked = true;
+              toggle.dispatchEvent(new Event('change'));
+              const hidden = sticker.style.display === 'none';
+              const stored = localStorage.getItem('smoky-mita-disabled') === '1';
+              mitaSay('PROBE-TEXT');
+              const noToast = !toastEl.classList.contains('show');
+              // Zurück: Toggle deaktivieren → Sticker wieder da, mitaSay zeigt Toast
+              toggle.checked = false;
+              toggle.dispatchEvent(new Event('change'));
+              const shown = sticker.style.display !== 'none';
+              mitaSay('PROBE-TEXT');
+              const withToast = toastEl.classList.contains('show');
+              // Zurücksetzen
+              toastEl.classList.remove('show');
+              if (before === null) localStorage.removeItem('smoky-mita-disabled'); else localStorage.setItem('smoky-mita-disabled', before);
+              const ok = hidden && stored && noToast && shown && withToast;
+              return ok ? 'ok' : 'fail(hidden=' + hidden + ',stored=' + stored + ',noToast=' + noToast + ',shown=' + shown + ',withToast=' + withToast + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
           // Layout-Stabilität: klassische Scrollbar darf den Inhalt NICHT
           // verschieben (Karten-Shift beim Tab-Wechsel). Mit scrollbar-gutter
           // stable bleibt innerWidth + main konstant, egal ob die vertikale

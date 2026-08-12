@@ -143,6 +143,28 @@ function hasCommand(cmd) {
   return false;
 }
 
+// ----------------------------------------------------- platform tools ------
+// Die gebündelten Tools sind plattformspezifisch: Windows liefert .exe-Dateien
+// mit, macOS nutzt unix-Binaries (werden beim ersten Tools-Update in den
+// tools-Ordner geholt — dort sucht bundledPath() dann auch).
+const IS_MAC = process.platform === 'darwin';
+const TOOL_YTDLP_NAME = IS_MAC ? 'yt-dlp' : 'yt-dlp.exe';
+const TOOL_FFMPEG_NAME = IS_MAC ? 'ffmpeg' : 'ffmpeg.exe';
+const TOOL_FFPROBE_NAME = IS_MAC ? 'ffprobe' : 'ffprobe.exe';
+const TOOL_YTDLP_URL = IS_MAC
+  ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos'
+  : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe';
+// ffmpeg für macOS: statische Builds von Martin Riedl (Intel + Apple Silicon),
+// Windows: gyan.dev essentials-Zip. Beide liefern ffmpeg + ffprobe.
+const TOOL_FFMPEG_ARCH = (() => {
+  if (process.arch === 'arm64') return 'arm64';
+  if (process.arch === 'x64') return 'amd64';
+  return 'amd64';
+})();
+const TOOL_FFMPEG_ZIP_URL = IS_MAC
+  ? `https://ffmpeg.martin-riedl.de/redirect/latest/macos/${TOOL_FFMPEG_ARCH}/release/ffmpeg.zip`
+  : 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip';
+
 // Bundled tools ship inside the app — the packaged build keeps them in
 // resources/tools (electron-builder extraResources), dev/standalone keeps
 // them in ./tools next to server.js. Bundled tools win over system tools so
@@ -177,11 +199,11 @@ function bundledCmd(name) {
 // pip-installed `py -m yt_dlp` (usually much newer than a standalone exe on
 // PATH, which gets HTTP 403 from YouTube when outdated), then PATH.
 function resolveYtdlp() {
-  const bundled = bundledCmd('yt-dlp.exe');
+  const bundled = bundledCmd(TOOL_YTDLP_NAME);
   if (bundled) return bundled;
   try {
-    require('node:child_process').execFileSync('py', ['-m', 'yt_dlp', '--version'], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
-    return { cmd: 'py', args: ['-m', 'yt_dlp'] };
+    require('node:child_process').execFileSync(IS_MAC ? 'python3' : 'py', ['-m', 'yt_dlp', '--version'], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
+    return { cmd: IS_MAC ? 'python3' : 'py', args: ['-m', 'yt_dlp'] };
   } catch {}
   if (hasCommand('yt-dlp')) return { cmd: 'yt-dlp', args: [] };
   return null;
@@ -245,47 +267,54 @@ function findFileRecursive(dir, name) {
 }
 
 async function updateBundledTools() {
-  const ytdlpPath = bundledPath('yt-dlp.exe');
+  const ytdlpPath = bundledPath(TOOL_YTDLP_NAME);
   const toolsDir = ytdlpPath ? path.dirname(ytdlpPath) : path.join(__dirname, 'tools');
   const out = {};
   try { fs.mkdirSync(toolsDir, { recursive: true }); } catch {}
   // yt-dlp (18 MB, GitHub Release)
   try {
-    const tmp = path.join(toolsDir, 'yt-dlp.exe.tmp');
-    await downloadFile('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', tmp);
+    const tmp = path.join(toolsDir, TOOL_YTDLP_NAME + '.tmp');
+    await downloadFile(TOOL_YTDLP_URL, tmp);
     const ver = cmdVersion({ cmd: tmp }, '--version');
-    if (!ver) throw new Error('neues yt-dlp.exe startet nicht');
-    const cur = path.join(toolsDir, 'yt-dlp.exe');
+    if (!ver) throw new Error('neues ' + TOOL_YTDLP_NAME + ' startet nicht');
+    const cur = path.join(toolsDir, TOOL_YTDLP_NAME);
     try { fs.unlinkSync(cur + '.old'); } catch {}
     if (fs.existsSync(cur)) fs.renameSync(cur, cur + '.old');
     fs.renameSync(tmp, cur);
+    if (!IS_MAC) { try { fs.chmodSync(cur, 0o755); } catch {} }
     try { fs.unlinkSync(cur + '.old'); } catch {}
     out.ytdlp = ver;
   } catch (e) {
-    try { fs.unlinkSync(path.join(toolsDir, 'yt-dlp.exe.tmp')); } catch {}
+    try { fs.unlinkSync(path.join(toolsDir, TOOL_YTDLP_NAME + '.tmp')); } catch {}
     out.error = 'yt-dlp: ' + String(e.message || e);
   }
-  // ffmpeg + ffprobe (gyan.dev essentials-Zip, ~100 MB, via PowerShell entpacken)
+  // ffmpeg + ffprobe (Zip herunterladen und entpacken — Windows via
+  // PowerShell, macOS via unzip; Windows-Zip verschachtelt, macOS flach)
   const zip = path.join(toolsDir, 'ffmpeg-release.zip');
   const extractDir = path.join(toolsDir, 'ffmpeg-extract');
   try {
-    await downloadFile('https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip', zip);
+    await downloadFile(TOOL_FFMPEG_ZIP_URL, zip);
     fs.rmSync(extractDir, { recursive: true, force: true });
     fs.mkdirSync(extractDir, { recursive: true });
-    require('node:child_process').execFileSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${extractDir}' -Force`], { windowsHide: true, stdio: 'ignore' });
-    const ffmpegNew = findFileRecursive(extractDir, 'ffmpeg.exe');
-    const ffprobeNew = findFileRecursive(extractDir, 'ffprobe.exe');
+    if (IS_MAC) {
+      require('node:child_process').execFileSync('unzip', ['-o', '-q', zip, '-d', extractDir], { stdio: 'ignore' });
+    } else {
+      require('node:child_process').execFileSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${extractDir}' -Force`], { windowsHide: true, stdio: 'ignore' });
+    }
+    const ffmpegNew = findFileRecursive(extractDir, TOOL_FFMPEG_NAME);
+    const ffprobeNew = findFileRecursive(extractDir, TOOL_FFPROBE_NAME);
     if (!ffmpegNew || !ffprobeNew) throw new Error('ffmpeg/ffprobe nicht im Archiv gefunden');
     const v = cmdVersion({ cmd: ffmpegNew }, '-version');
-    if (!v) throw new Error('neues ffmpeg.exe startet nicht');
-    for (const name of ['ffmpeg.exe', 'ffprobe.exe']) {
+    if (!v) throw new Error('neues ' + TOOL_FFMPEG_NAME + ' startet nicht');
+    for (const name of [TOOL_FFMPEG_NAME, TOOL_FFPROBE_NAME]) {
       const cur = path.join(toolsDir, name);
-      const src = name === 'ffmpeg.exe' ? ffmpegNew : ffprobeNew;
+      const src = name === TOOL_FFMPEG_NAME ? ffmpegNew : ffprobeNew;
       try { fs.unlinkSync(cur + '.old'); } catch {}
       if (fs.existsSync(cur)) fs.renameSync(cur, cur + '.old');
       fs.copyFileSync(src, cur);
+      if (IS_MAC) { try { fs.chmodSync(cur, 0o755); } catch {} }
     }
-    for (const name of ['ffmpeg.exe', 'ffprobe.exe']) { try { fs.unlinkSync(path.join(toolsDir, name + '.old')); } catch {} }
+    for (const name of [TOOL_FFMPEG_NAME, TOOL_FFPROBE_NAME]) { try { fs.unlinkSync(path.join(toolsDir, name + '.old')); } catch {} }
     out.ffmpeg = v;
   } catch (e) {
     out.error = (out.error ? out.error + ' | ' : '') + 'ffmpeg: ' + String(e.message || e);
@@ -305,8 +334,8 @@ async function updateBundledTools() {
 // Same idea for spotDL: prefer the pip-installed `py -m spotdl`, fall back to PATH.
 function resolveSpotdl() {
   try {
-    require('node:child_process').execFileSync('py', ['-m', 'spotdl', '--version'], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
-    return { cmd: 'py', args: ['-m', 'spotdl'] };
+    require('node:child_process').execFileSync(IS_MAC ? 'python3' : 'py', ['-m', 'spotdl', '--version'], { stdio: 'ignore', windowsHide: true, timeout: TOOL_TIMEOUT });
+    return { cmd: IS_MAC ? 'python3' : 'py', args: ['-m', 'spotdl'] };
   } catch {}
   if (hasCommand('spotdl')) return { cmd: 'spotdl', args: [] };
   return null;
@@ -314,8 +343,8 @@ function resolveSpotdl() {
 
 const ytdlp = resolveYtdlp();
 const spotdl = resolveSpotdl();
-const ffmpegCmd = bundledCmd('ffmpeg.exe') || (hasCommand('ffmpeg') ? { cmd: 'ffmpeg', args: [] } : null);
-const ffprobeCmd = bundledCmd('ffprobe.exe') || (hasCommand('ffprobe') ? { cmd: 'ffprobe', args: [] } : null);
+const ffmpegCmd = bundledCmd(TOOL_FFMPEG_NAME) || (hasCommand('ffmpeg') ? { cmd: 'ffmpeg', args: [] } : null);
+const ffprobeCmd = bundledCmd(TOOL_FFPROBE_NAME) || (hasCommand('ffprobe') ? { cmd: 'ffprobe', args: [] } : null);
 // Directory of the ffmpeg/ffprobe we resolved to — passed to yt-dlp via
 // --ffmpeg-location so friends without ffmpeg on their PATH can still merge.
 // Only set when it's a real file path (bundled exe); PATH-resolved ffmpeg

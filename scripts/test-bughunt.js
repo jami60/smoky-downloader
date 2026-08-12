@@ -353,6 +353,34 @@ check('server.js: VIDEO_EXTS definiert + kind im Library-Scan', () => {
   assert.ok(srv.includes('LIBRARY_CACHE_MS'), 'Library-Cache fehlt');
   assert.ok(srv.includes('invalidateLibraryCache()'), 'Cache-Invalidierung fehlt');
 });
+check('server.js: Plattform-Tools für Windows + macOS (Mac-Build)', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes("const IS_MAC = process.platform === 'darwin'"), 'IS_MAC fehlt');
+  assert.ok(srv.includes("TOOL_YTDLP_NAME = IS_MAC ? 'yt-dlp' : 'yt-dlp.exe'"), 'TOOL_YTDLP_NAME fehlt');
+  assert.ok(srv.includes("TOOL_FFMPEG_NAME = IS_MAC ? 'ffmpeg' : 'ffmpeg.exe'"), 'TOOL_FFMPEG_NAME fehlt');
+  assert.ok(srv.includes('yt-dlp_macos'), 'macOS-yt-dlp-Download-URL fehlt');
+  assert.ok(srv.includes('ffmpeg.martin-riedl.de/redirect/latest/macos'), 'macOS-ffmpeg-URL fehlt');
+  assert.ok(srv.includes("IS_MAC ? 'python3' : 'py'"), 'Python-Auswahl (py/python3) fehlt');
+  assert.ok(srv.includes("'unzip', ['-o', '-q', zip, '-d', extractDir]"), 'unzip für macOS fehlt');
+});
+check('package.json: mac-Target + icns + make-icns-Skript', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  assert.ok(pkg.build.mac, 'mac-Build-Konfig fehlt');
+  assert.ok(pkg.build.mac.icon === 'electron/icon.icns', 'mac-Icon fehlt');
+  const targets = (pkg.build.mac.target || []).map((t) => (typeof t === 'string' ? t : t.target)).join(',');
+  assert.ok(targets.includes('dmg') && targets.includes('zip'), 'dmg/zip-Targets fehlen: ' + targets);
+  assert.ok(pkg.scripts['icon:mac'], 'icon:mac-Skript fehlt');
+  const icns = fs.readFileSync(path.join(__dirname, '..', 'electron', 'icon.icns'));
+  assert.ok(icns.toString('ascii', 0, 4) === 'icns', 'icon.icns ist kein valides icns');
+});
+check('.github/workflows/mac-release.yml: Mac-Build + Release-Upload', () => {
+  const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'mac-release.yml'), 'utf8');
+  assert.ok(wf.includes('macos-latest'), 'Kein macOS-Runner');
+  assert.ok(wf.includes('electron-builder --mac'), 'Kein --mac-Build');
+  assert.ok(wf.includes('make-icns.js'), 'Kein icns-Schritt');
+  assert.ok(wf.includes('gh release upload'), 'Kein Release-Upload');
+  assert.ok(wf.includes('Smoky-*-mac.zip'), 'Zip-Glob fehlt');
+});
 check('index.html: Video-Player (Toggle + <video> + currentMedia + Hotkeys)', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.ok(html.includes('mediaKindToggle'), 'Musik/Videos-Toggle fehlt');
@@ -367,6 +395,24 @@ check('main.js: Smoke-Probe videos prüft Toggle + Wiedergabe-Umschaltung', () =
   assert.ok(main.includes('videos: await (async () => {'), 'videos-Probe fehlt');
   assert.ok(main.includes('mediaKindToggle [data-kind="video"]'), 'Video-Toggle fehlt in Probe');
   assert.ok(main.includes('pv.style.display'), 'Video-Element-Check fehlt in Probe');
+});
+check('index.html: Mita-Toggle (Settings + Gating von Sticker/Toast)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="mitaToggle"'), 'Mita-Toggle fehlt in Settings');
+  assert.ok(html.includes("smoky-mita-disabled'"), 'Storage-Key smoky-mita-disabled fehlt');
+  assert.ok(html.includes('const mitaDisabled = () =>'), 'mitaDisabled-Helper fehlt');
+  assert.ok(html.includes('if (mitaDisabled()) return;'), 'mitaSay ist nicht gegated');
+  assert.ok(html.includes("if (mitaDisabled()) mitaSticker.style.display = 'none'"), 'Sticker-Hide beim Laden fehlt');
+  assert.ok(html.includes('settings.mitaCopy'), 'i18n-Key settings.mitaCopy fehlt');
+  assert.ok(html.includes("mita.off'"), 'i18n-Key mita.off fehlt');
+  assert.ok(html.includes("mita.on'"), 'i18n-Key mita.on fehlt');
+});
+check('main.js: Smoke-Probe mita prüft Toggle + Gating', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('mita: (() => {'), 'mita-Probe fehlt');
+  assert.ok(main.includes("toggle.dispatchEvent(new Event('change'))"), 'Probe nutzt nicht den Change-Event-Flow');
+  assert.ok(main.includes('mitaSay(\'PROBE-TEXT\')'), 'Probe ruft mitaSay nicht auf');
+  assert.ok(main.includes("localStorage.getItem('smoky-mita-disabled') === '1'"), 'Probe prüft Storage nicht');
 });
 check('main.js: Smoke-Probe tabs schaltet Views durch + prüft Shift (Home/Downloader)', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
