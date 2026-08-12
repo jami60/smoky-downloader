@@ -1,5 +1,6 @@
-# Baut die macOS-Version von Smoky auf einem macOS-Runner und veröffentlicht
-# die Artefakte (DMG + ZIP) als GitHub-Release. Auslöser:
+# Baut die macOS-Version von Smoky auf einem macOS-Runner und hängt die
+# Artefakte (DMG + ZIP) an eine GitHub-Release an — neu oder bestehend.
+# Auslöser:
 #   - manuell (workflow_dispatch, wähle Release-Tag)
 #   - automatisch, sobald ein Tag vX.Y.Z gepusht wird
 name: Mac Release
@@ -46,15 +47,17 @@ jobs:
             echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build + publish macOS app (dmg + zip)
-        run: npx electron-builder --mac --publish always
+      - name: Build macOS app (dmg + zip)
+        run: npx electron-builder --mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_TOKEN: ${{ github.token }}
 
-      - name: Verify release assets
+      - name: Attach artifacts to release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Mac-Artefakte an ${{ steps.release.outputs.tag }}:"
-          gh release view "${{ steps.release.outputs.tag }}" --json assets -q '.assets[].name'
+          TAG="${{ steps.release.outputs.tag }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Smoky $TAG" --generate-notes
+          gh release upload "$TAG" dist/Smoky-*-mac.zip dist/Smoky-*.dmg --clobber
+          echo "Mac-Artefakte an $TAG angehängt:"
+          gh release view "$TAG" --json assets -q '.assets[].name'

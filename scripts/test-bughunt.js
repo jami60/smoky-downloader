@@ -382,8 +382,9 @@ check('.github/workflows/mac-release.yml: Mac-Build + Release-Upload', () => {
   assert.ok(wf.includes('macos-latest'), 'Kein macOS-Runner');
   assert.ok(wf.includes('electron-builder --mac'), 'Kein --mac-Build');
   assert.ok(wf.includes('make-icns.js'), 'Kein icns-Schritt');
-  assert.ok(wf.includes('--publish always'), 'Kein Publish-Schritt (electron-builder)');
-  assert.ok(wf.includes('GH_TOKEN'), 'GH_TOKEN fehlt für electron-builder publish');
+  assert.ok(wf.includes('gh release upload'), 'Kein Release-Upload (gh)');
+  assert.ok(wf.includes('Smoky-*-mac.zip') && wf.includes('Smoky-*.dmg'), 'Mac-Globs fehlen');
+  assert.ok(wf.includes('--clobber'), '--clobber fehlt (bestehende Release überschreiben)');
 });
 check('index.html: Video-Player (Toggle + <video> + currentMedia + Hotkeys)', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
