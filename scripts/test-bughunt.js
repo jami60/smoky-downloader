@@ -328,5 +328,20 @@ check('Update-Batch: Relaunch entkoppelt von der Konsole (Start-Process)', () =>
   assert.strictEqual((body.match(/if errorlevel 1 start "" "!EXEC!"/g) || []).length, 3);
 });
 
+// ------------------------------------------- Tab-Shift (statische Checks) --
+// Regression: Beim Tab-Wechsel erschien/verschwand die klassische vertikale
+// Scrollbar (je nach Seitenhöhe) und verschob dadurch den zentrierten
+// main-Block sowie den Album-/Karten-Grid horizontal. scrollbar-gutter:stable
+// reserviert die Gutter-Spalte dauerhaft → kein Shift mehr.
+check('index.html: html reserviert scrollbar-gutter:stable (kein Karten-Shift)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(/html \{[^}]*scrollbar-gutter:stable/.test(html), 'scrollbar-gutter:stable fehlt im html-Block');
+});
+check('main.js: Smoke-Probe layout prüft Gutter-Stabilität', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('layout: (() => {'), 'layout-Probe fehlt');
+  assert.ok(main.includes("getComputedStyle(html).scrollbarGutter"), 'scrollbarGutter-Check fehlt in Probe');
+});
+
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);

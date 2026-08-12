@@ -516,6 +516,25 @@ app.whenReady().then(async () => {
               const ok = hasAll && srcOk && shuffleOk;
               return ok ? 'ok' : 'fail(list=' + list.length + ',src=' + srcName + ',shuffle=' + shuffleOk + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // Layout-Stabilität: klassische Scrollbar darf den Inhalt NICHT
+          // verschieben (Karten-Shift beim Tab-Wechsel). Mit scrollbar-gutter
+          // stable bleibt innerWidth + main konstant, egal ob die vertikale
+          // Scrollbar sichtbar ist oder nicht.
+          layout: (() => {
+            try {
+              const html = document.documentElement;
+              const mainEl = document.querySelector('main');
+              const m = () => ({ w: window.innerWidth, l: Math.round(mainEl.getBoundingClientRect().left), mw: Math.round(mainEl.getBoundingClientRect().width) });
+              html.style.overflowY = 'hidden';
+              const a = m();
+              html.style.overflowY = 'scroll';
+              const b = m();
+              html.style.overflowY = '';
+              const gutter = getComputedStyle(html).scrollbarGutter;
+              const ok = gutter === 'stable' && a.w === b.w && a.l === b.l && a.mw === b.mw;
+              return ok ? 'ok' : 'fail(gutter=' + gutter + ',w=' + a.w + '\u2192' + b.w + ',left=' + a.l + '\u2192' + b.l + ',mw=' + a.mw + '\u2192' + b.mw + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };
         })()`);

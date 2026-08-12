@@ -60,7 +60,7 @@
     [data-theme="horror"] .glow { background:#a31332; opacity:.15; }
     [data-theme="horror"] .app-shell::after { content:''; position:fixed; inset:0; z-index:3; pointer-events:none; opacity:.055; mix-blend-mode:screen; background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,80,99,.18) 4px,transparent 5px),linear-gradient(90deg,transparent 0 48%,rgba(255,25,61,.24) 49%,transparent 51%); animation:horrorFlicker 7s steps(2,end) infinite; }
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; scrollbar-color:var(--scroll-thumb) var(--scroll-track); scrollbar-width:thin; }
+    html { scroll-behavior: smooth; scrollbar-color:var(--scroll-thumb) var(--scroll-track); scrollbar-width:thin; scrollbar-gutter:stable; }
     *::-webkit-scrollbar { width:10px; height:10px; }
     *::-webkit-scrollbar-track { background:var(--scroll-track); border-left:1px solid var(--border); }
     *::-webkit-scrollbar-thumb { min-height:46px; border:2px solid var(--scroll-track); border-radius:999px; background:var(--scroll-thumb); box-shadow:0 0 12px color-mix(in srgb,var(--scroll-thumb) 38%,transparent); }
