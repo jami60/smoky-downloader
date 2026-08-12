@@ -20,6 +20,10 @@ discord.start();
 const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return '0.0.0'; } })();
 
 const SMOKE = process.argv.includes('--smoke');
+// Klassische (nicht Overlay-)Scrollbars erzwingen, damit der Smoke die
+// echte User-Umgebung abbildet (Overlay-Scrollbars nehmen keinen Platz und
+// würden den Tab-Shift unsichtbar machen).
+if (SMOKE) { try { app.commandLine.appendSwitch('disable-features', 'OverlayScrollbar'); } catch {} }
 let win = null;
 let browserWin = null; // separates In-App-Browser-Fenster (Variante B)
 
@@ -87,8 +91,8 @@ app.whenReady().then(async () => {
   }, 8000);
 
   win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: SMOKE ? 1920 : 1440,
+    height: SMOKE ? 1080 : 900,
     minWidth: 1080,
     minHeight: 680,
     frame: false,
@@ -534,6 +538,76 @@ app.whenReady().then(async () => {
               const gutter = getComputedStyle(html).scrollbarGutter;
               const ok = gutter === 'stable' && a.w === b.w && a.l === b.l && a.mw === b.mw;
               return ok ? 'ok' : 'fail(gutter=' + gutter + ',w=' + a.w + '\u2192' + b.w + ',left=' + a.l + '\u2192' + b.l + ',mw=' + a.mw + '\u2192' + b.mw + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // Tab-Wechsel end-to-end (klassische Scrollbars im echten Fenster):
+          // Durch alle Views schalten und main.left/innerWidth messen. Jede
+          // Verschiebung (z. B. durch Scrollbar-Toggle auf Home/Downloader)
+          // schlägt hier fehl. Zusätzlich wird der Fix selbst verifiziert:
+          // scrollbar-gutter:stable entfernen → der Shift MUSS auftreten
+          // (sonst wäre die Probe blind für den Bug).
+          tabs: await (async () => {
+            try {
+              const html = document.documentElement;
+              const mainEl = document.querySelector('main');
+              // Hohe Seiten erzwingen (Home/Downloader sind im echten Betrieb
+              // lang — Queue, History, Downloads). Ohne Länge kein Scrollbar-Toggle.
+              const tall = document.getElementById('homeGrid');
+              const prevMin = tall ? tall.style.minHeight : '';
+              if (tall) tall.style.minHeight = Math.max(2400, window.innerHeight * 2.2) + 'px';
+              const m = () => ({ w: window.innerWidth, l: Math.round(mainEl.getBoundingClientRect().left), mw: Math.round(mainEl.getBoundingClientRect().width) });
+              const snap = () => {
+                const pick = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { l: Math.round(r.left), w: Math.round(r.width) }; };
+                return {
+                  innerW: window.innerWidth, clientW: document.documentElement.clientWidth,
+                  bodyScrollW: document.body.scrollWidth, docScrollW: document.documentElement.scrollWidth,
+                  dsw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
+                  main: pick(mainEl), hero: pick(document.getElementById('homeHero')),
+                  dlPanel: pick(document.getElementById('downloadPanel')), grid: pick(document.getElementById('homeGrid')),
+                  queue: pick(document.querySelector('.queue-card')), side: pick(document.querySelector('.side-card')),
+                  wsCard: pick(document.querySelector('.workspace-card')), viewHeader: pick(document.querySelector('.view-header')),
+                };
+              };
+              const views = ['Home', 'Downloader', 'Browser', 'Player', 'Queue', 'Converter', 'History'];
+              const results = {};
+              for (const v of views) {
+                if (typeof showView === 'function') showView(v); else { document.querySelector('.nav-item[data-view="' + v + '"]')?.click(); }
+                await new Promise((r) => setTimeout(r, 420));
+                results[v] = snap();
+              }
+              // A) Mit Gutter-Fix: main + innerW müssen über ALLE Views identisch
+              // sein (die einzigen überall vorhandenen Vergleichsgrößen).
+              const base = results[views[0]];
+              const bad = views.filter((k) => (results[k].main && results[k].main.l) !== (base.main && base.main.l) || results[k].innerW !== base.innerW);
+              // B) Ohne Gutter-Fix (auf 'auto' setzen — '' würde nur die
+              // Inline-Deklaration entfernen und die Stylesheet-Regel stable
+              // wieder greifen lassen): der Shift MUSS auftreten, sonst ist die
+              // Probe blind. Kurze Seite + lange Seite vergleichen.
+              const gutterBefore = getComputedStyle(html).scrollbarGutter;
+              html.style.scrollbarGutter = 'auto';
+              showView('Home');
+              await new Promise((r) => setTimeout(r, 420));
+              const noGutterHome = m();
+              showView('Browser');
+              await new Promise((r) => setTimeout(r, 420));
+              const noGutterBrowser = m();
+              html.style.scrollbarGutter = gutterBefore;
+              const noGutterShift = noGutterHome.l !== noGutterBrowser.l || noGutterHome.w !== noGutterBrowser.w;
+              // Scrollbar-Breite messen: klassische Scrollbars → clientWidth < innerWidth.
+              // WICHTIG: bei der LANGEN Seite messen (Home ist künstlich hoch).
+              showView('Home');
+              await new Promise((r) => setTimeout(r, 420));
+              const sbWidth = window.innerWidth - document.documentElement.clientWidth;
+              const gutterOk = getComputedStyle(html).scrollbarGutter === 'stable';
+              if (tall) tall.style.minHeight = prevMin;
+              // noGutterShift nur fordern, wenn klassische Scrollbars existieren
+              // (sbW>0). Bei Overlay-Scrollbars (sbW=0) gibt es keinen Platz-
+              // Shift — dann ist die Probe nicht blind, sondern nicht anwendbar.
+              const ok = bad.length === 0 && gutterOk && (sbWidth === 0 || noGutterShift);
+              // Kompakte Diagnose: pro View nur die 3 wichtigsten left-Werte.
+              const brief = {};
+              for (const k of views) { const r = results[k]; brief[k] = { i: r.innerW, m: r.main && r.main.l, d: r.dlPanel && r.dlPanel.l, q: r.queue && r.queue.l, dsw: r.dsw, cw: r.cw }; }
+              return ok ? 'ok' : 'fail(shift=' + bad.map((k) => k + '(m' + (results[k].main && results[k].main.l) + ')').join(';') + ',gutter=' + gutterOk + ',noGutterShift=' + noGutterShift + ',sbW=' + sbWidth + ',brief=' + JSON.stringify(brief).replace(/"/g, '') + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };

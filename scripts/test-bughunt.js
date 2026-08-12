@@ -342,6 +342,13 @@ check('main.js: Smoke-Probe layout prüft Gutter-Stabilität', () => {
   assert.ok(main.includes('layout: (() => {'), 'layout-Probe fehlt');
   assert.ok(main.includes("getComputedStyle(html).scrollbarGutter"), 'scrollbarGutter-Check fehlt in Probe');
 });
+check('main.js: Smoke-Probe tabs schaltet Views durch + prüft Shift (Home/Downloader)', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes("tabs: await (async () => {"), 'tabs-Probe fehlt');
+  assert.ok(main.includes("html.style.scrollbarGutter = 'auto'"), 'Gutter-Deaktivierung fehlt in tabs-Probe');
+  assert.ok(main.includes("sbWidth === 0 || noGutterShift"), 'Overlay-Scrollbar-Absicherung fehlt');
+  assert.ok(main.includes("disable-features", "OverlayScrollbar"), 'Smoke erzwingt keine klassischen Scrollbars');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);
