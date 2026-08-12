@@ -372,6 +372,9 @@ check('package.json: mac-Target + icns + make-icns-Skript', () => {
   assert.ok(pkg.scripts['icon:mac'], 'icon:mac-Skript fehlt');
   const icns = fs.readFileSync(path.join(__dirname, '..', 'electron', 'icon.icns'));
   assert.ok(icns.toString('ascii', 0, 4) === 'icns', 'icon.icns ist kein valides icns');
+  const icnsScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'make-icns.js'), 'utf8');
+  assert.ok(!icnsScript.includes('ffmpeg'), 'make-icns.js darf kein ffmpeg brauchen (GitHub-Runner hat keins)');
+  assert.ok(icnsScript.includes('decodePNG') && icnsScript.includes('encodePNG'), 'make-icns.js braucht PNG-Decoder/Encoder');
 });
 check('.github/workflows/mac-release.yml: Mac-Build + Release-Upload', () => {
   const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'mac-release.yml'), 'utf8');
