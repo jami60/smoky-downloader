@@ -380,7 +380,7 @@ check('package.json: mac-Target + icns + make-icns-Skript', () => {
 check('.github/workflows/mac-release.yml: Mac-Build + Release-Upload', () => {
   const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'mac-release.yml'), 'utf8');
   assert.ok(wf.includes('macos-latest'), 'Kein macOS-Runner');
-  assert.ok(wf.includes('electron-builder --mac'), 'Kein --mac-Build');
+  assert.ok(wf.includes('electron-builder --mac --publish never'), 'Kein --mac-Build mit publish never');
   assert.ok(wf.includes('make-icns.js'), 'Kein icns-Schritt');
   assert.ok(wf.includes('gh release upload'), 'Kein Release-Upload (gh)');
   assert.ok(wf.includes('Smoky-*-mac.zip') && wf.includes('Smoky-*.dmg'), 'Mac-Globs fehlen');
