@@ -342,6 +342,32 @@ check('main.js: Smoke-Probe layout prüft Gutter-Stabilität', () => {
   assert.ok(main.includes('layout: (() => {'), 'layout-Probe fehlt');
   assert.ok(main.includes("getComputedStyle(html).scrollbarGutter"), 'scrollbarGutter-Check fehlt in Probe');
 });
+// ------------------------------------------- Video-Player (statisch) ----
+check('server.js: VIDEO_EXTS definiert + kind im Library-Scan', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(/VIDEO_EXTS = new Set\(\['\.mp4', '\.webm', '\.mkv', '\.mov'\]\)/.test(srv), 'VIDEO_EXTS fehlt');
+  assert.ok(srv.includes("kind: isVideo ? 'video' : 'audio'"), 'kind fehlt im Library-Scan');
+  assert.ok(srv.includes('VIDEO_EXTS.has(path.extname(e.name).toLowerCase())'), 'Videos fehlen im Scan-Walk');
+  assert.ok(srv.includes('function videoFrame'), 'videoFrame (Thumbnail) fehlt');
+  assert.ok(srv.includes('const isVideo = VIDEO_EXTS.has(path.extname(file).toLowerCase())'), 'coverFor erkennt Videos nicht');
+  assert.ok(srv.includes('LIBRARY_CACHE_MS'), 'Library-Cache fehlt');
+  assert.ok(srv.includes('invalidateLibraryCache()'), 'Cache-Invalidierung fehlt');
+});
+check('index.html: Video-Player (Toggle + <video> + currentMedia + Hotkeys)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('mediaKindToggle'), 'Musik/Videos-Toggle fehlt');
+  assert.ok(html.includes('<video id="playerVideo"'), 'playerVideo-Element fehlt');
+  assert.ok(html.includes('const currentMedia = () =>'), 'currentMedia-Helper fehlt');
+  assert.ok(html.includes("(tr.kind || 'audio') === 'video'"), 'Video-Erkennung im Render fehlt');
+  assert.ok(html.includes('player.kindVideo'), 'i18n-Key kindVideo fehlt');
+  assert.ok(html.includes('player.emptyVideo'), 'i18n-Key emptyVideo fehlt');
+});
+check('main.js: Smoke-Probe videos prüft Toggle + Wiedergabe-Umschaltung', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('videos: await (async () => {'), 'videos-Probe fehlt');
+  assert.ok(main.includes('mediaKindToggle [data-kind="video"]'), 'Video-Toggle fehlt in Probe');
+  assert.ok(main.includes('pv.style.display'), 'Video-Element-Check fehlt in Probe');
+});
 check('main.js: Smoke-Probe tabs schaltet Views durch + prüft Shift (Home/Downloader)', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
   assert.ok(main.includes("tabs: await (async () => {"), 'tabs-Probe fehlt');

@@ -39,6 +39,7 @@ const MIME = {
   '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.aac': 'audio/aac', '.webm': 'video/webm', '.mp4': 'video/mp4',
 };
 const AUDIO_EXTS = new Set(['.mp3', '.m4a', '.flac', '.wav', '.ogg', '.opus', '.aac']);
+const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mkv', '.mov']);
 // Formate, die spotDL selbst erzeugen kann (--format {mp3,flac,ogg,opus,m4a,wav}).
 // aac ist nicht dabei → fällt in launchItem auf mp3 zurück.
 const SPOT_FORMATS = new Set(['mp3', 'flac', 'ogg', 'opus', 'm4a', 'wav']);
@@ -908,6 +909,7 @@ function finish(item) {
   if (item._finished) return; // idempotent — 'error' + 'close' feuern nacheinander
   item._finished = true;
   item.finishedAt = now();
+  if (item.status === 'finished') invalidateLibraryCache();
   if (item.status === 'finished') {
     let size = null;
     try { if (item.file) size = fs.statSync(item.file).size; } catch {}
@@ -1187,6 +1189,7 @@ function startClipJob(body) {
       item.status = 'finished';
       item.percent = 100;
       item.output = outPath;
+      invalidateLibraryCache();
       // Temp-Dateien aufräumen (SMOKY_KEEP_TMP=1 behält sie fürs Debuggen)
       if (!process.env.SMOKY_KEEP_TMP) { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {} }
     } catch (err) {
@@ -1275,6 +1278,7 @@ function convertFile(id, srcPath, origName, format) {
           item.status = 'finished';
           item.percent = 100;
           item.output = outPath;
+          invalidateLibraryCache();
         } else {
           item.status = 'failed';
           item.error = (errTail.split(/\r?\n/).filter(Boolean).slice(-2).join(' | ')) || `ffmpeg exited with code ${code}`;
@@ -1599,7 +1603,17 @@ function probeTags(file) {
   });
 }
 
+// Library-Scan cachen (10 s): Der Scan läuft mit ffprobe pro Datei — bei
+// großen Bibliotheken (viele Videos) würde jeder /api/library-Aufruf Sekunden
+// dauern. Downloads/Conversions invalidieren den Cache explizit.
+let libraryCache = null;
+let libraryCacheAt = 0;
+const LIBRARY_CACHE_MS = 10000;
+function invalidateLibraryCache() { libraryCache = null; libraryCacheAt = 0; }
+
 async function scanLibrary() {
+  const cached = libraryCache;
+  if (cached && Date.now() - libraryCacheAt < LIBRARY_CACHE_MS) return cached;
   const files = [];
   const walk = async (dir, depth) => {
     if (depth > 2) return;
@@ -1608,18 +1622,21 @@ async function scanLibrary() {
     for (const e of entries) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) await walk(p, depth + 1);
-      else if (AUDIO_EXTS.has(path.extname(e.name).toLowerCase())) files.push(p);
+      else if (AUDIO_EXTS.has(path.extname(e.name).toLowerCase()) || VIDEO_EXTS.has(path.extname(e.name).toLowerCase())) files.push(p);
     }
   };
   await walk(settings.folder, 0);
   files.sort();
   const tracks = [];
   for (const f of files) {
+    const ext = path.extname(f).toLowerCase();
+    const isVideo = VIDEO_EXTS.has(ext);
     const tags = await probeTags(f);
     let size = 0;
     try { size = fs.statSync(f).size; } catch {}
     tracks.push({
       path: f,
+      kind: isVideo ? 'video' : 'audio',
       title: tags.title || path.basename(f, path.extname(f)),
       artist: tags.artist || '',
       album: tags.album || '',
@@ -1627,6 +1644,8 @@ async function scanLibrary() {
       size,
     });
   }
+  libraryCache = tracks;
+  libraryCacheAt = Date.now();
   return tracks;
 }
 
@@ -1706,6 +1725,17 @@ function extractCoverFrame(file, out, codec) {
   });
 }
 
+// Video-Thumbnail: einen Frame kurz nach Start ziehen (1 s — vermeidet den
+// oft schwarzen allerersten Frame) und quadratisch croppen wie Covers.
+function videoFrame(file, out) {
+  return new Promise((resolve) => {
+    const p = spawn(ffmpegCmd.cmd, ['-y', '-ss', '1', '-i', file, '-an', '-c:v', 'mjpeg', '-q:v', '4', '-vf', 'crop=min(iw\\,ih):min(iw\\,ih),scale=320:320', '-frames:v', '1', out], { windowsHide: true });
+    const timer = setTimeout(() => { try { p.kill(); } catch {} }, 15000);
+    p.on('error', () => { clearTimeout(timer); resolve(); });
+    p.on('close', () => { clearTimeout(timer); resolve(); });
+  });
+}
+
 // Beliebige Bilddatei quadratisch zentriert zuschneiden (z. B. das 16:9-WebP,
 // das yt-dlp als Schwester-Datei neben WAV/AAC schreibt).
 function squareCrop(src, out) {
@@ -1761,6 +1791,16 @@ async function coverFor(file) {
   // wieder als Cover dienen.
   for (const stale of [outJpg, outPng, path.join(coverDir, hash + '.jpg'), path.join(coverDir, hash + '.png')]) {
     try { if (fs.existsSync(stale)) fs.unlinkSync(stale); } catch {}
+  }
+  const isVideo = VIDEO_EXTS.has(path.extname(file).toLowerCase());
+  if (isVideo) {
+    // Video-Dateien haben kein eingebettetes Cover — stattdessen einen Frame
+    // aus dem Video als Thumbnail ziehen (16:9-Quadrat-Crop wie bei Covers).
+    await withCoverSlot(() => videoFrame(file, outJpg));
+    if (isValidImage(outJpg)) return outJpg;
+    await withCoverSlot(() => extractCoverFrame(file, outPng, 'png'));
+    if (isValidImage(outPng)) return outPng;
+    return null;
   }
   await withCoverSlot(() => extractCoverFrame(file, outJpg, 'mjpeg'));
   if (isValidImage(outJpg)) return outJpg;

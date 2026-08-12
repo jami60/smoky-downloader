@@ -265,6 +265,7 @@
     .player-meta{text-align:center;margin:20px 0 14px;min-height:52px}.player-meta strong{font:600 17px 'Space Grotesk';display:block;letter-spacing:-.02em}
     .player-meta span{display:block;color:var(--muted);font-size:12px;margin-top:5px}.player-meta span:last-child{color:var(--muted-2);font-size:10px;margin-top:2px}
     #playerWave{width:100%;height:92px;border-radius:12px;background:var(--surface);border:1px solid var(--border)}
+    #playerVideo{width:100%;max-height:420px;border-radius:16px;background:#000;border:1px solid var(--border);box-shadow:var(--shadow)}
     .player-seek{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px}
     .player-seek input[type=range]{flex:1;accent-color:var(--accent);height:4px;cursor:pointer}
     .player-seek span{font-size:10px;color:var(--muted-2);white-space:nowrap}
@@ -334,11 +335,12 @@
       </section>
       <section class="page-view" id="playerView">
         <div class="view-header"><div><div class="view-kicker" data-i18n="player.kicker">Player</div><h2 data-i18n="player.title">Your music, locally.</h2><p data-i18n="player.copy">Every audio download lives in your library — play it right here with cover, tags and a live waveform.</p></div><div style="display:flex;align-items:center;gap:12px"><span class="status progress" id="playerCount">0 tracks</span><button class="folder-btn" id="exportPlaylist" data-i18n="player.export">Export playlist</button></div></div>
-        <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px"><div class="view-toggle" id="libraryViewToggle"><button class="view-toggle-btn active" data-mode="songs" data-i18n="player.viewSongs">Songs</button><button class="view-toggle-btn" data-mode="albums" data-i18n="player.viewAlbums">Alben</button></div><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--muted-2);fill:none;stroke-width:1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="playerSearch" type="text" placeholder="Search tracks…" aria-label="Search tracks" data-i18n-ph="player.searchPh" style="flex:1;max-width:320px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;font-size:12px"><span id="playerSearchCount" style="font-size:10px;color:var(--muted-2)"></span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px"><div class="view-toggle" id="mediaKindToggle"><button class="view-toggle-btn active" data-kind="audio" data-i18n="player.kindAudio">Musik</button><button class="view-toggle-btn" data-kind="video" data-i18n="player.kindVideo">Videos</button></div><div class="view-toggle" id="libraryViewToggle"><button class="view-toggle-btn active" data-mode="songs" data-i18n="player.viewSongs">Songs</button><button class="view-toggle-btn" data-mode="albums" data-i18n="player.viewAlbums">Alben</button></div><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--muted-2);fill:none;stroke-width:1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="playerSearch" type="text" placeholder="Search tracks…" aria-label="Search tracks" data-i18n-ph="player.searchPh" style="flex:1;max-width:320px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;font-size:12px"><span id="playerSearchCount" style="font-size:10px;color:var(--muted-2)"></span></div>
         <div class="player-layout">
           <div class="player-list" id="playerList"><div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 6 3.5-6 3.5z"/></svg></div><span data-i18n="player.empty">Download some audio first — your tracks will appear here.</span></div></div>
           <div class="player-now">
             <div class="player-cover" id="playerCover"><img id="playerCoverImg" alt="Cover" style="display:none"><span id="playerCoverFallback">♪</span></div>
+            <video id="playerVideo" preload="metadata" controls playsinline style="display:none"></video>
             <div class="player-meta"><strong id="playerTitle" data-i18n="player.nothing">Nothing playing</strong><span id="playerArtist" data-i18n="player.pick">Pick a track from your library</span><span id="playerAlbum"></span></div>
             <canvas id="playerWave" height="92" aria-hidden="true"></canvas>
             <div class="player-seek"><input id="playerSeek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="playerTime">0:00 / 0:00</span></div>
@@ -458,7 +460,7 @@
         'url.ph':'Füge einen oder mehrere Video- / Audio-Links ein …','btn.paste':'Einfügen','btn.download':'Download','works.with':'Funktioniert mit','platforms.more':'+ 1.200 weitere ↗','folder.label':'Download-Ordner','folder.choose':'Ordner wählen','snow.toggle':'Ambient-Schnee',
         'queue.active':'Aktive Downloads','queue.count.empty':'Keine aktiven Downloads','queue.deleteFinished':'Fertige entfernen','queue.empty':'Deine Queue ist leer. Füge oben einen Link ein.','formats.title':'Ausgabeformate','formats.customize':'Anpassen','recent.title':'Zuletzt gespeichert','recent.viewall':'Alle anzeigen','recent.empty':'Noch keine lokalen Downloads.',
         'downloader.kicker':'Downloader','downloader.title':'Alles in einem ruhigen Ablauf.','downloader.copy':'Füge oben einen Link ein, wähle ein Format, einen lokalen Ordner — und Smoky übernimmt den Rest.','downloader.platforms':'Unterstützte Plattformen','downloader.platformsCopy':'Smoky nutzt yt-dlp für breite Plattform-Unterstützung.','downloader.stat1':'Video- & Audio-Seiten','downloader.stat2':'private Datei-Speicherung','downloader.stat3':'Live-Fortschrittsupdates','downloader.formats':'Formate auf einen Blick','downloader.video':'Video','downloader.audio':'Audio',
-        'player.kicker':'Player','player.title':'Deine Musik, lokal.','player.copy':'Jeder Audio-Download landet in deiner Bibliothek — hier abspielen mit Cover, Tags und Live-Waveform.','player.count':'Titel','player.empty':'Lade zuerst etwas Audio herunter — deine Tracks erscheinen hier.','player.nothing':'Nichts läuft','player.pick':'Wähle einen Track aus deiner Bibliothek','player.unknown':'Unbekannter Künstler','player.export':'Playlist exportieren','player.searchPh':'Tracks suchen …','player.searchEmpty':'Keine Treffer','player.viewSongs':'Songs','player.viewAlbums':'Alben','player.albumTracks':'Tracks','player.singles':'Einzeltracks','player.backAlbums':'← Alle Alben','player.playAlbum':'Album abspielen','player.albumsEmpty':'Noch keine Alben — Songs mit Album-Tag erscheinen hier als Alben.','tags.title':'Tags bearbeiten','tags.titleLabel':'Titel','tags.artistLabel':'Künstler','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Bild wählen…','tags.coverClear':'Entfernen','tags.coverNone':'Kein eigenes Cover','tags.coverHint':'Wird direkt in die Datei eingebettet (MP3, M4A, FLAC).','tags.cancel':'Abbrechen','tags.save':'Tags speichern','tags.saved':'Tags gespeichert','tags.failed':'Tags konnten nicht gespeichert werden','player.ctx.open':'Im Ordner öffnen','player.ctx.tags':'Tags bearbeiten','player.ctx.copy':'Pfad kopieren','player.ctx.ambient':'Ambient-Modus','player.ctx.copied':'Pfad kopiert','ambient.hint':'Klicken oder ESC zum Beenden',
+        'player.kicker':'Player','player.title':'Deine Musik, lokal.','player.copy':'Jeder Audio-Download landet in deiner Bibliothek — hier abspielen mit Cover, Tags und Live-Waveform.','player.count':'Titel','player.empty':'Lade zuerst etwas Audio herunter — deine Tracks erscheinen hier.','player.emptyVideo':'Lade zuerst Videos herunter — sie erscheinen hier.','player.nothing':'Nichts läuft','player.pick':'Wähle einen Track aus deiner Bibliothek','player.unknown':'Unbekannter Künstler','player.export':'Playlist exportieren','player.searchPh':'Tracks suchen …','player.searchEmpty':'Keine Treffer','player.kindAudio':'Musik','player.kindVideo':'Videos','player.viewSongs':'Songs','player.viewAlbums':'Alben','player.albumTracks':'Tracks','player.singles':'Einzeltracks','player.backAlbums':'← Alle Alben','player.playAlbum':'Album abspielen','player.albumsEmpty':'Noch keine Alben — Songs mit Album-Tag erscheinen hier als Alben.','tags.title':'Tags bearbeiten','tags.titleLabel':'Titel','tags.artistLabel':'Künstler','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Bild wählen…','tags.coverClear':'Entfernen','tags.coverNone':'Kein eigenes Cover','tags.coverHint':'Wird direkt in die Datei eingebettet (MP3, M4A, FLAC).','tags.cancel':'Abbrechen','tags.save':'Tags speichern','tags.saved':'Tags gespeichert','tags.failed':'Tags konnten nicht gespeichert werden','player.ctx.open':'Im Ordner öffnen','player.ctx.tags':'Tags bearbeiten','player.ctx.copy':'Pfad kopieren','player.ctx.ambient':'Ambient-Modus','player.ctx.copied':'Pfad kopiert','ambient.hint':'Klicken oder ESC zum Beenden',
         'converter.kicker':'Konverter','converter.title':'Forme deine Medien.','converter.copy':'Wandle eine lokale Video- oder Audiodatei mit FFmpeg um — alles bleibt auf deinem Gerät.','converter.head':'Lokaler Medien-Konverter','converter.hint':'💡 <b>MP3 → MP4:</b> Das Album-Cover wird zum Video, Titel / Künstler / Album bleiben in den Tags erhalten.','converter.pick':'Mediendateien wählen …','converter.convert':'Konvertieren','converter.ready':'Bereit zum Konvertieren','converter.converting':'Konvertiere lokal …','converter.files':'Dateien','converter.batchDone':'Dateien konvertiert','converter.countDone':'fertig','converter.ok':'erfolgreich','converter.failed':'fehlgeschlagen','converter.fail':'Konvertierung konnte nicht starten','converter.done':'Konvertierung fertig. Lokal gespeichert.','converter.err':'Konvertierung fehlgeschlagen',
         'clips.kicker':'Clips','clips.title':'Schneide den Moment.','clips.copy':'Füge eine YouTube-URL ein, wähle Start und Ende und lade nur den Teil, den du brauchst — bis 4K. Vertikale Clips (9:16) sind bereit für Shorts, TikTok und Reels.','clips.head':'Video-Clip-Schneider','clips.copy2':'Nur der gewählte Ausschnitt wird geladen — schnell und schlank.','clips.tip':'Tipp:','clips.tip2':'Im Player kannst du „Aktuelle Zeit übernehmen“ nutzen, um den exakten Moment zu erwischen.',        'clips.pick':'YouTube-Link einfügen …','clips.start':'Start','clips.end':'Ende','clips.cut':'Clip schneiden','clips.linkReady':'Link bereit — Start und Ende setzen, dann „Clip schneiden“.','clips.vertical':'Vertikal 9:16 (Shorts · TikTok · Reels)','clips.mode':'Modus','clips.crop':'Crop (ausfüllen)','clips.blur':'Blur-Hintergrund','clips.caption':'Caption','clips.captionPh':'Optionaler Text …','clips.preset15':'15s Short','clips.preset30':'30s Short','clips.preset60':'60s','clips.current':'⏱ Aktuelle Player-Zeit übernehmen','clips.empty':'Noch keine Clips — schneide oben deinen ersten Moment.','clips.nourl':'Klicke zuerst auf das Link-Feld und füge eine YouTube-URL ein.','clips.notime':'Setze Start- und Endzeit (z. B. 0:05 und 0:20).','clips.starting':'Starte Clip-Job …','clips.running':'Clip läuft — nur der gewählte Ausschnitt wird geladen.','clips.fail':'Konnte nicht starten:','clips.done':'Clip fertig. Lokal gespeichert.',
         'history.kicker':'Verlauf','stats.title':'Download-Statistiken','stats.total':'Downloads','stats.bytes':'Gesamtgröße','stats.week':'Diese Woche','stats.weekBytes':'Diese Woche · Größe','stats.topHost':'Top-Plattform','stats.avg':'Ø Dateigröße','history.title':'Deine lokale Bibliothek.','history.copy':'Zuletzt gespeicherte Dateien bleiben auf diesem Gerät. Kein Konto, kein Remote-Verlauf.',        'history.clear':'Verlauf leeren','history.repair':'Mit Bibliothek abgleichen','history.repaired':'History abgeglichen','history.removed':'Einträge entfernt (Datei fehlt)','history.kept':'behalten','history.allOk':'History ist aktuell — alle Dateien existieren.','history.repairFailed':'Abgleich fehlgeschlagen:','history.empty':'Dein lokaler Verlauf erscheint nach dem ersten Download hier.','history.cleared':'Lokaler Verlauf geleert. Deine Dateien liegen sicher in ihren Ordnern.',
@@ -505,7 +507,7 @@
         'url.ph':'Paste one or more video / audio links here…','btn.paste':'Paste','btn.download':'Download','works.with':'Works with','platforms.more':'+ 1,200 more ↗','folder.label':'Downloads folder','folder.choose':'Choose folder','snow.toggle':'Ambient snow',
         'queue.active':'Active downloads','queue.count.empty':'No active downloads','queue.deleteFinished':'Clear finished','queue.empty':'Your queue is clear. Paste a link above to begin.','formats.title':'Output formats','formats.customize':'Customize','recent.title':'Recently saved','recent.viewall':'View all','recent.empty':'No local downloads yet.',
         'downloader.kicker':'Downloader','downloader.title':'Everything in one calm flow.','downloader.copy':'Paste a link above, pick a format, choose a local folder, and let Smoky handle the rest.','downloader.platforms':'Supported platforms','downloader.platformsCopy':'Smoky uses yt-dlp for broad platform support.','downloader.stat1':'video & audio sites','downloader.stat2':'private file storage','downloader.stat3':'live progress updates','downloader.formats':'Formats at a glance','downloader.video':'Video','downloader.audio':'Audio',
-        'player.kicker':'Player','player.title':'Your music, locally.','player.copy':'Every audio download lives in your library — play it right here with cover, tags and a live waveform.','player.count':'tracks','player.empty':'Download some audio first — your tracks will appear here.','player.nothing':'Nothing playing','player.pick':'Pick a track from your library','player.unknown':'Unknown artist','player.export':'Export playlist','player.searchPh':'Search tracks…','player.searchEmpty':'No matches','player.viewSongs':'Songs','player.viewAlbums':'Albums','player.albumTracks':'tracks','player.singles':'Singles','player.backAlbums':'← All albums','player.playAlbum':'Play album','player.albumsEmpty':'No albums yet — songs with an album tag appear here as albums.','tags.title':'Edit tags','tags.titleLabel':'Title','tags.artistLabel':'Artist','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Choose image…','tags.coverClear':'Remove','tags.coverNone':'No custom cover','tags.coverHint':'Embedded directly into the file (MP3, M4A, FLAC).','tags.cancel':'Cancel','tags.save':'Save tags','tags.saved':'Tags saved','tags.failed':'Could not save tags','player.ctx.open':'Open folder','player.ctx.tags':'Edit tags','player.ctx.copy':'Copy path','player.ctx.ambient':'Ambient mode','player.ctx.copied':'Path copied','ambient.hint':'Click or ESC to exit',
+        'player.kicker':'Player','player.title':'Your music, locally.','player.copy':'Every audio download lives in your library — play it right here with cover, tags and a live waveform.','player.count':'tracks','player.empty':'Download some audio first — your tracks will appear here.','player.emptyVideo':'Download some videos first — they will appear here.','player.nothing':'Nothing playing','player.pick':'Pick a track from your library','player.unknown':'Unknown artist','player.export':'Export playlist','player.searchPh':'Search tracks…','player.searchEmpty':'No matches','player.kindAudio':'Music','player.kindVideo':'Videos','player.viewSongs':'Songs','player.viewAlbums':'Albums','player.albumTracks':'tracks','player.singles':'Singles','player.backAlbums':'← All albums','player.playAlbum':'Play album','player.albumsEmpty':'No albums yet — songs with an album tag appear here as albums.','tags.title':'Edit tags','tags.titleLabel':'Title','tags.artistLabel':'Artist','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Choose image…','tags.coverClear':'Remove','tags.coverNone':'No custom cover','tags.coverHint':'Embedded directly into the file (MP3, M4A, FLAC).','tags.cancel':'Cancel','tags.save':'Save tags','tags.saved':'Tags saved','tags.failed':'Could not save tags','player.ctx.open':'Open folder','player.ctx.tags':'Edit tags','player.ctx.copy':'Copy path','player.ctx.ambient':'Ambient mode','player.ctx.copied':'Path copied','ambient.hint':'Click or ESC to exit',
         'converter.kicker':'Converter','converter.title':'Shape your media.','converter.copy':'Convert a local video or audio file with FFmpeg while keeping everything on this device.','converter.head':'Local media converter','converter.hint':'💡 <b>MP3 → MP4:</b> The album cover becomes the video, and the title / artist / album tags are kept in the file.','converter.pick':'Choose media files…','converter.convert':'Convert','converter.ready':'Ready to convert','converter.converting':'Converting locally…','converter.files':'files','converter.batchDone':'files converted','converter.countDone':'done','converter.ok':'ok','converter.failed':'failed','converter.fail':'Conversion could not start','converter.done':'Conversion complete. Saved locally.','converter.err':'Conversion failed',
         'clips.kicker':'Clips','clips.title':'Cut the moment.','clips.copy':'Paste a YouTube URL, choose the start and end, and download only the part you need — up to 4K. Vertically styled clips (9:16) are ready for YouTube Shorts, TikTok and Reels.','clips.head':'Video clip cutter','clips.copy2':'Only the selected section is downloaded — fast and lean.','clips.tip':'Tip:','clips.tip2':'In the Player you can use “Use current time” to grab the exact moment.',        'clips.pick':'Paste a YouTube link…','clips.start':'Start','clips.end':'End','clips.cut':'Cut clip','clips.linkReady':'Link ready — set start and end, then hit “Cut clip”.','clips.vertical':'Vertical 9:16 (Shorts · TikTok · Reels)','clips.mode':'Mode','clips.crop':'Crop to fill','clips.blur':'Blurred background','clips.caption':'Caption','clips.captionPh':'Optional text overlay…','clips.preset15':'15s Short','clips.preset30':'30s Short','clips.preset60':'60s','clips.current':'⏱ Use current player time','clips.empty':'No clips yet — cut your first moment above.','clips.nourl':'Click the link field and paste a YouTube URL first.','clips.notime':'Set a start and end time (e.g. 0:05 and 0:20).','clips.starting':'Starting clip job…','clips.running':'Clip running — only the selected section is downloaded.','clips.fail':'Could not start:','clips.done':'Clip finished. Saved locally.',
         'history.kicker':'History','stats.title':'Download statistics','stats.total':'downloads','stats.bytes':'total size','stats.week':'this week','stats.weekBytes':'this week · size','stats.topHost':'top platform','stats.avg':'avg. file size','history.title':'Your local library.','history.copy':'Recently saved files stay on this device. No account or remote history is created.',        'history.clear':'Clear history','history.repair':'Match with library','history.repaired':'History matched','history.removed':'entries removed (file missing)','history.kept':'kept','history.allOk':'History is current — all files exist.','history.repairFailed':'Match failed:','history.empty':'Your local history will appear here after the first download.','history.cleared':'Local history cleared. Your files are still safe in their folders.',
@@ -1215,6 +1217,7 @@
     document.getElementById('repairHistory')?.addEventListener('click', async () => { try { const res = await fetch('/api/history-repair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const d = await res.json(); if (d && typeof d.removed === 'number') toast(d.removed ? `${t('history.repaired')} — ${d.removed} ${t('history.removed')}, ${d.kept} ${t('history.kept')}` : t('history.allOk')); else toast(`${t('history.repairFailed')} ${escapeHtml(d && d.error || '')}`); } catch (e) { toast(`${t('history.repairFailed')} ${escapeHtml(e.message || '')}`); } });
     // ------------------------------------------------------------- player ---
     const playerAudio = document.getElementById('playerAudio');
+    const playerVideo = document.getElementById('playerVideo');
     const playerList = document.getElementById('playerList');
     const playerCoverImg = document.getElementById('playerCoverImg');
     const playerCoverFallback = document.getElementById('playerCoverFallback');
@@ -1234,9 +1237,24 @@
     const savedPlayerVolume = (() => { try { const v = localStorage.getItem('smoky-player-volume'); return v === null ? null : Number(v); } catch { return null; } })();
     const initialPlayerVolume = savedPlayerVolume !== null && Number.isFinite(savedPlayerVolume) && savedPlayerVolume >= 0 && savedPlayerVolume <= 100 ? savedPlayerVolume : 80;
     playerAudio.volume = initialPlayerVolume / 100;
+    playerVideo.volume = initialPlayerVolume / 100;
     playerVolume.value = initialPlayerVolume;
     playerVolumeValue.textContent = initialPlayerVolume + '%';
-    playerVolume.addEventListener('input', () => { const v = Number(playerVolume.value); playerAudio.volume = v / 100; playerVolumeValue.textContent = v + '%'; try { localStorage.setItem('smoky-player-volume', String(v)); } catch {} });
+    playerVolume.addEventListener('input', () => { const v = Number(playerVolume.value); playerAudio.volume = v / 100; playerVideo.volume = v / 100; playerVolumeValue.textContent = v + '%'; try { localStorage.setItem('smoky-player-volume', String(v)); } catch {} });
+    // Aktives Medienelement: Audio-Track → <audio>, Video-Track → <video>.
+    const currentMedia = () => (currentIndex >= 0 && library[currentIndex] && library[currentIndex].kind === 'video') ? playerVideo : playerAudio;
+    // Welche Art die Liste zeigt (Toggle „Musik / Videos“).
+    let mediaKind = 'audio'; // 'audio' | 'video'
+    const mediaKindToggle = document.getElementById('mediaKindToggle');
+    if (mediaKindToggle) mediaKindToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-kind]');
+      if (!btn) return;
+      mediaKind = btn.dataset.kind;
+      mediaKindToggle.querySelectorAll('.view-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      if (mediaKind === 'video') { libraryView = 'songs'; const v = document.getElementById('libraryViewToggle'); if (v) v.style.display = 'none'; }
+      else { const v = document.getElementById('libraryViewToggle'); if (v) v.style.display = ''; }
+      renderLibrary();
+    });
     let library = [];
     let currentIndex = -1;
     let shuffleOn = false, repeatOn = false;
@@ -1277,7 +1295,7 @@
     function filteredIndices() {
       const q = playerQuery.trim().toLowerCase();
       const idx = [];
-      library.forEach((tr, i) => { if (trackMatches(tr, q)) idx.push(i); });
+      library.forEach((tr, i) => { if ((tr.kind || 'audio') === (mediaKind || 'audio') && trackMatches(tr, q)) idx.push(i); });
       return idx;
     }
     // Album = Album-Tag, sofern er nicht identisch mit dem Titel ist (wie im Listen-Meta).
@@ -1356,17 +1374,20 @@
         } else albumOpen = null;
         if (countEl) countEl.textContent = '';
       } else if (countEl) {
-        countEl.textContent = q ? (idx.length ? idx.length + ' / ' + library.length : t('player.searchEmpty')) : '';
+        const total = library.filter((tr) => (tr.kind || 'audio') === (mediaKind || 'audio')).length;
+        countEl.textContent = q ? (idx.length ? idx.length + ' / ' + total : t('player.searchEmpty')) : '';
       }
       if (!idx.length) {
-        playerList.innerHTML = head + '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 6 3.5-6 3.5z"/></svg></div><span>' + (q ? t('player.searchEmpty') : t('player.empty')) + '</span></div>';
+        playerList.innerHTML = head + '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 6 3.5-6 3.5z"/></svg></div><span>' + (q ? t('player.searchEmpty') : (mediaKind === 'video' ? t('player.emptyVideo') : t('player.empty'))) + '</span></div>';
         return;
       }
       playerList.innerHTML = head + idx.map((i) => {
         const tr = library[i];
+        const isVideo = (tr.kind || 'audio') === 'video';
+        const glyph = isVideo ? '▶' : '♪';
         return `
         <div class="player-track ${i === currentIndex ? 'playing' : ''}" data-index="${i}">
-          <div class="pt-cover"><img src="${coverUrl(tr.path)}" alt="" loading="lazy" onerror="this.remove()"><span>♪</span></div>
+          <div class="pt-cover"><img src="${coverUrl(tr.path)}" alt="" loading="lazy" onerror="this.remove()"><span>${glyph}</span></div>
           <div class="pt-meta"><b>${escapeHtml(tr.title)}</b><span>${escapeHtml(tr.artist || t('player.unknown'))}${(tr.album && tr.album.trim().toLowerCase() !== String(tr.title || '').trim().toLowerCase()) ? ' · ' + escapeHtml(tr.album) : ''}</span></div>
           <span class="pt-dur">${tr.duration ? fmtDur(tr.duration) : ''}</span>
         </div>`;
@@ -1496,7 +1517,7 @@
       try {
         if (currentIndex >= 0) {
           localStorage.setItem('smoky-last-track', library[currentIndex].path);
-          localStorage.setItem('smoky-last-position', String(playerAudio.currentTime || 0));
+          localStorage.setItem('smoky-last-position', String(currentMedia().currentTime || 0));
         }
       } catch {}
     };
@@ -1511,8 +1532,18 @@
       playbackResumed = true;
       const track = library[i];
       currentIndex = i;
-      playerAudio.src = playUrl(track.path);
-      startVis();
+      const isVideo = (track.kind || 'audio') === 'video';
+      playerCover.style.display = isVideo ? 'none' : '';
+      playerVideo.style.display = isVideo ? '' : 'none';
+      playerWave.style.display = isVideo ? 'none' : '';
+      if (isVideo) {
+        playerAudio.pause(); playerAudio.removeAttribute('src');
+        playerVideo.src = playUrl(track.path);
+      } else {
+        playerVideo.pause(); playerVideo.removeAttribute('src');
+        playerAudio.src = playUrl(track.path);
+        startVis();
+      }
       playerTitleEl.textContent = track.title;
       playerArtistEl.textContent = track.artist || t('player.unknown');
       setPlayerAlbum(track.album);
@@ -1520,13 +1551,14 @@
       playerCoverImg.style.display = '';
       playerCoverImg.onerror = () => { playerCoverImg.style.display = 'none'; };
       renderLibrary();
-      loadWaveform(track.path);
+      if (!isVideo) loadWaveform(track.path);
+      const media = isVideo ? playerVideo : playerAudio;
       if (savedPos > 1) {
-        playerAudio.addEventListener('loadedmetadata', () => {
-          try { if (playerAudio.currentTime < 1 && playerAudio.duration) playerAudio.currentTime = Math.min(savedPos, Math.max(0, playerAudio.duration - 0.5)); } catch {}
+        media.addEventListener('loadedmetadata', () => {
+          try { if (media.currentTime < 1 && media.duration) media.currentTime = Math.min(savedPos, Math.max(0, media.duration - 0.5)); } catch {}
         }, { once: true });
       }
-      playerAudio.play().catch(() => {});
+      media.play().catch(() => {});
       sendPlayerState(true);
       updateMediaSession();
     }
@@ -1539,9 +1571,26 @@
       // überdecken — bei Tracks ohne Künstler warf t.artist || t('player.unknown')
       // einen TypeError und brach playTrack mitten ab (kein Render, kein Sync).
       const track = library[i];
-      playerAudio.src = playUrl(track.path);
-      startVis();
-      playerAudio.play().catch(() => {});
+      const isVideo = (track.kind || 'audio') === 'video';
+      // Video → <video>-Element mit nativen Controls, Cover/Waveform aus.
+      // Audio → wie bisher <audio> + Cover + Waveform.
+      playerCover.style.display = isVideo ? 'none' : '';
+      playerVideo.style.display = isVideo ? '' : 'none';
+      playerWave.style.display = isVideo ? 'none' : '';
+      if (isVideo) {
+        playerAudio.pause();
+        playerAudio.removeAttribute('src');
+        try { playerAudio.load(); } catch {}
+        playerVideo.src = playUrl(track.path);
+        playerVideo.play().catch(() => {});
+      } else {
+        playerVideo.pause();
+        playerVideo.removeAttribute('src');
+        try { playerVideo.load(); } catch {}
+        playerAudio.src = playUrl(track.path);
+        startVis();
+        playerAudio.play().catch(() => {});
+      }
       playerTitleEl.textContent = track.title;
       playerArtistEl.textContent = track.artist || t('player.unknown');
       setPlayerAlbum(track.album);
@@ -1549,12 +1598,14 @@
       playerCoverImg.style.display = '';
       playerCoverImg.onerror = () => { playerCoverImg.style.display = 'none'; };
       renderLibrary();
-      loadWaveform(track.path);
+      if (!isVideo) loadWaveform(track.path);
       sendPlayerState(true);
       saveLastPlayback();
       updateMediaSession();
       try { if (bgAudio && !bgAudio.paused) { bgAudio.pause(); if (musicToggle) musicToggle.setAttribute('aria-pressed', 'false'); } } catch {}
     }
+    // Nächster/vorheriger Track im Rahmen der sichtbaren Liste (Musik/Videos),
+    // inkl. Album-Queue und Shuffle — Video-Modus bleibt bei Videos.
     function nextTrack() {
       if (!library.length) return;
       if (playQueue && playQueue.length) {
@@ -1562,21 +1613,28 @@
         playTrack(playQueue[playQueuePos]);
         return;
       }
-      if (shuffleOn && library.length > 1) {
-        let n = Math.floor(Math.random() * library.length);
-        while (n === currentIndex) n = Math.floor(Math.random() * library.length);
+      const list = filteredIndices();
+      if (!list.length) return;
+      const pos = list.indexOf(currentIndex);
+      if (shuffleOn && list.length > 1) {
+        let n = list[Math.floor(Math.random() * list.length)];
+        while (n === currentIndex) n = list[Math.floor(Math.random() * list.length)];
         playTrack(n);
-      } else playTrack((currentIndex + 1) % library.length);
+      } else playTrack(list[(pos + 1) % list.length]);
     }
     function prevTrack() {
       if (!library.length) return;
-      if (playerAudio.currentTime > 3) { playerAudio.currentTime = 0; return; }
+      const media = currentMedia();
+      if (media.currentTime > 3) { media.currentTime = 0; return; }
       if (playQueue && playQueue.length) {
         playQueuePos = (playQueuePos - 1 + playQueue.length) % playQueue.length;
         playTrack(playQueue[playQueuePos]);
         return;
       }
-      playTrack((currentIndex - 1 + library.length) % library.length);
+      const list = filteredIndices();
+      if (!list.length) return;
+      const pos = list.indexOf(currentIndex);
+      playTrack(list[(pos - 1 + list.length) % list.length]);
     }
     // System-Media-Controls (Windows-Overlay, Media-Keys): Titel/Künstler/Cover an
     // das Betriebssystem melden — sonst zeigt Windows nur das ♫-Platzhalter-Symbol.
@@ -1585,30 +1643,30 @@
       try {
         const track = currentIndex >= 0 ? library[currentIndex] : null;
         if (!track) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; return; }
+        const media = currentMedia();
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title || 'Smoky',
           artist: track.artist || t('player.unknown'),
           album: track.album || '',
           artwork: [{ src: coverUrl(track.path), sizes: '512x512' }],
         });
-        navigator.mediaSession.playbackState = playerAudio.paused ? 'paused' : 'playing';
+        navigator.mediaSession.playbackState = media.paused ? 'paused' : 'playing';
       } catch { /* MediaSession nicht verfügbar */ }
     };
     if ('mediaSession' in navigator) {
       try {
-        navigator.mediaSession.setActionHandler('play', () => { playerAudio.play().catch(() => {}); });
-        navigator.mediaSession.setActionHandler('pause', () => playerAudio.pause());
+        navigator.mediaSession.setActionHandler('play', () => { currentMedia().play().catch(() => {}); });
+        navigator.mediaSession.setActionHandler('pause', () => currentMedia().pause());
         navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
         navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
-        navigator.mediaSession.setActionHandler('seekto', (d) => { if (playerAudio.duration && typeof d.seekTime === 'number') playerAudio.currentTime = d.seekTime; });
+        navigator.mediaSession.setActionHandler('seekto', (d) => { const m = currentMedia(); if (m.duration && typeof d.seekTime === 'number') m.currentTime = d.seekTime; });
       } catch {}
     }
     // Play/Pause umschalten — genutzt vom Play-Button, von den Medien-Keys
     // und von den Hotkeys (F5). Startet Track 0, wenn noch nichts geladen ist.
     function togglePlay() {
       if (currentIndex < 0) { if (library.length) playTrack(0); }
-      else if (playerAudio.paused) playerAudio.play().catch(() => {});
-      else playerAudio.pause();
+      else { const m = currentMedia(); if (m.paused) m.play().catch(() => {}); else m.pause(); }
     }
     // Medien-Hotkeys wie in Spotify/Browsern: F4 = zurück, F5 = Play/Pause, F6 = weiter.
     // Wirken ohne Modifier (Ctrl/Alt), damit Shortcuts wie Ctrl+F5 nicht blockiert werden.
@@ -1628,20 +1686,32 @@
         else if (action === 'next') nextTrack();
       });
     }
-    playerAudio.addEventListener('timeupdate', () => {
-      if (playerAudio.duration) {
-        const p = playerAudio.currentTime / playerAudio.duration;
+    // Zeit/Play/Pause/Ende — auf beiden Medienelementen registrieren, damit
+    // Video-Tracks (playerVideo) dieselben Steuerungen nutzen wie Audio.
+    const onTimeUpdate = () => {
+      const m = currentMedia();
+      if (m.duration) {
+        const p = m.currentTime / m.duration;
         playerSeek.value = Math.round(p * 1000);
-        playerTimeEl.textContent = fmtDur(playerAudio.currentTime) + ' / ' + fmtDur(playerAudio.duration);
+        playerTimeEl.textContent = fmtDur(m.currentTime) + ' / ' + fmtDur(m.duration);
         if (wavePeaks && !visAnalyser) drawWave(p);
       }
       const now = Date.now();
       if (now - lastPosSaveAt > 2000) { lastPosSaveAt = now; saveLastPlayback(); }
-    });
-    playerAudio.addEventListener('play', () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); sendPlayerState(true); updateMediaSession(); });
-    playerAudio.addEventListener('pause', () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; sendPlayerState(false); saveLastPlayback(); updateMediaSession(); });
-    playerAudio.addEventListener('ended', () => { if (repeatOn) { playerAudio.currentTime = 0; playerAudio.play().catch(() => {}); } else nextTrack(); });
-    playerSeek.addEventListener('input', () => { if (playerAudio.duration) playerAudio.currentTime = (playerSeek.value / 1000) * playerAudio.duration; });
+    };
+    const onPlay = () => { playerPlayBtn.innerHTML = PAUSE_ICON; playerPlayBtn.title = 'Pause'; if (visCtx && visCtx.state === 'suspended') visCtx.resume().catch(() => {}); sendPlayerState(true); updateMediaSession(); };
+    const onPause = () => { playerPlayBtn.innerHTML = PLAY_ICON; playerPlayBtn.title = 'Play'; sendPlayerState(false); saveLastPlayback(); updateMediaSession(); };
+    const onEnded = () => { const m = currentMedia(); if (repeatOn) { m.currentTime = 0; m.play().catch(() => {}); } else nextTrack(); };
+    const onSeekInput = () => { const m = currentMedia(); if (m.duration) m.currentTime = (playerSeek.value / 1000) * m.duration; };
+    playerAudio.addEventListener('timeupdate', onTimeUpdate);
+    playerVideo.addEventListener('timeupdate', onTimeUpdate);
+    playerAudio.addEventListener('play', onPlay);
+    playerVideo.addEventListener('play', onPlay);
+    playerAudio.addEventListener('pause', onPause);
+    playerVideo.addEventListener('pause', onPause);
+    playerAudio.addEventListener('ended', onEnded);
+    playerVideo.addEventListener('ended', onEnded);
+    playerSeek.addEventListener('input', onSeekInput);
     playerPlayBtn.addEventListener('click', togglePlay);
     document.getElementById('playerNext').addEventListener('click', nextTrack);
     document.getElementById('playerPrev').addEventListener('click', prevTrack);
@@ -1669,6 +1739,9 @@
       e.preventDefault();
       ctxTrack = library[parseInt(tr.dataset.index, 10)];
       if (!ctxTrack) return;
+      // Ambient ist ein Audio-Visualizer — bei Video-Tracks ohne Funktion.
+      const ambientBtn = ctxMenu.querySelector('[data-ctx="ambient"]');
+      if (ambientBtn) ambientBtn.style.display = (ctxTrack.kind || 'audio') === 'video' ? 'none' : '';
       ctxMenu.style.display = 'flex';
       ctxMenu.style.left = Math.min(e.clientX, innerWidth - 190) + 'px';
       ctxMenu.style.top = Math.min(e.clientY, innerHeight - 150) + 'px';

@@ -521,6 +521,65 @@ app.whenReady().then(async () => {
               return ok ? 'ok' : 'fail(list=' + list.length + ',src=' + srcName + ',shuffle=' + shuffleOk + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
           })(),
+          // Video-Player: Musik/Videos-Toggle, kind-Filter, <video>-Element bei
+          // Video-Tracks (Cover/Waveform aus), Next/Prev bleiben bei Videos.
+          videos: await (async () => {
+            try {
+              const oLib = library, oQuery = playerQuery, oKind = mediaKind, oView = libraryView, oIdx = currentIndex;
+              library = [
+                { path: 'X:\\smoky-reg\\s1.mp3', title: 'Song One', artist: 'A', album: '', kind: 'audio' },
+                { path: 'X:\\smoky-reg\\s2.mp3', title: 'Song Two', artist: 'B', album: '', kind: 'audio' },
+                { path: 'X:\\smoky-reg\\v1.mp4', title: 'Video One', artist: '', album: '', kind: 'video' },
+                { path: 'X:\\smoky-reg\\v2.mp4', title: 'Video Two', artist: '', album: '', kind: 'video' },
+              ];
+              playerQuery = ''; currentIndex = -1;
+              const audioBtn = document.querySelector('#mediaKindToggle [data-kind="audio"]');
+              const videoBtn = document.querySelector('#mediaKindToggle [data-kind="video"]');
+              if (audioBtn) audioBtn.click();
+              await new Promise((r) => setTimeout(r, 60));
+              const audioRows = [...document.querySelectorAll('.player-track')].map((r) => r.textContent);
+              const audioOnly = audioRows.length === 2 && audioRows.join('|').includes('Song One') && audioRows.join('|').includes('Song Two') && !audioRows.join('|').includes('Video');
+              const albumToggleVisible = !!document.getElementById('libraryViewToggle') && document.getElementById('libraryViewToggle').style.display !== 'none';
+              if (videoBtn) videoBtn.click();
+              await new Promise((r) => setTimeout(r, 60));
+              const videoRows = [...document.querySelectorAll('.player-track')].map((r) => r.textContent);
+              const videoOnly = videoRows.length === 2 && videoRows.join('|').includes('Video One') && videoRows.join('|').includes('Video Two') && !videoRows.join('|').includes('Song');
+              const albumToggleHidden = document.getElementById('libraryViewToggle').style.display === 'none';
+              // Video-Track abspielen → <video> sichtbar, <audio> pausiert
+              const calls = [];
+              const oPT = playTrack;
+              playTrack = (i) => calls.push(i);
+              const rowsAfter = [...document.querySelectorAll('.player-track')];
+              const vIdx = library.findIndex((t) => t.title === 'Video One');
+              playTrack = oPT;
+              playTrack(vIdx);
+              await new Promise((r) => setTimeout(r, 80));
+              const pv = document.getElementById('playerVideo');
+              const pa = document.getElementById('playerAudio');
+              const pc = document.getElementById('playerCover');
+              const pw = document.getElementById('playerWave');
+              const videoShown = pv.style.display !== 'none' && !!pv.src && pc.style.display === 'none' && pw.style.display === 'none';
+              const mediaEl = (typeof currentMedia === 'function') ? currentMedia() : null;
+              const mediaIsVideo = mediaEl === pv;
+              // Zurück zu Audio → <audio> wieder aktiv
+              const sIdx = library.findIndex((t) => t.title === 'Song One');
+              playTrack(sIdx);
+              await new Promise((r) => setTimeout(r, 80));
+              const audioShown = pa.src && pv.style.display === 'none' && pc.style.display !== 'none';
+              const mediaIsAudio = currentMedia() === pa;
+              // Next/Prev bleiben bei Videos (Stub aktiv lassen — nextTrack
+              // ruft playTrack auf, das in calls landet)
+              playTrack = (i) => calls.push(i);
+              nextTrack();
+              const nextStayedVideo = calls.length > 0 && library[calls[calls.length - 1]].kind === 'video';
+              // Zurücksetzen
+              document.querySelector('#mediaKindToggle [data-kind="audio"]').click();
+              library = oLib; playerQuery = oQuery; mediaKind = oKind; libraryView = oView; currentIndex = oIdx;
+              renderLibrary();
+              const ok = audioOnly && albumToggleVisible && videoOnly && albumToggleHidden && videoShown && mediaIsVideo && audioShown && mediaIsAudio && nextStayedVideo;
+              return ok ? 'ok' : 'fail(audioOnly=' + audioOnly + ',albumToggle=' + albumToggleVisible + ',videoOnly=' + videoOnly + ',albumHidden=' + albumToggleHidden + ',videoShown=' + videoShown + ',mediaVideo=' + mediaIsVideo + ',audioShown=' + audioShown + ',mediaAudio=' + mediaIsAudio + ',nextVideo=' + nextStayedVideo + ',rows=' + videoRows.length + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
           // Layout-Stabilität: klassische Scrollbar darf den Inhalt NICHT
           // verschieben (Karten-Shift beim Tab-Wechsel). Mit scrollbar-gutter
           // stable bleibt innerWidth + main konstant, egal ob die vertikale

@@ -210,6 +210,7 @@ async function json(base, path, opts) {
   check('GET / → Alben-Ansicht ausgeliefert (Toggle + Grid-CSS + i18n)', idx.status === 200 && idxText.includes('libraryViewToggle') && idxText.includes('.album-grid') && idxText.includes('player.viewAlbums') && idxText.includes('player.playAlbum') && idxText.includes('player.singles'));
   check('GET / → Hintergrundmusik: 5 Tracks im Shuffle (3 alte + 2 neue)', idx.status === 200 && idxText.includes("'assets/bg-music.wav', 'assets/bg-2.wav', 'assets/bg-3.wav', 'assets/bg-4.mp3', 'assets/bg-5.mp3'") && idxText.includes('pickNextBgTrack'));
   check('GET / → scrollbar-gutter:stable (kein Karten-Shift beim Tab-Wechsel)', idx.status === 200 && /html \{[^}]*scrollbar-gutter:stable/.test(idxText));
+  check('GET / → Video-Player ausgeliefert (Toggle + video-Element + i18n)', idx.status === 200 && idxText.includes('mediaKindToggle') && idxText.includes('playerVideo') && idxText.includes('player.kindAudio') && idxText.includes('player.kindVideo') && idxText.includes('player.emptyVideo') && idxText.includes('currentMedia'));
   const bg4 = await fetch(base + '/assets/bg-4.mp3');
   check('GET /assets/bg-4.mp3 (Piedkies – landfall) → 200 + audio', bg4.status === 200 && (bg4.headers.get('content-type') || '').startsWith('audio'), 'status=' + bg4.status);
   const bg5 = await fetch(base + '/assets/bg-5.mp3');
