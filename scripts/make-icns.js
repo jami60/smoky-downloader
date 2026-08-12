@@ -1,6 +1,6 @@
 // Generates the Smoky macOS app icon (electron/icon.icns) from the designed
-// 2000x2000 source (electron/icon-source.png) — zero dependencies (no ffmpeg,
-// no iconutil), so it runs on any GitHub Actions runner.
+// 2000x2000 source (electron/icon-source.png) — zero dependencies (no
+// external binaries), so it runs on any GitHub Actions runner.
 // Modern .icns stores PNG data directly per icon type.
 const fs = require('node:fs');
 const path = require('node:path');
