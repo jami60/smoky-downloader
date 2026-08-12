@@ -367,6 +367,7 @@ check('package.json: mac-Target + icns + make-icns-Skript', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.build.mac, 'mac-Build-Konfig fehlt');
   assert.ok(pkg.build.mac.icon === 'electron/icon.icns', 'mac-Icon fehlt');
+  assert.ok(!('electronDist' in pkg.build), 'electronDist-Override blockiert den Mac-Build (Windows-Pfad existiert auf dem Runner nicht)');
   const targets = (pkg.build.mac.target || []).map((t) => (typeof t === 'string' ? t : t.target)).join(',');
   assert.ok(targets.includes('dmg') && targets.includes('zip'), 'dmg/zip-Targets fehlen: ' + targets);
   assert.ok(pkg.scripts['icon:mac'], 'icon:mac-Skript fehlt');

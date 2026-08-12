@@ -30,7 +30,6 @@
   "build": {
     "appId": "de.smoky.app",
     "productName": "Smoky",
-    "electronDist": "node_modules/electron/dist",
     "npmRebuild": false,
     "directories": {
       "output": "dist"
