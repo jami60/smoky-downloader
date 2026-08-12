@@ -12,6 +12,17 @@ Ein ruhiger, lokaler Multi-Media-Downloader für Windows. Videos, Musik, Playlis
 
 > Alternativ: Die portable Version `Smoky-1.8.2-win.zip` entpacken und `Smoky.exe` starten (z. B. vom USB-Stick, keine Installation nötig).
 
+### macOS (Apple Silicon)
+
+1. **`Smoky-1.13.5-arm64.dmg`** herunterladen und Smoky nach `/Applications` ziehen
+2. Einmal im Terminal ausführen (der Build ist nicht notarized, Gatekeeper blockt sonst den Start):
+
+   ```
+   xattr -cr "/Applications/Smoky.app"
+   ```
+
+3. Smoky starten — fertig
+
 ---
 
 ## Erste Schritte
