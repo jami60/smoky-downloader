@@ -148,6 +148,10 @@ function hasCommand(cmd) {
 // mit, macOS nutzt unix-Binaries (werden beim ersten Tools-Update in den
 // tools-Ordner geholt — dort sucht bundledPath() dann auch).
 const IS_MAC = process.platform === 'darwin';
+// Fallback-Installationshinweise, falls kein Tool gefunden wird (die App lädt
+// die Binaries normalerweise selbst über „Tools aktualisieren“).
+const YTDLP_INSTALL_HINT = IS_MAC ? 'brew install yt-dlp' : 'py -m pip install -U yt-dlp';
+const SPOTDL_INSTALL_HINT = IS_MAC ? 'python3 -m pip install -U spotdl' : 'py -m pip install -U spotdl';
 const TOOL_YTDLP_NAME = IS_MAC ? 'yt-dlp' : 'yt-dlp.exe';
 const TOOL_FFMPEG_NAME = IS_MAC ? 'ffmpeg' : 'ffmpeg.exe';
 const TOOL_FFPROBE_NAME = IS_MAC ? 'ffprobe' : 'ffprobe.exe';
@@ -268,7 +272,15 @@ function findFileRecursive(dir, name) {
 
 async function updateBundledTools() {
   const ytdlpPath = bundledPath(TOOL_YTDLP_NAME);
-  const toolsDir = ytdlpPath ? path.dirname(ytdlpPath) : path.join(__dirname, 'tools');
+  // Wichtiger macOS-Fix: Im gepackten Build liegt server.js im read-only
+  // app.asar — __dirname/tools wäre dort nicht beschreibbar. Deshalb auf
+  // resources/tools ausweichen (ausserhalb des asar, wird beim ersten Update
+  // angelegt). Dev (ohne resourcesPath) nutzt weiter __dirname/tools.
+  const toolsDir = ytdlpPath
+    ? path.dirname(ytdlpPath)
+    : (typeof process.resourcesPath === 'string'
+        ? path.join(process.resourcesPath, 'tools')
+        : path.join(__dirname, 'tools'));
   const out = {};
   try { fs.mkdirSync(toolsDir, { recursive: true }); } catch {}
   // yt-dlp (18 MB, GitHub Release)
@@ -324,8 +336,11 @@ async function updateBundledTools() {
     try { fs.unlinkSync(zip); } catch {}
     try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
   }
-  // Nach dem Austausch der Binaries den gecachten Stand aktualisieren, damit
-  // /api/status die neuen Versionen meldet (ohne erneuten execFileSync pro Poll).
+  // Nach dem Austausch der Binaries die Tool-Auflösung neu laden (sonst bliebe
+  // ytdlp auf einem frischen Mac `null` bis zum Neustart) und den gecachten
+  // Versions-Stand aktualisieren, damit /api/status die neuen Versionen meldet
+  // (ohne erneuten execFileSync pro Poll).
+  try { reloadTools(); } catch {}
   try { refreshToolVersions(); } catch {}
   out.ok = !out.error;
   return out;
@@ -341,28 +356,46 @@ function resolveSpotdl() {
   return null;
 }
 
-const ytdlp = resolveYtdlp();
-const spotdl = resolveSpotdl();
-const ffmpegCmd = bundledCmd(TOOL_FFMPEG_NAME) || (hasCommand('ffmpeg') ? { cmd: 'ffmpeg', args: [] } : null);
-const ffprobeCmd = bundledCmd(TOOL_FFPROBE_NAME) || (hasCommand('ffprobe') ? { cmd: 'ffprobe', args: [] } : null);
+// Tool-Auflösung ist veränderlich: Beim ersten Start auf einem frischen Mac
+// ist kein yt-dlp/ffmpeg vorhanden — erst „Tools aktualisieren“ lädt die
+// Binaries herunter. Deshalb als `let` halten und nach einem Tools-Update über
+// reloadTools() neu auflösen, damit Downloads sofort (ohne Neustart) laufen.
+let ytdlp = null;
+let spotdl = null;
+let ffmpegCmd = null;
+let ffprobeCmd = null;
 // Directory of the ffmpeg/ffprobe we resolved to — passed to yt-dlp via
 // --ffmpeg-location so friends without ffmpeg on their PATH can still merge.
 // Only set when it's a real file path (bundled exe); PATH-resolved ffmpeg
 // needs no hint.
-const FFMPEG_DIR = ffmpegCmd && ffmpegCmd.cmd.includes(path.sep) && fs.existsSync(ffmpegCmd.cmd)
-  ? path.dirname(ffmpegCmd.cmd)
-  : null;
+let FFMPEG_DIR = null;
 // Prepending the bundled tools dir to PATH guarantees that yt-dlp and spotDL
 // (which spawn ffmpeg/ffprobe themselves for postprocessing) find the bundled
 // copy — belt and braces on top of --ffmpeg-location, and the only mechanism
 // spotDL honours.
-const TOOL_ENV = FFMPEG_DIR
-  ? { ...process.env, PATH: `${FFMPEG_DIR}${path.delimiter}${process.env.PATH || ''}` }
-  : process.env;
-const YTDLP_OK = !!ytdlp;
-const SPOTDL_OK = !!spotdl;
-const FFMPEG_OK = !!ffmpegCmd;
-const FFPROBE_OK = !!ffprobeCmd;
+let TOOL_ENV = process.env;
+let YTDLP_OK = false;
+let SPOTDL_OK = false;
+let FFMPEG_OK = false;
+let FFPROBE_OK = false;
+
+function reloadTools() {
+  ytdlp = resolveYtdlp();
+  spotdl = resolveSpotdl();
+  ffmpegCmd = bundledCmd(TOOL_FFMPEG_NAME) || (hasCommand('ffmpeg') ? { cmd: 'ffmpeg', args: [] } : null);
+  ffprobeCmd = bundledCmd(TOOL_FFPROBE_NAME) || (hasCommand('ffprobe') ? { cmd: 'ffprobe', args: [] } : null);
+  FFMPEG_DIR = ffmpegCmd && ffmpegCmd.cmd.includes(path.sep) && fs.existsSync(ffmpegCmd.cmd)
+    ? path.dirname(ffmpegCmd.cmd)
+    : null;
+  TOOL_ENV = FFMPEG_DIR
+    ? { ...process.env, PATH: `${FFMPEG_DIR}${path.delimiter}${process.env.PATH || ''}` }
+    : process.env;
+  YTDLP_OK = !!ytdlp;
+  SPOTDL_OK = !!spotdl;
+  FFMPEG_OK = !!ffmpegCmd;
+  FFPROBE_OK = !!ffprobeCmd;
+}
+reloadTools();
 // Einmalig beim Start ermitteln (danach nur noch nach einem Tools-Update).
 refreshToolVersions();
 
@@ -607,7 +640,7 @@ function launchItem(item) {
   if (isSpot) {
     if (!SPOTDL_OK) {
       item.status = 'failed';
-      item.error = 'spotDL is not installed. Run: py -m pip install -U spotdl';
+      item.error = `spotDL is not installed. Run: ${SPOTDL_INSTALL_HINT}`;
       finish(item);
       return;
     }
@@ -626,7 +659,7 @@ function launchItem(item) {
   } else {
     if (!YTDLP_OK) {
       item.status = 'failed';
-      item.error = 'yt-dlp is not installed. Run: py -m pip install -U yt-dlp';
+      item.error = `yt-dlp is not installed. Run: ${YTDLP_INSTALL_HINT}`;
       finish(item);
       return;
     }
@@ -896,7 +929,7 @@ async function listPlaylistTracks(url) {
       return await spotifyEmbedTracks(url);
     } catch { /* Fallback unten */ }
     // 2) Bisheriger Weg: spotDL save (Alben, private Playlists).
-    if (!SPOTDL_OK) throw new Error('spotDL is not installed. Run: py -m pip install -U spotdl');
+    if (!SPOTDL_OK) throw new Error(`spotDL is not installed. Run: ${SPOTDL_INSTALL_HINT}`);
     const tmp = path.join(os.tmpdir(), 'smoky-playlist-' + crypto.randomBytes(4).toString('hex') + '.spotdl');
     let spotdlErr = null;
     try {
@@ -919,7 +952,7 @@ async function listPlaylistTracks(url) {
       ? 'Spotify blockiert Album-Listen gerade (Album-Embeds abgeschafft). Nutze die Playlist des Albums oder füge die Track-Links einzeln ein.'
       : ('Die Playlist konnte nicht geladen werden. ' + (spotdlErr && spotdlErr.message ? spotdlErr.message.slice(0, 120) : '')));
   }
-  if (!YTDLP_OK) throw new Error('yt-dlp is not installed. Run: py -m pip install -U yt-dlp');
+  if (!YTDLP_OK) throw new Error(`yt-dlp is not installed. Run: ${YTDLP_INSTALL_HINT}`);
   const json = await runCmdOut(ytdlp.cmd, [...ytdlp.args, '--flat-playlist', '--no-warnings', '-J', url], 60000);
   const parsed = JSON.parse(json);
   const entries = (parsed && parsed.entries) || [];
@@ -1100,7 +1133,7 @@ function startClipJob(body) {
 
   (async () => {
     try {
-      if (!YTDLP_OK) throw new Error('yt-dlp is not installed. Run: py -m pip install -U yt-dlp');
+      if (!YTDLP_OK) throw new Error(`yt-dlp is not installed. Run: ${YTDLP_INSTALL_HINT}`);
       if (item.start === null || item.end === null || item.end <= item.start) throw new Error('Invalid time range — set a valid start and end.');
       if (item.end - item.start > 15 * 60) throw new Error('Clips are limited to 15 minutes.');
       if (!FFMPEG_OK) throw new Error('ffmpeg is not installed — the clip cutter needs it.');

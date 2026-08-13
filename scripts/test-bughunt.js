@@ -362,6 +362,13 @@ check('server.js: Plattform-Tools für Windows + macOS (Mac-Build)', () => {
   assert.ok(srv.includes('ffmpeg.martin-riedl.de/redirect/latest/macos'), 'macOS-ffmpeg-URL fehlt');
   assert.ok(srv.includes("IS_MAC ? 'python3' : 'py'"), 'Python-Auswahl (py/python3) fehlt');
   assert.ok(srv.includes("'unzip', ['-o', '-q', zip, '-d', extractDir]"), 'unzip für macOS fehlt');
+  // macOS-Tools-Flow: schreibbarer Ort (resources/tools statt read-only asar),
+  // Neuauflösung nach Update (reloadTools) + plattformgerechte Install-Hints.
+  assert.ok(srv.includes('path.join(process.resourcesPath, \'tools\')'), 'resources/tools-Fallback fehlt');
+  assert.ok(/function reloadTools\(\)[\s\S]*?reloadTools\(\);/.test(srv), 'reloadTools fehlt');
+  assert.ok(srv.includes('try { reloadTools(); } catch {}'), 'reloadTools nach Tools-Update fehlt');
+  assert.ok(srv.includes("IS_MAC ? 'brew install yt-dlp' : 'py -m pip install -U yt-dlp'"), 'YTDLP_INSTALL_HINT fehlt');
+  assert.ok(srv.includes('${YTDLP_INSTALL_HINT}'), 'YTDLP_INSTALL_HINT wird nicht genutzt');
 });
 check('package.json: mac-Target + icns + make-icns-Skript', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
