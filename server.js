@@ -1582,6 +1582,32 @@ function invalidateCoverCache(file) {
   }
 }
 
+// Ersetzt eine Zieldatei durch eine fertig geschriebene Temp-Datei — robust
+// gegen Windows-Dateisperren (Player/Explorer/Antivirus). Rename ist atomar;
+// scheitert er kurz (EPERM/EACCES/EBUSY, z. B. weil die Datei noch im Player
+// geladen ist), wird kurz gewartet, danach als Fallback kopiert + Temp gelöscht.
+async function replaceFileAtomic(tmp, target) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      fs.renameSync(tmp, target);
+      return true;
+    } catch (e) {
+      // ENOENT = Temp weg → aufgeben. Nur Sperr-Fehler kurz retrien.
+      if (e.code === 'ENOENT' || !['EPERM', 'EACCES', 'EBUSY'].includes(e.code)) break;
+      await new Promise((r) => setTimeout(r, 100 + attempt * 120));
+    }
+  }
+  // Letzte Rettung: Ziel überschreiben (kopieren) statt atomar umbenennen.
+  try {
+    fs.copyFileSync(tmp, target);
+    fs.rmSync(tmp, { force: true });
+    return true;
+  } catch {
+    try { fs.rmSync(tmp, { force: true }); } catch {}
+    return false;
+  }
+}
+
 // ------------------------------------------------------------- HTTP app ----
 function sendJson(res, code, obj) {
   // Defensiv: Der Request kann schon zerstört sein (z. B. „body too large"),
@@ -2491,7 +2517,8 @@ const server = http.createServer(async (req, res) => {
         coverTmp = writeCoverTemp(body.cover);
         if (!coverTmp) return sendJson(res, 400, { error: 'invalid cover image' });
       }
-      const tmp = file.slice(0, -ext.length) + '.tagfix' + ext;
+      const stem = ext ? file.slice(0, -ext.length) : file;
+      const tmp = stem + '.tagfix' + ext;
       const args = ['-y', '-i', file];
       if (coverTmp) args.push('-i', coverTmp);
       args.push('-map', '0:a');
@@ -2512,11 +2539,16 @@ const server = http.createServer(async (req, res) => {
       await new Promise((resolve) => {
         const p = spawn(ffmpegCmd.cmd, args, { windowsHide: true });
         p.on('error', () => resolve());
-        p.on('close', (code) => {
+        p.on('close', async (code) => {
           try {
-            if (code === 0 && fs.existsSync(tmp)) { fs.renameSync(tmp, file); ok = true; }
-            else fs.rmSync(tmp, { force: true });
-          } catch { try { fs.rmSync(tmp, { force: true }); } catch {} }
+            if (code !== 0 || !fs.existsSync(tmp)) {
+              fs.rmSync(tmp, { force: true });
+            } else {
+              ok = await replaceFileAtomic(tmp, file);
+            }
+          } catch {
+            try { fs.rmSync(tmp, { force: true }); } catch {}
+          }
           resolve();
         });
       });

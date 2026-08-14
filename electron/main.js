@@ -690,7 +690,7 @@ app.whenReady().then(async () => {
                   wsCard: pick(document.querySelector('.workspace-card')), viewHeader: pick(document.querySelector('.view-header')),
                 };
               };
-              const views = ['Home', 'Downloader', 'Browser', 'Player', 'Queue', 'Converter', 'History'];
+              const views = ['Home', 'Browser', 'Player', 'Queue', 'Converter', 'History'];
               const results = {};
               for (const v of views) {
                 if (typeof showView === 'function') showView(v); else { document.querySelector('.nav-item[data-view="' + v + '"]')?.click(); }

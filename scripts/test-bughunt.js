@@ -523,5 +523,26 @@ check('„Senden ans Handy“: Share-Server + Token + QR + UI', () => {
   assert.ok(main.includes('share: (() => {'), 'Smoke-Probe share fehlt');
 });
 
+check('Polish: Downloader-Seite entfernt (kein Nav-Item, kein View)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(!html.includes('data-view="Downloader"'), 'Nav-Item data-view="Downloader" existiert noch');
+  assert.ok(!html.includes('id="downloaderView"'), 'downloaderView existiert noch');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(!main.includes("'Downloader'"), 'Smoke-Views-Array referenziert Downloader noch');
+});
+check('Polish: Edit-Tags robust (Datei-Freigabe + Rename-Fallback)', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes('function replaceFileAtomic'), 'replaceFileAtomic fehlt');
+  assert.ok(srv.includes('fs.copyFileSync(tmp, target)'), 'Copy-Fallback fehlt in replaceFileAtomic');
+  assert.ok(srv.includes("'EPERM', 'EACCES', 'EBUSY'"), 'Sperr-Fehler-Retry fehlt');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('// Windows sperrt die Datei'), 'Player-Datei wird vor dem Speichern nicht freigegeben');
+});
+check('Polish: Kein Auto-Play beim App-Start (restoreLastPlayback)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('// Kein Auto-Play beim App-Start'), 'Auto-Play-Hinweis fehlt in restoreLastPlayback');
+  assert.ok(!html.includes('media.play().catch(() => {});'), 'Auto-Play (media.play) in restoreLastPlayback noch vorhanden');
+});
+
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);
