@@ -507,6 +507,9 @@ check('„Senden ans Handy“: Share-Server + Token + QR + UI', () => {
   assert.ok(srv.includes("listen(SHARE_PORT, '0.0.0.0'"), 'Share-Server bindet nicht auf 0.0.0.0');
   assert.ok(srv.includes('function createShareToken'), 'createShareToken fehlt');
   assert.ok(srv.includes('function lanIPv4'), 'lanIPv4 fehlt');
+  assert.ok(srv.includes('VIRTUAL_IF_RE'), 'VPN-/virtuelle-Adapter-Filter fehlt');
+  assert.ok(srv.includes('function isCgnatIPv4'), 'CGNAT-Tunnel-Filter fehlt (NordLynx 100.66.x)');
+  assert.ok(srv.includes('function isPrivateIPv4'), 'RFC-1918-Erkennung fehlt');
   assert.ok(srv.includes('shareServerPromise'), 'Idempotenz-Schutz (shareServerPromise) fehlt');
   // Der Haupt-Server muss auf 127.0.0.1 bleiben (Secrets nie im LAN).
   assert.ok(!srv.includes("server.listen(port, '0.0.0.0'"), 'Haupt-Server darf nicht auf 0.0.0.0 binden');

@@ -1670,15 +1670,59 @@ function isInsideFolder(file, folder) {
 }
 
 // -------------------------------------------------------- phone share ----
-// Erste nicht-interne IPv4 des Rechners (für die QR-/Link-URL im WLAN).
-function lanIPv4() {
-  const ifs = os.networkInterfaces();
+// Muster für virtuelle/VPN-Adapter, deren IP vom Handy aus NICHT erreichbar
+// ist (NordVPN/NordLynx, WireGuard, ZeroTier, Tailscale, Hamachi, Docker,
+// Hyper-V, VirtualBox, WSL …). Ohne diesen Filter würde z. B. die erste
+// NordLynx-IP (100.66.x) statt der echten WLAN-IP in den QR-Code geraten und
+// das Handy liefe ins Leere („Seite lädt nicht“).
+const VIRTUAL_IF_RE = /virtual|vbox|vmware|hyper-?v|vethernet|loopback|tunnel|\btap\b|\btun\b|vpn|nord|lynx|wireguard|zerotier|tailscale|hamachi|radmin|proton|wsl|docker|utun|llw/i;
+
+// CGNAT-Tunnelbereich (100.64.0.0/10): fast immer ein VPN-/Carrier-Tunnel,
+// nie die Adresse, unter der ein Handy im selben WLAN den PC erreicht.
+function isCgnatIPv4(ip) {
+  const p = String(ip || '').split('.').map(Number);
+  return p.length === 4 && p[0] === 100 && p[1] >= 64 && p[1] <= 127;
+}
+
+// RFC-1918-Heimnetz-Bereiche: 10.x, 172.16–31.x, 192.168.x.
+function isPrivateIPv4(ip) {
+  const p = String(ip || '').split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  if (p[0] === 10) return true;
+  if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return true;
+  if (p[0] === 192 && p[1] === 168) return true;
+  return false;
+}
+
+// Alle nicht-internen IPv4-Adressen inkl. Adaptername. `interfaces` ist nur
+// für Tests injizierbar (Standard: echte os.networkInterfaces()).
+function lanIPv4Candidates(interfaces) {
+  const ifs = interfaces || os.networkInterfaces();
+  const out = [];
   for (const name of Object.keys(ifs)) {
     for (const ni of ifs[name] || []) {
-      if (ni && ni.family === 'IPv4' && !ni.internal) return ni.address;
+      if (ni && ni.family === 'IPv4' && !ni.internal) out.push({ name, address: ni.address });
     }
   }
-  return null;
+  return out;
+}
+
+function rankIPv4(ip) {
+  const p = String(ip || '').split('.').map(Number);
+  if (p[0] === 192 && p[1] === 168) return 0;   // häufigstes Heim-WLAN
+  if (p[0] === 10) return 1;
+  if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return 2;
+  return 3;
+}
+
+// Beste IPv4 für den QR-/Link-URL: VPN-/virtuelle Adapter und CGNAT-Tunnel
+// werden übersprungen, private Heimnetz-IPs (192.168.x zuerst) bevorzugt.
+function lanIPv4(interfaces) {
+  const all = lanIPv4Candidates(interfaces);
+  const real = all.filter((c) => !VIRTUAL_IF_RE.test(c.name) && !isCgnatIPv4(c.address));
+  const pool = real.length ? real : all;
+  const ranked = pool.slice().sort((a, b) => rankIPv4(a.address) - rankIPv4(b.address));
+  return ranked.length ? ranked[0].address : null;
 }
 
 function pruneShareTokens() {
@@ -2602,7 +2646,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, lanIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
+module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
 
 if (require.main === module) {
   startServer();

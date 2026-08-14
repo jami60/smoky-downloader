@@ -212,6 +212,27 @@ check('createShareToken: fehlende Datei → error', !!missing.error, JSON.string
 // LAN-IP-Erkennung darf nicht crashen und (im WLAN) eine IPv4 liefern oder null sein.
 check('lanIPv4: Funktion liefert String/null', lanIPv4() === null || /^\d+\.\d+\.\d+\.\d+$/.test(lanIPv4()), String(lanIPv4()));
 
+// Regression: VPN-/virtuelle Adapter dürfen NICHT als LAN-IP gewählt werden —
+// sonst zeigt der QR-Code auf die NordLynx-Tunnel-IP (100.66.x) und das Handy
+// lädt die Seite nie („Seite lädt nicht“).
+const vpnIfs = {
+  'NordLynx': [{ address: '100.66.6.169', family: 'IPv4', internal: false }],
+  'WLAN': [{ address: '192.168.178.79', family: 'IPv4', internal: false }],
+  'Loopback Pseudo-Interface 1': [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+};
+check('lanIPv4: überspringt VPN-Adresse (NordLynx 100.66.x)', lanIPv4(vpnIfs) === '192.168.178.79', String(lanIPv4(vpnIfs)));
+
+const vpnOnly = { 'NordLynx': [{ address: '100.66.6.169', family: 'IPv4', internal: false }] };
+check('lanIPv4: nur VPN vorhanden → Fallback auf VPN-IP statt null', lanIPv4(vpnOnly) === '100.66.6.169', String(lanIPv4(vpnOnly)));
+
+const prio = {
+  'Ethernet': [{ address: '10.0.0.5', family: 'IPv4', internal: false }],
+  'WLAN': [{ address: '192.168.1.20', family: 'IPv4', internal: false }],
+};
+check('lanIPv4: bevorzugt 192.168.x vor 10.x', lanIPv4(prio) === '192.168.1.20', String(lanIPv4(prio)));
+
+check('lanIPv4: keine Interfaces → null', lanIPv4({}) === null, String(lanIPv4({})));
+
 (async () => {
   const port = await startServer(0, true);
   const base = `http://127.0.0.1:${port}`;
