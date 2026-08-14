@@ -11,7 +11,7 @@ const assert = require('node:assert');
 
 const { findExistingSpotFiles, spotFormatFor, displayTitle, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar, settings } = require('../server.js');
 const { history } = require('../server.js');
-const { buildUpdateBat } = require('../electron/updater.js');
+const { buildUpdateBat, buildUpdateSh } = require('../electron/updater.js');
 const { spawnSync } = require('node:child_process');
 
 let failures = 0;
@@ -326,6 +326,23 @@ check('Update-Batch: Relaunch entkoppelt von der Konsole (Start-Process)', () =>
   const body = buildUpdateBat({ newAsar: 'n', targetAsar: 't', tmp: 'x', execPath: 'e', markerBase: 'm', failFile: 'f' });
   assert.strictEqual((body.match(/Start-Process -FilePath '!EXEC!'/g) || []).length, 3);
   assert.strictEqual((body.match(/if errorlevel 1 start "" "!EXEC!"/g) || []).length, 3);
+});
+// Regression: Mac-Auto-Update schlug mit „spawn powershell ENOENT" fehl, weil
+// die Extraktion hartkodiert PowerShell aufrief. Der Updater muss je Plattform
+// ditto (macOS) bzw. unzip (Linux) verwenden und über /bin/sh relaunchen.
+check('Updater: plattform-übergreifend (kein hartkodiertes spawn(powershell))', () => {
+  const upd = fs.readFileSync(path.join(__dirname, '..', 'electron', 'updater.js'), 'utf8');
+  // Kommentare ausblenden — der Hinweistext selbst enthält `spawn('powershell')`.
+  const code = upd.replace(/\/\/[^\n]*/g, '');
+  assert.ok(!/spawn\(\s*'powershell'/.test(code), 'updater.js ruft spawn(\'powershell\') direkt auf (Mac-ENOENT-Bug)');
+  assert.ok(upd.includes("process.platform === 'darwin'"), 'darwin-Zweig fehlt');
+  assert.ok(upd.includes("cmd = 'ditto'"), 'ditto für macOS fehlt');
+  assert.ok(upd.includes("cmd = 'unzip'"), 'unzip für Linux fehlt');
+  assert.ok(upd.includes('function buildUpdateSh'), 'buildUpdateSh fehlt');
+  assert.ok(upd.includes("spawn('/bin/sh', [sh]"), 'macOS-Relaunch über /bin/sh fehlt');
+  const sh = buildUpdateSh({ newAsar: '/n', targetAsar: '/t', relaunch: 'open /App', failFile: '/f' });
+  assert.ok(!/powershell|\bcmd\b|taskkill|tasklist/.test(sh), 'Sh-Skript enthält Windows-Reste');
+  assert.ok(sh.includes('cp -f "$NEW" "$TARGET"'), 'Sh-Skript tauscht app.asar nicht');
 });
 
 // ------------------------------------------- Tab-Shift (statische Checks) --

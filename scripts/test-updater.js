@@ -5,7 +5,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
-const { download, parseVersion, isNewer, buildUpdateBat } = require('../electron/updater.js');
+const { download, parseVersion, isNewer, buildUpdateBat, buildUpdateSh, unzip } = require('../electron/updater.js');
 const { spawnSync } = require('node:child_process');
 
 // Wartet bis zu ms lang darauf, dass eine Datei erscheint — der Relaunch läuft
@@ -87,6 +87,20 @@ const check = (name, ok) => { console.log((ok ? '✅' : '❌') + ' ' + name); if
   const noElev = buildUpdateBat({ ...bp, elevation: false });
   check('Ohne Elevation: kein -Verb RunAs, direkt :give_up', !noElev.includes('-Verb RunAs') && noElev.includes(':elevate\r\ngoto :give_up'));
 
+  // ----------------------------------------- macOS/Linux-Sh-Skript-Inhalt --
+  const shBody = buildUpdateSh({
+    newAsar: '/tmp/upd/staging/resources/app.asar',
+    targetAsar: '/Applications/Smoky.app/Contents/Resources/app.asar',
+    relaunch: "open '/Applications/Smoky.app'",
+    failFile: '/Users/x/Library/Application Support/Smoky/update-failed.txt',
+  });
+  check('Sh-Skript tauscht app.asar (cp NEW → TARGET)', shBody.includes('cp -f "$NEW" "$TARGET"'));
+  check('Sh-Skript hat Copy-Retry-Loop (Dateisperre)', shBody.includes('for i in 1 2 3 4 5') && shBody.includes('sleep 1'));
+  check('Sh-Skript schreibt Fehlerdatei bei Misserfolg', shBody.includes('Smoky update failed — keeping current version.'));
+  check('Sh-Skript startet App IMMER neu (relaunch am Ende)', shBody.trim().endsWith("open '/Applications/Smoky.app'"));
+  check('Sh-Skript enthält keine Windows-Reste (powershell/cmd/taskkill)', !/powershell|\bcmd\b|taskkill/.test(shBody));
+  check('Sh-Skript räumt Staging nach Erfolg auf', shBody.includes('rm -rf "$(dirname "$NEW")"'));
+
   // --------------------------------------------- batch real execution (win) --
   const root = path.join(os.tmpdir(), 'smoky-updtest-' + Date.now());
   const appDir = path.join(root, 'app');
@@ -161,6 +175,48 @@ const check = (name, ok) => { console.log((ok ? '✅' : '❌') + ' ' + name); if
     console.log('   Fehler:', e && e.message || e);
   } finally {
     try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
+  }
+
+  // --------------------------------------- unzip (echter Roundtrip) --------
+  // Der Mac-Bug „spawn powershell ENOENT" kam daher, dass die Extraktion
+  // hartkodiert PowerShell aufrief. Der neue unzip() wählt je Plattform
+  // powershell/ditto/unzip. Hier wird die Windows-Strecke mit einer echten
+  // Zip (via Compress-Archive erzeugt) verifiziert; auf anderen Systemen
+  // nur, dass eine fehlende Zip sauber rejected statt zu hängen.
+  if (process.platform === 'win32') {
+    const zroot = path.join(os.tmpdir(), 'smoky-ziptest-' + Date.now());
+    const zsrc = path.join(zroot, 'src');
+    fs.mkdirSync(zsrc, { recursive: true });
+    const zContent = 'app.asar-payload-' + 'x'.repeat(2048);
+    const zfile = path.join(zsrc, 'app.asar');
+    fs.writeFileSync(zfile, zContent);
+    const zip = path.join(zroot, 'test.zip');
+    const zdst = path.join(zroot, 'out');
+    const mk = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+      `Compress-Archive -LiteralPath '${zfile}' -DestinationPath '${zip}' -Force`],
+      { timeout: 30000, stdio: 'ignore' });
+    try {
+      if (mk.status === 0 && fs.existsSync(zip)) {
+        await unzip(zip, zdst);
+        const out = path.join(zdst, 'app.asar');
+        check('unzip entpackt eine echte Zip korrekt (roundtrip)', fs.existsSync(out) && fs.readFileSync(out, 'utf8') === zContent);
+      } else {
+        check('unzip entpackt eine echte Zip korrekt (roundtrip)', false);
+        console.log('   (Compress-Archive schlug fehl — Test übersprungen)');
+      }
+    } catch (e) {
+      check('unzip entpackt eine echte Zip korrekt (roundtrip)', false);
+      console.log('   Fehler:', e && e.message || e);
+    } finally {
+      try { fs.rmSync(zroot, { recursive: true, force: true }); } catch {}
+    }
+  } else {
+    try {
+      await unzip(path.join(os.tmpdir(), 'smoky-nonexistent-' + Date.now() + '.zip'), path.join(os.tmpdir(), 'smoky-ziptest-' + Date.now()));
+      check('unzip rejected bei fehlender Zip (non-win)', false);
+    } catch (e) {
+      check('unzip rejected bei fehlender Zip (non-win)', true);
+    }
   }
 
   console.log(failed ? `\n${failed} Test(s) fehlgeschlagen` : '\nAlle Updater-Tests bestanden ✅');

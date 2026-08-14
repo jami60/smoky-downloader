@@ -119,16 +119,30 @@ async function download(url, dest, onProgress) {
 }
 
 // ------------------------------------------------------------ extract -----
+// Plattform-übergreifend ohne zusätzliche Dependencies: Windows nutzt das
+// eingebaute PowerShell Expand-Archive, macOS das eingebaute ditto, Linux
+// (falls je gebaut) unzip. Ein gemeinsamer Befehl ist der einzige Weg — ein
+// hartkodiertes `spawn('powershell')` schlug auf dem Mac mit ENOENT fehl.
 function unzip(zipFile, dest) {
   return new Promise((resolve, reject) => {
-    // PowerShell Expand-Archive is built into Windows — no extra deps.
-    const ps = spawn('powershell', [
-      '-NoProfile', '-NonInteractive', '-Command',
-      `Expand-Archive -LiteralPath '${zipFile}' -DestinationPath '${dest}' -Force`,
-    ], { windowsHide: true });
+    fs.mkdirSync(dest, { recursive: true });
+    let cmd;
+    let args;
+    if (process.platform === 'win32') {
+      cmd = 'powershell';
+      args = ['-NoProfile', '-NonInteractive', '-Command',
+        `Expand-Archive -LiteralPath '${zipFile}' -DestinationPath '${dest}' -Force`];
+    } else if (process.platform === 'darwin') {
+      cmd = 'ditto';
+      args = ['-x', '-k', zipFile, dest];
+    } else {
+      cmd = 'unzip';
+      args = ['-o', zipFile, '-d', dest];
+    }
+    const ps = spawn(cmd, args, { windowsHide: true });
     let err = '';
     ps.stderr.on('data', (d) => { err += d; });
-    ps.on('error', reject);
+    ps.on('error', (e) => reject(new Error(`Extract failed (${cmd}: ${e && e.message || e})`)));
     ps.on('close', (code) => {
       if (code === 0) resolve();
       else reject(new Error('Extract failed (' + code + '): ' + err.trim()));
@@ -274,6 +288,35 @@ function buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFi
   return base.concat(elev, tail).join('\r\n');
 }
 
+// buildUpdateSh({ newAsar, targetAsar, relaunch, failFile }) → macOS/Linux-
+// Shell-Skript: wartet, bis die App beendet ist, tauscht app.asar mit
+// Copy-Retries und startet die App IMMER neu (Erfolg oder Fehler).
+function buildUpdateSh({ newAsar, targetAsar, relaunch, failFile }) {
+  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  return [
+    '#!/bin/bash',
+    `NEW=${q(newAsar)}`,
+    `TARGET=${q(targetAsar)}`,
+    `FAIL=${q(failFile)}`,
+    // Kurz warten, bis die laufende App wirklich beendet ist (app.asar kann
+    // beim Beenden noch kurz gesperrt sein).
+    'sleep 1',
+    'OK=0',
+    'for i in 1 2 3 4 5; do',
+    '  if cp -f "$NEW" "$TARGET" 2>/dev/null; then OK=1; break; fi',
+    '  sleep 1',
+    'done',
+    'if [ "$OK" = "1" ]; then',
+    '  rm -f "$FAIL"',
+    '  rm -rf "$(dirname "$NEW")" 2>/dev/null',
+    'else',
+    '  echo "Smoky update failed — keeping current version." > "$FAIL"',
+    'fi',
+    // App IMMER neu starten (alter Stand bleibt beim Fehler intakt).
+    relaunch,
+  ].join('\n');
+}
+
 // applyUpdate(url, { appDir, execPath, userData, log, onProgress }) →
 // downloads, extracts and hands over to a batch that swaps the app folder
 // and relaunches. Der Batch startet die App in JEDEM Fall neu (Erfolg oder
@@ -305,17 +348,38 @@ async function applyUpdate(url, { appDir, execPath, userData, log = () => {}, on
   // NOTE: build the paths with path.join — inline backslashes in a template
   // literal would be eaten as escape sequences (\r, \u…) and corrupt the batch.
   const newAsar = path.join(src, 'resources', 'app.asar');
-  const targetAsar = path.join(appDir, 'resources', 'app.asar');
   // Fehlerdatei IMMER in userData (immer beschreibbar), nie im appDir —
   // das kann bei Program-Files-Installationen selbst geschützt sein.
   const failFile = path.join(userData || os.tmpdir(), 'update-failed.txt');
-  const markerBase = path.join(os.tmpdir(), 'smoky-update-' + Date.now());
-  const bat = path.join(os.tmpdir(), 'smoky-update.bat');
-  const body = buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFile });
-  fs.writeFileSync(bat, body);
 
-  spawn('cmd', ['/c', 'start', '', bat], { detached: true, stdio: 'ignore' }).unref();
+  if (process.platform === 'win32') {
+    // Windows: Batch tauscht app.asar + Relaunch (inkl. UAC-Fallback).
+    const targetAsar = path.join(appDir, 'resources', 'app.asar');
+    const markerBase = path.join(os.tmpdir(), 'smoky-update-' + Date.now());
+    const bat = path.join(os.tmpdir(), 'smoky-update.bat');
+    const body = buildUpdateBat({ newAsar, targetAsar, tmp, execPath, markerBase, failFile });
+    fs.writeFileSync(bat, body);
+    spawn('cmd', ['/c', 'start', '', bat], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+
+  // macOS / Linux: die app.asar liegt im .app-Bundle (Contents/Resources)
+  // bzw. neben der Binary. Ein Shell-Skript tauscht die Datei und startet
+  // die App über `open` neu — das bisherige cmd/PowerShell existiert hier
+  // nicht („spawn powershell ENOENT“).
+  const q = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
+  const targetAsar = process.platform === 'darwin'
+    ? path.join(path.dirname(path.dirname(execPath)), 'Resources', 'app.asar')
+    : path.join(path.dirname(execPath), 'resources', 'app.asar');
+  const relaunch = process.platform === 'darwin'
+    ? `open ${q(path.dirname(path.dirname(path.dirname(execPath))))} 2>/dev/null || ${q(execPath)} 2>/dev/null || true`
+    : `${q(execPath)} >/dev/null 2>&1 &`;
+  const sh = path.join(os.tmpdir(), 'smoky-update.sh');
+  const body = buildUpdateSh({ newAsar, targetAsar, relaunch, failFile });
+  fs.writeFileSync(sh, body);
+  try { fs.chmodSync(sh, 0o755); } catch {}
+  spawn('/bin/sh', [sh], { detached: true, stdio: 'ignore' }).unref();
   return true;
 }
 
-module.exports = { parseVersion, isNewer, fetchManifest, checkForUpdates, checkForGitHubUpdate, download, unzip, buildUpdateBat, applyUpdate };
+module.exports = { parseVersion, isNewer, fetchManifest, checkForUpdates, checkForGitHubUpdate, download, unzip, buildUpdateBat, buildUpdateSh, applyUpdate };
