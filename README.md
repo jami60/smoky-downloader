@@ -71,10 +71,16 @@ Smoky aktualisiert sich **automatisch**: Beim Start wird auf GitHub nach einer n
 
 ---
 
+## Discord (optional)
+
+Smoky kann deinen **laufenden Track als Discord Rich Presence** anzeigen und dich optional **mit Discord verbinden** (Avatar + Name in den Einstellungen). Beides braucht eine eigene Discord-App-ID — die komplette Schritt-für-Schritt-Anleitung steht in **[ANLEITUNG.md](ANLEITUNG.md)**.
+
+---
+
 ## Datenschutz
 
 - Alle Downloads, Einstellungen und die Musik-Bibliothek liegen **nur auf deinem Gerät**
-- Keine Accounts, keine Cloud, kein Tracking
+- Keine Pflicht-Accounts, keine Cloud, kein Tracking — der Discord-Login ist rein optional
 - **Private by default. Nothing leaves your device.** 🔒
 
 ---
@@ -82,6 +88,14 @@ Smoky aktualisiert sich **automatisch**: Beim Start wird auf GitHub nach einer n
 ## Unterstützte Plattformen (Auszug)
 
 YouTube · Spotify · SoundCloud · TikTok · Instagram · Vimeo · Twitter/X · Facebook · +1.200 weitere über yt-dlp
+
+---
+
+---
+
+## Komplette Anleitung
+
+**Discord einrichten, Versionen bauen & veröffentlichen, Installation für Freunde, alle Features und Troubleshooting** — alles ausführlich in **[ANLEITUNG.md](ANLEITUNG.md)**.
 
 ---
 
