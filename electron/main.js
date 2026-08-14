@@ -207,6 +207,11 @@ app.whenReady().then(async () => {
         } else {
           act.state = `⏸ ${act.state}`;
         }
+        // Album-Cover als großes Bild (kurze Token-URL, vom Discord-Client
+        // direkt geladen). Fehlt es (z. B. Video), bleibt die Presence text-only.
+        if (p.cover) {
+          act.assets = { large_image: `http://127.0.0.1:${port}${p.cover}`, large_text: p.title };
+        }
         discord.setActivity(act);
       } else {
         discord.setActivity({ details: 'Smoky Desktop', state: 'Verwaltet seine Media-Bibliothek' });

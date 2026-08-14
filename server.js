@@ -1847,6 +1847,20 @@ async function backfillCover(file) {
   return found;
 }
 
+// Kurze, stabile Cover-URLs für Discord Rich Presence: Discord begrenzt
+// externe Bild-URLs, und der komplette Dateipfad wäre (URL-encodiert) oft zu
+// lang. Ein SHA1-Token + In-Memory-Map liefert stattdessen eine ~55-Zeichen-URL.
+const coverTokenMap = new Map(); // token -> filePath
+function coverTokenFor(file) {
+  const token = crypto.createHash('sha1').update(String(file)).digest('hex').slice(0, 20);
+  coverTokenMap.set(token, file);
+  if (coverTokenMap.size > 300) {
+    const first = coverTokenMap.keys().next().value;
+    if (first) coverTokenMap.delete(first);
+  }
+  return token;
+}
+
 async function coverFor(file) {
   if (!ffmpegCmd) return null;
   const hash = crypto.createHash('md5').update(file).digest('hex');
@@ -2117,6 +2131,12 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const pos = Number(body.position);
       const dur = Number(body.duration);
+      // Cover nur für echte lokale Audio-Dateien (kein Video, kein Webpfad).
+      const file = typeof body.file === 'string' && !/^https?:/i.test(body.file) ? body.file : '';
+      let cover = null;
+      try {
+        if (file && isInsideFolder(file, settings.folder)) cover = '/api/cover/t/' + coverTokenFor(file);
+      } catch {}
       playerState = {
         title: String(body.title || '').slice(0, 120),
         artist: String(body.artist || '').slice(0, 80),
@@ -2124,6 +2144,7 @@ const server = http.createServer(async (req, res) => {
         playing: !!body.playing,
         position: Number.isFinite(pos) && pos >= 0 ? pos : null,
         duration: Number.isFinite(dur) && dur > 0 ? dur : null,
+        cover,
         updatedAt: now(),
       };
       return sendJson(res, 200, { ok: true });
@@ -2400,6 +2421,16 @@ const server = http.createServer(async (req, res) => {
       const cover = await coverFor(file);
       if (!cover) return sendJson(res, 204);
       // Schwester-Bilder können .png/.webp sein — passenden MIME-Type liefern
+      return serveFile(req, res, cover, MIME[path.extname(cover).toLowerCase()] || 'image/jpeg');
+    }
+
+    // Kurze Cover-URL für Discord Rich Presence (Token statt langem Dateipfad).
+    const coverTok = p.match(/^\/api\/cover\/t\/([a-f0-9]{8,40})$/);
+    if (req.method === 'GET' && coverTok) {
+      const file = coverTokenMap.get(coverTok[1]);
+      if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
+      const cover = await coverFor(file);
+      if (!cover) return sendJson(res, 204);
       return serveFile(req, res, cover, MIME[path.extname(cover).toLowerCase()] || 'image/jpeg');
     }
 

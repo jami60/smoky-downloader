@@ -1597,7 +1597,7 @@
       } catch { /* waveform not available */ }
     }
     // Meldet den aktuellen Track an den Server — Discord Rich Presence zeigt ihn an.
-    const sendPlayerState = (playing) => { try { const m = currentMedia(); fetch('/api/player-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: playerTitleEl.textContent, artist: playerArtistEl.textContent, album: playerAlbumEl ? playerAlbumEl.textContent : '', playing, position: m && Number.isFinite(m.currentTime) ? m.currentTime : null, duration: m && Number.isFinite(m.duration) ? m.duration : null }) }).catch(() => {}); } catch {} };
+    const sendPlayerState = (playing) => { try { const m = currentMedia(); const tr = currentIndex >= 0 ? library[currentIndex] : null; fetch('/api/player-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: playerTitleEl.textContent, artist: playerArtistEl.textContent, album: playerAlbumEl ? playerAlbumEl.textContent : '', playing, position: m && Number.isFinite(m.currentTime) ? m.currentTime : null, duration: m && Number.isFinite(m.duration) ? m.duration : null, file: tr && tr.kind !== 'video' ? tr.path : '' }) }).catch(() => {}); } catch {} };
     // Zuletzt gespielten Track + Position merken — nach einem Neustart geht's weiter.
     let lastPosSaveAt = 0;
     const saveLastPlayback = () => {

@@ -467,6 +467,17 @@ check('discord-rpc.js + main.js: setClientId + openExternal + Smoke-Probe', () =
   assert.ok(main.includes("ipcMain.handle('shell:openExternal'"), 'shell:openExternal-Handler fehlt');
   assert.ok(main.includes('discordUi: (() => {'), 'Smoke-Probe discordUi fehlt');
 });
+check('Cover-Token für Discord RPC (large_image)', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes('function coverTokenFor(file)'), 'coverTokenFor fehlt');
+  assert.ok(srv.includes('/api/cover/t/'), 'Cover-Token-Endpunkt fehlt');
+  assert.ok(srv.includes("cover = '/api/cover/t/' + coverTokenFor(file)"), 'player-state registriert kein Cover-Token');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('large_image'), 'RPC-Activity hat kein large_image');
+  assert.ok(main.includes('act.assets = { large_image: `http://127.0.0.1:${port}${p.cover}`'), 'Cover-URL wird nicht absolut gesetzt');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes("file: tr && tr.kind !== 'video' ? tr.path : ''"), 'sendPlayerState sendet keinen Audio-Pfad');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);
