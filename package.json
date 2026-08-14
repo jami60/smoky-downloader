@@ -1,6 +1,6 @@
 {
   "name": "smoky",
-  "version": "1.13.6",
+  "version": "1.14.0",
   "description": "Smoky — multi media downloader. Dark, calm, private by default.",
   "main": "electron/main.js",
   "scripts": {
