@@ -483,6 +483,25 @@ check('Discord RPC: Art-Asset-Key statt localhost-Cover-URL', () => {
   assert.ok(html.includes('id="discordAssetKey"'), 'Art-Asset-Key-Input fehlt');
   assert.ok(html.includes('postDiscordSetting({ discordAssetKey:'), 'Art-Asset-Key wird nicht gespeichert');
 });
+check('„Senden ans Handy“: Share-Server + Token + QR + UI', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes('/api/share/create'), 'share/create-Endpunkt fehlt');
+  assert.ok(srv.includes('/api/share/revoke'), 'share/revoke-Endpunkt fehlt');
+  assert.ok(srv.includes("listen(SHARE_PORT, '0.0.0.0'"), 'Share-Server bindet nicht auf 0.0.0.0');
+  assert.ok(srv.includes('function createShareToken'), 'createShareToken fehlt');
+  assert.ok(srv.includes('function lanIPv4'), 'lanIPv4 fehlt');
+  assert.ok(srv.includes('shareServerPromise'), 'Idempotenz-Schutz (shareServerPromise) fehlt');
+  // Der Haupt-Server muss auf 127.0.0.1 bleiben (Secrets nie im LAN).
+  assert.ok(!srv.includes("server.listen(port, '0.0.0.0'"), 'Haupt-Server darf nicht auf 0.0.0.0 binden');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="shareToPhone"'), 'Share-Button fehlt');
+  assert.ok(html.includes('id="shareOverlay"'), 'Share-Overlay fehlt');
+  assert.ok(html.includes('id="shareQr"'), 'QR-Canvas fehlt');
+  assert.ok(html.includes('src="qrcode.js"'), 'qrcode.js wird nicht eingebunden');
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'qrcode.js')), 'public/qrcode.js fehlt');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('share: (() => {'), 'Smoke-Probe share fehlt');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);

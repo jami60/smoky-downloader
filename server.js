@@ -78,6 +78,17 @@ let clips = [];              // clip jobs (yt-dlp section download + ffmpeg)
 let playerState = null;      // { title, artist, album, playing, position, duration, updatedAt }
 let serverPort = PORT;       // tatsächlicher Port (für den Discord-OAuth-Redirect)
 
+// ------------------------------------------------------- phone share ----
+// „Senden ans Handy“: ein separater, LAN-sichtbarer Mini-Server (0.0.0.0),
+// der NUR explizit freigegebene Dateien über kurzlebige Token ausliefert.
+// Der Haupt-Server bleibt auf 127.0.0.1 — Settings, Downloads & Secrets sind
+// damit nie im Netzwerk erreichbar.
+const SHARE_PORT = process.env.SHARE_PORT ? parseInt(process.env.SHARE_PORT, 10) : 4174;
+const SHARE_TTL_MS = 10 * 60 * 1000; // Token laufen nach 10 Minuten ab
+const shareTokens = new Map();       // token -> { path, filename, expiresAt }
+let shareServer = null;
+let sharePort = null;
+
 function loadJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 }
@@ -1658,6 +1669,131 @@ function isInsideFolder(file, folder) {
   return f === base || f.startsWith(base + path.sep);
 }
 
+// -------------------------------------------------------- phone share ----
+// Erste nicht-interne IPv4 des Rechners (für die QR-/Link-URL im WLAN).
+function lanIPv4() {
+  const ifs = os.networkInterfaces();
+  for (const name of Object.keys(ifs)) {
+    for (const ni of ifs[name] || []) {
+      if (ni && ni.family === 'IPv4' && !ni.internal) return ni.address;
+    }
+  }
+  return null;
+}
+
+function pruneShareTokens() {
+  const nowMs = Date.now();
+  for (const [t, s] of shareTokens) if (s.expiresAt <= nowMs) shareTokens.delete(t);
+}
+
+// Legt einen kurzlebigen Token für eine Datei im Download-Ordner an.
+// Rückgabe: { token, filename, url, expiresAt } oder { error }.
+function createShareToken(filePath) {
+  const full = path.resolve(String(filePath || ''));
+  if (!full || !isInsideFolder(full, settings.folder) || !fs.existsSync(full)) {
+    return { error: 'Datei nicht gefunden oder liegt außerhalb des Download-Ordners.' };
+  }
+  let st;
+  try { st = fs.statSync(full); } catch { return { error: 'Kein Datei-Zugriff möglich.' }; }
+  if (!st.isFile()) return { error: 'Kein Datei-Zugriff möglich.' };
+  pruneShareTokens();
+  const token = crypto.randomBytes(8).toString('hex');
+  const filename = path.basename(full);
+  shareTokens.set(token, { path: full, filename, expiresAt: Date.now() + SHARE_TTL_MS });
+  const ip = lanIPv4();
+  if (!ip) return { error: 'Keine LAN-IP gefunden — PC und Handy müssen im selben WLAN sein.' };
+  const port = sharePort || SHARE_PORT;
+  return { token, filename, url: `http://${ip}:${port}/share/${token}`, expiresAt: Date.now() + SHARE_TTL_MS };
+}
+
+function revokeShareToken(token) {
+  const existed = shareTokens.delete(String(token || ''));
+  return existed;
+}
+
+function shareLandingPage(share, token) {
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const name = esc(share.filename);
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+    + `<title>Smoky — Senden</title>`
+    + `<body style="margin:0;background:#0e111a;color:#e8eaf2;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh">`
+    + `<div style="text-align:center;padding:32px;max-width:440px">`
+    + `<h2 style="margin:0 0 8px">🚬 Smoky</h2>`
+    + `<p style="margin:0 0 24px;opacity:.85">Eine Datei von deinem PC — direkt aufs Handy.</p>`
+    + `<p style="margin:0 0 20px;font-weight:600;word-break:break-all">${name}</p>`
+    + `<a href="/share/${encodeURIComponent(token)}/dl" style="display:inline-block;padding:14px 30px;background:#6558e8;color:#fff;text-decoration:none;border-radius:10px;font-weight:600">Herunterladen</a>`
+    + `<p style="margin:20px 0 0;opacity:.5;font-size:12px">Dieser Link läuft nach 10 Minuten ab.</p>`
+    + `</div></body>`;
+}
+
+// Startet den LAN-Server (0.0.0.0). Falls SHARE_PORT belegt ist, wird auf
+// einen freien Port ausgewichen; scheitert auch das, läuft Smoky ohne Share
+// weiter (resolve(null)) statt den Start zu blockieren. Idempotent: parallele
+// Aufrufe teilen sich dasselbe Promise, damit nie zwei Server um den Port
+// konkurrieren und ein verspäteter Fehler den anderen Server zurücksetzt.
+let shareServerPromise = null;
+function startShareServer() {
+  if (shareServer) return Promise.resolve(sharePort);
+  if (shareServerPromise) return shareServerPromise;
+  shareServerPromise = new Promise((resolve) => {
+    const srv = http.createServer((req, res) => {
+      try {
+        const u = new URL(req.url, `http://${req.headers.host}`);
+        const m = /^\/share\/([0-9a-f]+)(?:\/(dl))?$/.exec(u.pathname);
+        const token = m ? m[1] : null;
+        const isDl = m ? m[2] === 'dl' : false;
+        const share = token ? shareTokens.get(token) : null;
+        if (!share || share.expiresAt <= Date.now()) {
+          sendJson(res, 404, { error: 'Link abgelaufen oder ungültig.' });
+          return;
+        }
+        if (!fs.existsSync(share.path)) { sendJson(res, 404, { error: 'Datei nicht mehr vorhanden.' }); return; }
+        if (isDl) {
+          const mime = MIME[path.extname(share.path).toLowerCase()] || 'application/octet-stream';
+          const safeName = String(share.filename || 'file').replace(/["\\\r\n]/g, '_');
+          serveFile(req, res, share.path, mime, { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}` });
+        } else {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(shareLandingPage(share, token));
+        }
+      } catch { try { sendJson(res, 500, { error: 'Server-Fehler' }); } catch {} }
+    });
+    let done = false;
+    const finish = (port) => {
+      if (done) return;
+      done = true;
+      shareServerPromise = null;
+      resolve(port);
+    };
+    const onError = (err) => {
+      if (done) return;
+      if (err && err.code === 'EADDRINUSE' && !srv.__fallback) {
+        srv.__fallback = true;
+        // Port belegt → auf einen freien Port ausweichen (0 = zufällig).
+        srv.listen(0, '0.0.0.0', () => {
+          sharePort = srv.address().port;
+          shareServer = srv;
+          try { srv.unref(); } catch {}
+          finish(sharePort);
+        });
+      } else {
+        finish(null);
+      }
+    };
+    srv.on('error', onError);
+    srv.listen(SHARE_PORT, '0.0.0.0', () => {
+      sharePort = srv.address().port;
+      shareServer = srv;
+      // Der LAN-Server darf den Prozess nicht am Beenden hindern (Tests, die
+      // nur den Haupt-Server schließen). In Electron hält die App den Loop
+      // selbst am Leben, in `node server.js` der Haupt-Server.
+      try { srv.unref(); } catch {}
+      finish(sharePort);
+    });
+  });
+  return shareServerPromise;
+}
+
 function probeTags(file) {
   return new Promise((resolve) => {
     if (!ffprobeCmd) return resolve({});
@@ -2404,6 +2540,21 @@ const server = http.createServer(async (req, res) => {
       return serveFile(req, res, cover, MIME[path.extname(cover).toLowerCase()] || 'image/jpeg');
     }
 
+    // ----- „Senden ans Handy“ (Token anlegen / widerrufen) -----
+    if (req.method === 'POST' && p === '/api/share/create') {
+      const body = await readBody(req);
+      const r = createShareToken(body.path);
+      if (r.error) return sendJson(res, 400, r);
+      return sendJson(res, 200, r);
+    }
+
+    if (req.method === 'POST' && p === '/api/share/revoke') {
+      const body = await readBody(req);
+      const token = String(body.token || '');
+      if (!/^[0-9a-f]{16}$/.test(token)) return sendJson(res, 400, { error: 'Ungültiger Token.' });
+      return sendJson(res, 200, { ok: true, removed: revokeShareToken(token) });
+    }
+
     serveStatic(req, res, p);
   } catch (err) {
     sendJson(res, 500, { error: String(err.message || err) });
@@ -2426,6 +2577,8 @@ function startServer(port = PORT, silent = false) {
         console.log('');
       }
       resolve(server.address().port);
+      // LAN-Server für „Senden ans Handy“ parallel starten (feuern & vergessen).
+      startShareServer().catch(() => {});
     });
   });
 }
@@ -2449,7 +2602,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, settings, queue, history, conversions, server, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
+module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, lanIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
 
 if (require.main === module) {
   startServer();

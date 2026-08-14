@@ -731,6 +731,19 @@ app.whenReady().then(async () => {
               for (const k of views) { const r = results[k]; brief[k] = { i: r.innerW, m: r.main && r.main.l, d: r.dlPanel && r.dlPanel.l, q: r.queue && r.queue.l, dsw: r.dsw, cw: r.cw }; }
               return ok ? 'ok' : 'fail(shift=' + bad.map((k) => k + '(m' + (results[k].main && results[k].main.l) + ')').join(';') + ',gutter=' + gutterOk + ',noGutterShift=' + noGutterShift + ',sbW=' + sbWidth + ',brief=' + JSON.stringify(brief).replace(/"/g, '') + ')';
             } catch (e) { return 'err-' + String(e && e.message || e); }
+          })(),
+          // „Aufs Handy senden“: Button + Overlay + QR-Encoder müssen da sein;
+          // der Encoder liefert eine gültige Matrix (Größe 21–41, 2D-Array).
+          share: (() => {
+            try {
+              const btn = document.getElementById('shareToPhone');
+              const overlay = document.getElementById('shareOverlay');
+              const canvas = document.getElementById('shareQr');
+              const urlInput = document.getElementById('shareUrl');
+              const qrOk = typeof smokyQR === 'function' && (() => { const m = smokyQR('http://192.168.1.1:4174/share/test'); return !!m && m.size >= 21 && m.size <= 41 && Array.isArray(m.matrix); })();
+              const ok = !!btn && !!overlay && !!canvas && !!urlInput && qrOk;
+              return ok ? 'ok' : 'fail(btn=' + !!btn + ',overlay=' + !!overlay + ',canvas=' + !!canvas + ',url=' + !!urlInput + ',qr=' + qrOk + ')';
+            } catch (e) { return 'err-' + String(e && e.message || e); }
           })()
         };
         })()`);
