@@ -14,9 +14,9 @@ const { DiscordRPC } = require('./discord-rpc.js');
 const UPDATE_REPO = process.env.SMOKY_UPDATE_REPO || 'jami60/smoky-downloader';
 // Discord Rich Presence — träg deine App-ID hier ein (discord.com/developers).
 // Ohne gültige ID bleibt Smoky still und verbindet sich nicht.
-const DISCORD_CLIENT_ID = process.env.SMOKY_DISCORD_ID || 'DEINE_DISCORD_APP_ID';
+const DISCORD_CLIENT_ID = process.env.SMOKY_DISCORD_ID || '';
 const discord = new DiscordRPC(DISCORD_CLIENT_ID);
-discord.start();
+discord.start(); // verbindet nur, wenn die ID gültig ist (siehe hasValidId)
 const APP_VERSION = (() => { try { return require('../package.json').version; } catch { return '0.0.0'; } })();
 
 const SMOKE = process.argv.includes('--smoke');
@@ -157,10 +157,18 @@ app.whenReady().then(async () => {
 
   // Taskbar progress: the Windows icon shows a bar while a download runs.
   let discordDlId = null, discordDlStart = null, discordDlPct = -1;
+  let discordConfigId = null; // letzte an Discord übergebene App-ID
   setInterval(async () => {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/api/status`);
       const s = await res.json();
+      // Discord Rich Presence konfigurieren: Client-ID aus den Einstellungen
+      // (Server-Settings), RPC nur wenn aktiviert. Nur bei Änderung neu verbinden.
+      const sid = (s.settings && s.settings.discordClientId) ? String(s.settings.discordClientId).trim() : '';
+      const rpcOn = !(s.settings && s.settings.discordRpc === false);
+      const effId = rpcOn ? (sid || DISCORD_CLIENT_ID) : '';
+      if (effId !== discordConfigId) { discordConfigId = effId; discord.setClientId(effId); }
+
       const active = (s.queue || []).find((q) => q.status === 'downloading' || q.status === 'processing' || q.status === 'queued');
       if (!active) { win.setProgressBar(-1); discordDlId = null; discordDlStart = null; discordDlPct = -1; }
       else if (active.status === 'queued') win.setProgressBar(0.05);
@@ -181,11 +189,25 @@ app.whenReady().then(async () => {
             timestamps: { start: discordDlStart || Date.now() },
           });
         }
-      } else if (s.player && s.player.playing && s.player.title) {
-        discord.setActivity({
-          details: `🎵 ${s.player.title}`,
-          state: s.player.artist || 'Musik-Player',
-        });
+      } else if (s.player && s.player.title) {
+        const p = s.player;
+        const act = { details: `🎵 ${p.title}` };
+        if (p.artist) act.state = p.album && p.album !== p.title ? `${p.artist} · ${p.album}` : p.artist;
+        else if (p.album && p.album !== p.title) act.state = p.album;
+        else act.state = 'Musik-Player';
+        if (p.playing) {
+          // Start/Ende aus Server-Zeit + Position/Dauer ableiten (ohne
+          // sekündliche Renderer-Posts). updatedAt ist die letzte Meldung.
+          if (p.updatedAt && Number.isFinite(p.position) && p.position >= 0) {
+            const start = p.updatedAt - Math.round(p.position * 1000);
+            const t = { start };
+            if (p.duration) t.end = start + Math.round(p.duration * 1000);
+            act.timestamps = t;
+          }
+        } else {
+          act.state = `⏸ ${act.state}`;
+        }
+        discord.setActivity(act);
       } else {
         discord.setActivity({ details: 'Smoky Desktop', state: 'Verwaltet seine Media-Bibliothek' });
       }
@@ -332,6 +354,14 @@ app.whenReady().then(async () => {
           // History-Repair + Tools-Update Buttons existieren
           repairBtn: !!document.getElementById('repairHistory'),
           toolsBtn: !!document.getElementById('toolsUpdate'),
+          // Discord: Settings-Felder + GitHub-Button + openExternal-Bridge
+          discordUi: (() => {
+            const ids = ['discordClientId', 'discordClientSecret', 'discordRpcToggle', 'discordConnect', 'discordProfile'];
+            const missing = ids.filter((id) => !document.getElementById(id));
+            const repo = !!document.getElementById('openGithub');
+            const bridge = typeof (window.smokyDesktopNative && window.smokyDesktopNative.openExternal) === 'function';
+            return !missing.length && repo && bridge ? 'ok' : 'fail(missing=' + missing.join(',') + ',repo=' + repo + ',bridge=' + bridge + ')';
+          })(),
           // Toast mit data-goto-Link navigiert zu den Settings
           toastGoto: (() => {
             try {
@@ -805,6 +835,18 @@ ipcMain.handle('shell:openPath', async (_event, dir) => {
   try {
     if (!dir || !fs.existsSync(dir)) dir = require('node:path').dirname(dir || '') || '.';
     await shell.openPath(dir);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+});
+
+// Öffnet externe Links (GitHub-Repo, Discord-Entwicklerportal, OAuth-Authorize)
+// im Standard-Browser. Nur http/https — nie file:// o. ä.
+ipcMain.handle('shell:openExternal', async (_event, url) => {
+  if (!/^https?:\/\//i.test(String(url || ''))) return { ok: false, error: 'invalid url' };
+  try {
+    await shell.openExternal(String(url));
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e.message || e) };

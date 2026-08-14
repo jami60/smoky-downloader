@@ -67,6 +67,24 @@ class DiscordRPC {
     return /^\d+$/.test(String(id || ''));
   }
 
+  // Verbunden = Handshake mit Discord abgeschlossen und Socket offen.
+  isConnected() {
+    return !!(this.sock && this.handshakeDone);
+  }
+
+  // App-ID zur Laufzeit ändern (User trägt sie in den Einstellungen ein).
+  // Ungültig/leer → stilllegen; neue gültige ID → neu verbinden und die
+  // aktuelle Aktivität nach dem Handshake erneut senden.
+  setClientId(id) {
+    const next = String(id || '').trim();
+    if (next === this.clientId && (this.isConnected() || !DiscordRPC.hasValidId(next))) return;
+    this.clientId = next;
+    this.disconnect();
+    this._stopped = false;
+    this._lastKey = null; // Aktivität nach Reconnect neu senden
+    if (DiscordRPC.hasValidId(next)) this.start();
+  }
+
   start() {
     if (!DiscordRPC.hasValidId(this.clientId)) return false;
     this.connect();

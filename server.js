@@ -62,11 +62,20 @@ let settings = {
   guideSeen: false,
   maxParallel: 3,
   organizeFolders: false,
+  // Discord: RPC (Client-ID reicht) + optionaler Login (Client-ID + Secret).
+  // NIE im /api/status oder im Settings-Export zurückgeben — Secret + Token
+  // bleiben lokal auf diesem Gerät.
+  discordClientId: '',
+  discordClientSecret: '',
+  discordRpc: true,
+  discordProfile: null, // { id, username, avatar, discriminator }
+  discordToken: null,
 };
 const running = [];          // derzeit aktive Downloads (parallel, max. settings.maxParallel)
 let conversions = [];        // ffmpeg conversions (in memory)
 let clips = [];              // clip jobs (yt-dlp section download + ffmpeg)
-let playerState = null;      // { title, artist, playing, updatedAt } — für Discord Rich Presence
+let playerState = null;      // { title, artist, album, playing, position, duration, updatedAt }
+let serverPort = PORT;       // tatsächlicher Port (für den Discord-OAuth-Redirect)
 
 function loadJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -1907,11 +1916,111 @@ async function statusPayload() {
     history,
     conversions: conversions.map((c) => c),
     clips: clips.map((c) => c),
-    settings,
+    settings: publicSettings(),
     storage,
     player: playerState,
     tools: { ytdlp: YTDLP_OK, spotdl: SPOTDL_OK, ffmpeg: FFMPEG_OK, ffprobe: FFPROBE_OK, versions: toolVersions },
   };
+}
+
+// ------------------------------------------------------ Discord -------
+// Optionaler Discord-Login (OAuth2 Authorization Code Grant) + Profil-Anzeige
+// und Rich Presence. Benötigt eine Discord-App (discord.com/developers):
+// Client-ID + Client-Secret, Redirect-URI:
+//   http://127.0.0.1:<PORT>/api/discord/callback   (Scope: identify)
+
+// Settings OHNE Geheimnisse — Secret + Token verlassen nie den Server.
+function publicSettings() {
+  const { discordClientSecret, discordToken, ...pub } = settings;
+  return pub;
+}
+
+function discordRedirectUri() {
+  return `http://127.0.0.1:${serverPort}/api/discord/callback`;
+}
+
+function discordAvatarUrl(profile) {
+  if (!profile || !profile.id || !profile.avatar) return null;
+  const ext = String(profile.avatar).startsWith('a_') ? 'gif' : 'png';
+  return `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.${ext}?size=128`;
+}
+
+function discordPublicStatus() {
+  const id = String(settings.discordClientId || '').trim();
+  return {
+    rpcConfigured: /^\d+$/.test(id),
+    rpcEnabled: !!settings.discordRpc,
+    loginConfigured: !!(id && String(settings.discordClientSecret || '').trim()),
+    redirectUri: discordRedirectUri(),
+    connected: !!(settings.discordProfile && settings.discordProfile.id),
+    profile: settings.discordProfile
+      ? {
+          id: settings.discordProfile.id,
+          username: settings.discordProfile.username,
+          avatarUrl: discordAvatarUrl(settings.discordProfile),
+        }
+      : null,
+  };
+}
+
+let pendingDiscordState = null;
+
+function discordAuthorizeUrl() {
+  const state = crypto.randomBytes(12).toString('hex');
+  pendingDiscordState = state;
+  const q = new URLSearchParams({
+    client_id: settings.discordClientId,
+    redirect_uri: discordRedirectUri(),
+    response_type: 'code',
+    scope: 'identify',
+    prompt: 'consent',
+    state,
+  });
+  return `https://discord.com/oauth2/authorize?${q.toString()}`;
+}
+
+async function discordExchangeCode(code) {
+  const body = new URLSearchParams({
+    client_id: settings.discordClientId,
+    client_secret: settings.discordClientSecret,
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: discordRedirectUri(),
+  });
+  const res = await fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) {
+    throw new Error(String(data.error_description || data.error || ('HTTP ' + res.status)));
+  }
+  return data.access_token;
+}
+
+async function discordFetchProfile(token) {
+  const res = await fetch('https://discord.com/api/users/@me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.id) throw new Error('Profil nicht geladen (HTTP ' + res.status + ')');
+  return {
+    id: String(data.id),
+    username: String(data.username || ''),
+    avatar: data.avatar ? String(data.avatar) : null,
+    discriminator: data.discriminator ? String(data.discriminator) : '0',
+  };
+}
+
+// Kleine HTML-Antwort für den Browser-Tab, den Discord nach dem Login öffnet.
+function discordCallbackPage(ok, message) {
+  const color = ok ? '#3ba55d' : '#ed4245';
+  const title = ok ? 'Discord verbunden ✓' : 'Discord-Login fehlgeschlagen';
+  return `<!doctype html><meta charset="utf-8"><title>Smoky — Discord</title>
+<body style="margin:0;background:#0e111a;color:#e8eaf2;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh">
+<div style="text-align:center;padding:32px"><h2 style="color:${color};margin:0 0 12px">${title}</h2>
+<p style="opacity:.8;margin:0">${message}</p><p style="opacity:.55;margin:16px 0 0">Du kannst diesen Tab jetzt schließen und zurück zu Smoky wechseln.</p></div></body>`;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -2006,10 +2115,15 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && p === '/api/player-state') {
       const body = await readBody(req);
+      const pos = Number(body.position);
+      const dur = Number(body.duration);
       playerState = {
         title: String(body.title || '').slice(0, 120),
         artist: String(body.artist || '').slice(0, 80),
+        album: String(body.album || '').slice(0, 120),
         playing: !!body.playing,
+        position: Number.isFinite(pos) && pos >= 0 ? pos : null,
+        duration: Number.isFinite(dur) && dur > 0 ? dur : null,
         updatedAt: now(),
       };
       return sendJson(res, 200, { ok: true });
@@ -2020,7 +2134,51 @@ const server = http.createServer(async (req, res) => {
       if (body.theme && !THEMES.includes(body.theme)) return sendJson(res, 400, { error: 'unknown theme' });
       settings = { ...settings, ...body };
       saveJson(SETTINGS_FILE, settings);
-      return sendJson(res, 200, { settings });
+      return sendJson(res, 200, { settings: publicSettings() });
+    }
+
+    // ----- Discord (Login + Rich-Presence-Konfiguration) -----
+    if (req.method === 'GET' && p === '/api/discord/status') {
+      return sendJson(res, 200, discordPublicStatus());
+    }
+
+    if (req.method === 'POST' && p === '/api/discord/authorize') {
+      const id = String(settings.discordClientId || '').trim();
+      const secret = String(settings.discordClientSecret || '').trim();
+      if (!/^\d+$/.test(id) || !secret) {
+        return sendJson(res, 400, { error: 'Trage zuerst Client-ID und Client-Secret in den Einstellungen ein.' });
+      }
+      return sendJson(res, 200, { url: discordAuthorizeUrl(), redirectUri: discordRedirectUri() });
+    }
+
+    if (req.method === 'GET' && p === '/api/discord/callback') {
+      const u = new URL(req.url, `http://${req.headers.host}`);
+      const code = u.searchParams.get('code');
+      const state = u.searchParams.get('state');
+      if (!code || !state || state !== pendingDiscordState) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(discordCallbackPage(false, 'Ungültiger oder abgelaufener Login-Versuch.'));
+        return;
+      }
+      pendingDiscordState = null;
+      try {
+        const token = await discordExchangeCode(code);
+        const profile = await discordFetchProfile(token);
+        settings = { ...settings, discordProfile: profile, discordToken: token };
+        saveJson(SETTINGS_FILE, settings);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(discordCallbackPage(true, `Angemeldet als <b>${String(profile.username).replace(/[<>&]/g, '')}</b>.`));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(discordCallbackPage(false, String(e.message || e).replace(/[<>&]/g, '')));
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && p === '/api/discord/disconnect') {
+      settings = { ...settings, discordProfile: null, discordToken: null };
+      saveJson(SETTINGS_FILE, settings);
+      return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === 'POST' && p === '/api/upload') {
@@ -2255,6 +2413,7 @@ function startServer(port = PORT, silent = false) {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, '127.0.0.1', () => {
+      serverPort = server.address().port;
       if (!silent) {
         console.log('');
         console.log('  ┌───────────────────────────────────────┐');

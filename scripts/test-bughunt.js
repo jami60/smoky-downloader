@@ -433,6 +433,40 @@ check('main.js: Smoke-Probe tabs schaltet Views durch + prüft Shift (Home/Downl
   assert.ok(main.includes("sbWidth === 0 || noGutterShift"), 'Overlay-Scrollbar-Absicherung fehlt');
   assert.ok(main.includes("disable-features", "OverlayScrollbar"), 'Smoke erzwingt keine klassischen Scrollbars');
 });
+check('server.js: Discord-Endpunkte + Secret/Token-Schutz', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  for (const ep of ['/api/discord/status', '/api/discord/authorize', '/api/discord/callback', '/api/discord/disconnect']) {
+    assert.ok(srv.includes(ep), 'Discord-Endpunkt fehlt: ' + ep);
+  }
+  assert.ok(srv.includes('function publicSettings()'), 'publicSettings() fehlt');
+  assert.ok(srv.includes('const { discordClientSecret, discordToken, ...pub } = settings'), 'Secret/Token-Strip fehlt in publicSettings');
+  assert.ok(srv.includes('settings: publicSettings()'), 'statusPayload nutzt nicht publicSettings');
+  assert.ok(srv.includes('discord.com/api/oauth2/token'), 'Token-Exchange fehlt');
+  assert.ok(srv.includes('discord.com/api/users/@me'), 'Profil-Fetch fehlt');
+  assert.ok(srv.includes('album: String(body.album'), 'player-state speichert kein Album');
+  assert.ok(srv.includes('position: Number.isFinite(pos)'), 'player-state speichert keine Position');
+});
+check('index.html: Discord-UI + GitHub-Button + Login-Flow', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  for (const id of ['discordClientId', 'discordClientSecret', 'discordRpcToggle', 'discordConnect', 'discordDisconnect', 'discordProfile', 'openGithub']) {
+    assert.ok(html.includes('id="' + id + '"'), 'UI-Element fehlt: ' + id);
+  }
+  assert.ok(html.includes('jami60/smoky-downloader'), 'GitHub-Repo-URL fehlt');
+  assert.ok(html.includes('openExternalSafe'), 'openExternalSafe-Helper fehlt');
+  assert.ok(html.includes('/api/discord/authorize'), 'Login-Flow ruft authorize nicht auf');
+  assert.ok(html.includes('/api/discord/status'), 'Login-Flow pollt status nicht');
+  assert.ok(html.includes('settings.discordConnect'), 'i18n-Key discordConnect fehlt');
+  assert.ok(html.includes('settings.githubBtn'), 'i18n-Key githubBtn fehlt');
+});
+check('discord-rpc.js + main.js: setClientId + openExternal + Smoke-Probe', () => {
+  const rpc = fs.readFileSync(path.join(__dirname, '..', 'electron', 'discord-rpc.js'), 'utf8');
+  assert.ok(rpc.includes('setClientId(id)'), 'setClientId fehlt in discord-rpc.js');
+  assert.ok(rpc.includes('isConnected()'), 'isConnected fehlt in discord-rpc.js');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
+  assert.ok(main.includes('discord.setClientId(effId)'), 'main.js rekonfiguriert RPC nicht');
+  assert.ok(main.includes("ipcMain.handle('shell:openExternal'"), 'shell:openExternal-Handler fehlt');
+  assert.ok(main.includes('discordUi: (() => {'), 'Smoke-Probe discordUi fehlt');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);
