@@ -196,6 +196,7 @@
     #splash .splash-mark { width:86px; height:86px; display:grid; place-items:center; border-radius:26px; color:#fff; font:700 44px 'Space Grotesk'; background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 55%,#5d53c9)); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent),0 18px 55px color-mix(in srgb,var(--accent) 38%,transparent); animation:splashPulse 1.6s ease-in-out infinite; }
     #splash .splash-name { font:700 30px 'Space Grotesk'; letter-spacing:-.04em; color:var(--text); }
     #splash .splash-tag { font-size:10px; letter-spacing:.34em; text-transform:uppercase; color:var(--muted-2); font-weight:700; }
+    #splash .splash-welcome { font-size:13px; font-weight:600; color:var(--accent-2); letter-spacing:.02em; margin-top:-10px; }
     #splash .splash-bar { width:150px; height:3px; border-radius:99px; background:var(--surface-3); overflow:hidden; margin-top:4px; }
     #splash .splash-bar i { display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--mint)); animation:splashFill 1.3s .25s cubic-bezier(.22,1,.36,1) forwards; }
     @keyframes splashIn { from { opacity:0; transform:scale(.9) translateY(10px); } to { opacity:1; transform:none; } }
@@ -278,7 +279,7 @@
   </style>
 </head>
 <body data-theme="midnight" data-view="Home">
-<div id="splash" aria-hidden="true"><div class="splash-inner"><div class="splash-mark">S</div><div class="splash-name">Smoky</div><div class="splash-tag">multi media downloader</div><div class="splash-bar"><i></i></div></div></div>
+<div id="splash" aria-hidden="true"><div class="splash-inner"><div class="splash-mark">S</div><div class="splash-name">Smoky</div><div class="splash-tag">multi media downloader</div><div class="splash-welcome" id="splashWelcome"></div><div class="splash-bar"><i></i></div></div></div>
   <div class="titlebar"><div class="titlebar-brand"><i>S</i> Smoky</div><div class="window-actions"><button class="window-action" id="windowMinimize" aria-label="Minimize"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button><button class="window-action" id="windowMaximize" aria-label="Maximize"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></button><button class="window-action close" id="windowClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
   <canvas id="snow" aria-hidden="true"></canvas><canvas id="confetti" aria-hidden="true"></canvas><div class="glow"></div><div class="horror-splatters" aria-hidden="true"></div>
   <div class="app-shell">
@@ -832,6 +833,20 @@
     })();
     // Splash: nach 1,5 s ausblenden (Theme ist dann schon gesetzt → Splash trägt die Farbe)
     const splash = document.getElementById('splash');
+    // Kleines Detail: bei verbundenem Discord „Welcome, <username>“ im Splash.
+    (async () => {
+      try {
+        const st = await fetch('/api/discord/status').then(r => r.json());
+        const el = document.getElementById('splashWelcome');
+        if (el && st && st.connected && st.profile && st.profile.username) {
+          el.textContent = '';
+          el.append('Welcome, ');
+          const b = document.createElement('b');
+          b.textContent = st.profile.username;
+          el.append(b);
+        }
+      } catch {}
+    })();
     setTimeout(() => { splash.classList.add('hide'); setTimeout(() => splash.remove(), 650); }, 1500);
     const hexToRgba = (hex, alpha) => { let h=String(hex||'#6558e8').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); if(!isFinite(n)) return `rgba(101,88,232,${alpha})`; return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`; };
     const applyTheme = (theme) => { root.dataset.theme=theme; if(theme==='custom'){ const a=localStorage.getItem('smoky-custom-accent')||'#6558e8'; const b=localStorage.getItem('smoky-custom-bg')||'#0e111a'; const r=root.style; r.setProperty('--bg',b); r.setProperty('--surface',`color-mix(in srgb, ${b} 88%, ${a})`); r.setProperty('--surface-2',`color-mix(in srgb, ${b} 82%, ${a})`); r.setProperty('--surface-3',`color-mix(in srgb, ${b} 74%, ${a})`); r.setProperty('--accent',a); r.setProperty('--accent-2',`color-mix(in srgb, ${a} 55%, #ffffff)`); r.setProperty('--accent-soft',hexToRgba(a,.16)); r.setProperty('--mint',`color-mix(in srgb, ${a} 50%, #ffffff)`); r.setProperty('--scroll-track',`color-mix(in srgb, ${b} 94%, #000000)`); r.setProperty('--scroll-thumb',a); r.setProperty('--scroll-thumb-hover',`color-mix(in srgb, ${a} 60%, #ffffff)`); } else { root.removeAttribute('style'); } try { localStorage.setItem('smoky-theme',theme); } catch {}; try { fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme }) }).catch(() => {}); } catch {}; const a=ambientFor(theme); document.getElementById('ambientLabel').textContent=a[0]; document.getElementById('ambientTitle').textContent=a[1]; document.getElementById('ambientDescription').textContent=a[2]; document.querySelectorAll('.theme-dot').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); document.querySelectorAll('.theme-choice').forEach(x=>x.classList.toggle('active',x.dataset.set===theme)); };

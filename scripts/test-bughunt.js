@@ -457,6 +457,9 @@ check('index.html: Discord-UI + GitHub-Button + Login-Flow', () => {
   assert.ok(html.includes('/api/discord/status'), 'Login-Flow pollt status nicht');
   assert.ok(html.includes('settings.discordConnect'), 'i18n-Key discordConnect fehlt');
   assert.ok(html.includes('settings.githubBtn'), 'i18n-Key githubBtn fehlt');
+  assert.ok(html.includes('id="splashWelcome"'), 'Splash-Welcome-Element fehlt');
+  assert.ok(html.includes("el.append('Welcome, ')"), 'Splash begrüßt den Discord-User nicht');
+  assert.ok(html.includes("fetch('/api/discord/status')"), 'Splash lädt den Discord-Status nicht');
 });
 check('discord-rpc.js + main.js: setClientId + openExternal + Smoke-Probe', () => {
   const rpc = fs.readFileSync(path.join(__dirname, '..', 'electron', 'discord-rpc.js'), 'utf8');
