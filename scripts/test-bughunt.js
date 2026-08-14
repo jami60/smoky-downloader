@@ -470,16 +470,18 @@ check('discord-rpc.js + main.js: setClientId + openExternal + Smoke-Probe', () =
   assert.ok(main.includes("ipcMain.handle('shell:openExternal'"), 'shell:openExternal-Handler fehlt');
   assert.ok(main.includes('discordUi: (() => {'), 'Smoke-Probe discordUi fehlt');
 });
-check('Cover-Token für Discord RPC (large_image)', () => {
+check('Discord RPC: Art-Asset-Key statt localhost-Cover-URL', () => {
   const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
-  assert.ok(srv.includes('function coverTokenFor(file)'), 'coverTokenFor fehlt');
-  assert.ok(srv.includes('/api/cover/t/'), 'Cover-Token-Endpunkt fehlt');
-  assert.ok(srv.includes("cover = '/api/cover/t/' + coverTokenFor(file)"), 'player-state registriert kein Cover-Token');
+  assert.ok(srv.includes("discordAssetKey: ''"), 'discordAssetKey-Setting fehlt');
+  assert.ok(!srv.includes('coverTokenFor'), 'coverTokenFor-Rest übrig (localhost-Ansatz entfernt)');
+  assert.ok(!srv.includes('/api/cover/t/'), 'Cover-Token-Endpunkt übrig (localhost-Ansatz entfernt)');
   const main = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.js'), 'utf8');
   assert.ok(main.includes('large_image'), 'RPC-Activity hat kein large_image');
-  assert.ok(main.includes('act.assets = { large_image: `http://127.0.0.1:${port}${p.cover}`'), 'Cover-URL wird nicht absolut gesetzt');
+  assert.ok(main.includes('large_image: assetKey'), 'large_image nutzt nicht den Art-Asset-Key');
+  assert.ok(!main.includes('http://127.0.0.1:${port}${p.cover}'), 'localhost-Cover-URL darf nicht mehr vorkommen');
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes("file: tr && tr.kind !== 'video' ? tr.path : ''"), 'sendPlayerState sendet keinen Audio-Pfad');
+  assert.ok(html.includes('id="discordAssetKey"'), 'Art-Asset-Key-Input fehlt');
+  assert.ok(html.includes('postDiscordSetting({ discordAssetKey:'), 'Art-Asset-Key wird nicht gespeichert');
 });
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');

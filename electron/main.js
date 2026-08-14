@@ -207,11 +207,12 @@ app.whenReady().then(async () => {
         } else {
           act.state = `⏸ ${act.state}`;
         }
-        // Album-Cover als großes Bild (kurze Token-URL, vom Discord-Client
-        // direkt geladen). Fehlt es (z. B. Video), bleibt die Presence text-only.
-        if (p.cover) {
-          act.assets = { large_image: `http://127.0.0.1:${port}${p.cover}`, large_text: p.title };
-        }
+        // Großes Bild: Discord kann lokale http://127.0.0.1-URLs nicht laden
+        // (es braucht öffentliche HTTPS-URLs). Deshalb nur ein statisches
+        // Art-Asset aus dem Portal (Rich Presence → Art Assets → Key).
+        // Ohne Key bleibt die Presence text-only — kein kaputtes Fragezeichen.
+        const assetKey = (s.settings && s.settings.discordAssetKey) ? String(s.settings.discordAssetKey).trim() : '';
+        if (assetKey) act.assets = { large_image: assetKey, large_text: p.title };
         discord.setActivity(act);
       } else {
         discord.setActivity({ details: 'Smoky Desktop', state: 'Verwaltet seine Media-Bibliothek' });

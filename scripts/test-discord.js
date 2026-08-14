@@ -72,28 +72,11 @@ const check = (name, ok, extra) => { console.log((ok ? '✅' : '❌') + ' ' + na
   const status = await (await get('/api/status')).json();
   check('/api/status: Secret + Token nicht geleakt', !('discordClientSecret' in status.settings) && !('discordToken' in status.settings), JSON.stringify(status.settings));
 
-  // ------------------------------------------------ Cover-Token (RPC) -----
-  // Kurze, stabile Cover-URL für Discord: player-state mit Datei → /api/cover/t/<token>.
-  // (Die eigentliche Cover-Extraktion testet schon test-covers.js; hier geht es
-  // nur um die Token-Zuordnung — ohne den langsamen ffmpeg-Pfad.)
-  const coverDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-cover-token-'));
-  // Folder über die API setzen (statt settings.folder direkt zu mutieren):
-  // /api/discord/disconnect ersetzt das settings-Objekt serverseitig, daher ist
-  // die beim require() geholte Referenz hier evtl. veraltet.
-  await get('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: coverDir }) });
-  const dummy = path.join(coverDir, 'track.mp3');
-  fs.writeFileSync(dummy, 'kein echtes Audio — nur für den Cover-Token-Test');
-  await get('/api/player-state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'T', artist: 'A', playing: true, file: dummy, position: 10, duration: 200 }) });
-  const st = await (await get('/api/status')).json();
-  const tokMatch = st.player && st.player.cover && st.player.cover.match(/^\/api\/cover\/t\/([a-f0-9]{20})$/);
-  check('player-state mit Datei → kurze Cover-Token-URL', !!tokMatch, st.player && st.player.cover);
-  const tokMissing = await get('/api/cover/t/' + '0'.repeat(20));
-  check('unbekannter Cover-Token → 404', tokMissing.status === 404, 'status=' + tokMissing.status);
-  // Token zeigt auf die Datei: nach Löschen muss die Existenz-Prüfung greifen (404).
-  fs.unlinkSync(dummy);
-  const tokDeleted = await get(st.player.cover);
-  check('Cover-Token auf gelöschte Datei → 404 (Mapping korrekt)', tokDeleted.status === 404, 'status=' + tokDeleted.status);
-  try { fs.rmSync(coverDir, { recursive: true, force: true }); } catch {}
+  // Art-Asset-Key wird (wie die Client-ID) über /api/settings gespeichert und
+  // über /api/status zurückgegeben — er darf NIE gefiltert werden.
+  await get('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ discordAssetKey: 'smoky' }) });
+  const stAsset = await (await get('/api/status')).json();
+  check('/api/status: discordAssetKey wird durchgereicht', stAsset.settings.discordAssetKey === 'smoky', JSON.stringify(stAsset.settings));
 
   console.log(failed ? `\n${failed} Test(s) fehlgeschlagen` : '\nAlle Discord-Tests bestanden ✅');
   try { server.closeAllConnections(); } catch {}

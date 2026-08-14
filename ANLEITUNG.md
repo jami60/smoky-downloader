@@ -47,6 +47,22 @@ Smoky kann zwei Dinge mit Discord — **unabhängig voneinander**:
 - **Trennen** entfernt das Profil wieder (lokal, jederzeit).
 - Ohne eigene Discord-App bleiben RPC und Login einfach aus — die App läuft normal weiter.
 
+### 1.4 Großes Cover-Bild (Art-Asset, optional)
+
+Das **echte Album-Cover** kann Discord nicht anzeigen: Smoky ist lokal, und Discord
+lädt RPC-Bilder nur von öffentlichen HTTPS-URLs — `http://127.0.0.1/…` funktioniert
+nicht (würde als kaputtes Fragezeichen erscheinen).
+
+Stattdessen kannst du **ein eigenes Bild** als großes RPC-Cover zeigen:
+
+1. Discord-Developer-Portal → deine App → links **„Rich Presence"** → **„Art Assets"**.
+2. Ein quadratisches Bild hochladen (am besten **1024×1024**, z. B. das Smoky-Logo).
+3. Den **Asset-Key** merken (der Dateiname, automatisch kleingeschrieben — z. B. `smoky`).
+4. In Smoky: **Einstellungen → Discord → Art-Asset-Key** eintragen (z. B. `smoky`).
+5. Beim Musik-Hören zeigt Discord dann dieses Bild neben Titel/Künstler/Fortschritt.
+
+Ohne Art-Asset-Key bleibt die Presence sauber **text-only** (kein kaputtes Bild).
+
 ---
 
 ## 2. Version bauen & als Release veröffentlichen
