@@ -65,6 +65,12 @@ let settings = {
   // Favoriten + Abspiel-Statistik (für Smart-Alben „Favoriten / Zuletzt / Meist").
   favorites: [],      // Datei-Pfade (absolut) der als Favorit markierten Tracks
   playStats: {},      // { [path]: { plays, lastPlayed } }
+  playLog: [],        // Zeitstempel aller Plays (gekappt) — für Wrapped-Streaks
+  // Horror-Theme: 3-AM-Auto-Aktivierung + fester Atmosphere-Track.
+  horror3am: true,
+  horrorMusic: true,
+  horrorMusicVolume: 40,
+  horrorFx: 60,       // Effekt-Intensität 0–100
   // Discord: RPC (Client-ID reicht) + optionaler Login (Client-ID + Secret).
   // NIE im /api/status oder im Settings-Export zurückgeben — Secret + Token
   // bleiben lokal auf diesem Gerät.
@@ -1885,6 +1891,65 @@ function shareLandingPage(share, token) {
     + `</div></body>`;
 }
 
+// Mobiler Web-Player („Dein eigenes Spotify“): read-only Streaming der Library
+// über den LAN-Server. Keine Secrets, keine Downloads — nur Audio + Cover.
+function mobilePlayerPage() {
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Smoky Player</title><style>
+  :root{--bg:#0e111a;--surface:#171b26;--surface2:#1f2432;--border:rgba(255,255,255,.08);--text:#eef0f8;--muted:#8b93a7;--accent:#8b7cff;--mint:#72e2c0}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+  .top{position:sticky;top:0;z-index:3;padding:16px 16px 10px;background:linear-gradient(var(--bg) 80%,transparent)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;letter-spacing:-.02em}
+  .brand i{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;background:linear-gradient(135deg,var(--accent),#5d53c9);color:#fff;font-style:normal;font-size:13px}
+  .sub{font-size:12px;color:var(--muted);margin:4px 0 10px}
+  input{width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;outline:none}
+  .list{padding:6px 8px 120px}
+  .tr{display:flex;align-items:center;gap:11px;padding:9px;border-radius:12px;cursor:pointer}.tr:active{background:var(--surface2)}.tr.on{background:var(--surface2)}
+  .cov{width:46px;height:46px;border-radius:9px;background:var(--surface2);flex:none;display:grid;place-items:center;color:var(--muted);overflow:hidden;font-size:20px}
+  .cov img{width:100%;height:100%;object-fit:cover;display:block}
+  .meta{flex:1;min-width:0}.meta b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dur{font-size:11px;color:var(--muted);flex:none}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:13px}
+  .bar{position:fixed;left:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;gap:12px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(14,17,26,.92);backdrop-filter:blur(14px);border-top:1px solid var(--border)}
+  .bar .cov{width:42px;height:42px}.bar .meta b{font-size:13px}.bar .meta span{font-size:11px}
+  .ctl{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
+  .ctl button{width:40px;height:40px;border-radius:50%;border:0;background:var(--surface2);color:var(--text);font-size:16px;display:grid;place-items:center}
+  .ctl button.main{background:var(--accent);color:#fff;width:46px;height:46px}
+  </style></head><body>
+  <div class="top"><div class="brand"><i>S</i>Smoky</div><div class="sub">Deine Musik, gestreamt von deinem PC</div><input id="q" type="search" placeholder="Suchen…"></div>
+  <div class="list" id="list"><div class="empty">Lädt…</div></div>
+  <div class="bar" id="bar" style="display:none"><div class="cov" id="barCov">♪</div><div class="meta"><b id="barTitle">—</b><span id="barArtist">—</span></div><div class="ctl"><button id="prev">⏮</button><button id="play" class="main">▶</button><button id="next">⏭</button></div></div>
+  <script>
+  var tracks=[],all=[],idx=-1;
+  var audio=new Audio();audio.preload='metadata';
+  function $(id){return document.getElementById(id)}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function cover(p){return p?('/m/api/cover?file='+encodeURIComponent(p)):''}
+  function fmt(s){s=Math.round(s||0);var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss}
+  function play(p){audio.src='/m/api/play?file='+encodeURIComponent(p);audio.play().catch(function(){})}
+  function render(){
+    var q=$('q').value.trim().toLowerCase();
+    tracks=all.filter(function(t){return !q||(t.title||'').toLowerCase().indexOf(q)>=0||(t.artist||'').toLowerCase().indexOf(q)>=0||(t.album||'').toLowerCase().indexOf(q)>=0});
+    var html='';
+    if(!tracks.length)html='<div class="empty">Keine Treffer</div>';
+    for(var i=0;i<tracks.length;i++){var t=tracks[i];var on=t.path===(all[idx]&&all[idx].path)?' on':'';html+='<div class="tr'+on+'"><div class="cov">'+(cover(t.path)?'<img src="'+cover(t.path)+'" alt="" onerror="this.remove()">':'♪')+'</div><div class="meta"><b>'+esc(t.title)+'</b><span>'+esc(t.artist||'Unbekannt')+'</span></div><div class="dur">'+fmt(t.duration)+'</div></div>'}
+    $('list').innerHTML=html;
+    var items=document.querySelectorAll('.tr');
+    for(var j=0;j<items.length;j++){(function(n){items[j].onclick=function(){idx=all.indexOf(tracks[n]);play(tracks[n].path)}})(j)}
+    var b=$('bar');if(idx>=0&&all[idx]){b.style.display='';$('barTitle').textContent=all[idx].title||'';$('barArtist').textContent=all[idx].artist||'';var c=cover(all[idx].path);$('barCov').innerHTML=c?'<img src="'+c+'" alt="">':'♪';$('play').textContent=audio.paused?'▶':'⏸'}else{b.style.display='none'}
+  }
+  function step(d){if(!all.length)return;var n=idx<0?0:(idx+d+all.length)%all.length;idx=n;play(all[n].path);render()}
+  $('q').addEventListener('input',render);
+  $('play').addEventListener('click',function(){if(idx<0&&all.length)idx=0;if(idx<0)return;if(audio.paused){audio.play().catch(function(){})}else{audio.pause()}render()});
+  $('prev').addEventListener('click',function(){step(-1)});
+  $('next').addEventListener('click',function(){step(1)});
+  audio.addEventListener('ended',function(){step(1)});
+  audio.addEventListener('play',function(){$('play').textContent='⏸'});
+  audio.addEventListener('pause',function(){$('play').textContent='▶'});
+  fetch('/m/api/library').then(function(r){return r.json()}).then(function(d){all=(d&&d.tracks)||[];render()}).catch(function(){$('list').innerHTML='<div class="empty">Server nicht erreichbar</div>'});
+  </script></body></html>`;
+}
+
 // Startet den LAN-Server (0.0.0.0). Falls SHARE_PORT belegt ist, wird auf
 // einen freien Port ausgewichen; scheitert auch das, läuft Smoky ohne Share
 // weiter (resolve(null)) statt den Start zu blockieren. Idempotent: parallele
@@ -1895,9 +1960,32 @@ function startShareServer() {
   if (shareServer) return Promise.resolve(sharePort);
   if (shareServerPromise) return shareServerPromise;
   shareServerPromise = new Promise((resolve) => {
-    const srv = http.createServer((req, res) => {
+    const srv = http.createServer(async (req, res) => {
       try {
         const u = new URL(req.url, `http://${req.headers.host}`);
+        // ---- Mobiler Player („Dein eigenes Spotify“): read-only Streaming ----
+        if (u.pathname === '/m' || u.pathname === '/m/') {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(mobilePlayerPage());
+          return;
+        }
+        if (u.pathname === '/m/api/library') {
+          const lib = await scanLibrary();
+          const audio = lib.filter((t) => t.kind === 'audio').map((t) => ({ path: t.path, title: t.title, artist: t.artist || '', album: t.album || '', duration: t.duration || 0 }));
+          return sendJson(res, 200, { tracks: audio });
+        }
+        if (u.pathname === '/m/api/cover') {
+          const file = u.searchParams.get('file');
+          if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
+          const cover = await coverFor(file);
+          if (!cover) return sendJson(res, 204);
+          return serveFile(req, res, cover, MIME[path.extname(cover).toLowerCase()] || 'image/jpeg');
+        }
+        if (u.pathname === '/m/api/play') {
+          const file = u.searchParams.get('file');
+          if (!file || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) return sendJson(res, 404, { error: 'not found' });
+          return serveFile(req, res, file, MIME[path.extname(file).toLowerCase()] || 'application/octet-stream');
+        }
         const m = /^\/share\/([0-9a-f]+)(?:\/(dl))?$/.exec(u.pathname);
         const token = m ? m[1] : null;
         const isDl = m ? m[2] === 'dl' : false;
@@ -2660,6 +2748,9 @@ const server = http.createServer(async (req, res) => {
       if (!settings.playStats || typeof settings.playStats !== 'object') settings.playStats = {};
       const cur = settings.playStats[file] || { plays: 0, lastPlayed: 0 };
       settings.playStats[file] = { plays: (cur.plays || 0) + 1, lastPlayed: Date.now() };
+      if (!Array.isArray(settings.playLog)) settings.playLog = [];
+      settings.playLog.push(Date.now());
+      if (settings.playLog.length > 5000) settings.playLog = settings.playLog.slice(-5000);
       saveJson(SETTINGS_FILE, settings);
       return sendJson(res, 200, { ok: true, plays: settings.playStats[file].plays, lastPlayed: settings.playStats[file].lastPlayed });
     }
@@ -2748,6 +2839,47 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { total, bytesFmt: fmt(bytes), weekCount: week.length, weekBytesFmt: fmt(weekBytes), topHost: topHost ? { host: topHost[0], count: topHost[1] } : null, avgFmt: total ? fmt(bytes / total) : '—' });
     }
 
+    // Smoky Wrapped: persönliche Hör-Statistik aus Play-Log + Library.
+    if (req.method === 'GET' && p === '/api/wrapped') {
+      const tracks = await scanLibrary();
+      const log = Array.isArray(settings.playLog) ? settings.playLog : [];
+      const topTracks = tracks.filter((t) => (t.plays || 0) > 0)
+        .sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 8)
+        .map((t) => ({ title: t.title, artist: t.artist || '', album: t.album || '', plays: t.plays || 0, path: t.path }));
+      const artistMap = {};
+      for (const t of tracks) if (t.artist) artistMap[t.artist] = (artistMap[t.artist] || 0) + (t.plays || 0);
+      const topArtists = Object.entries(artistMap).filter(([, p]) => p > 0)
+        .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, plays]) => ({ name, plays }));
+      const totalPlays = tracks.reduce((s, t) => s + (t.plays || 0), 0);
+      const listenMs = tracks.reduce((s, t) => s + (t.plays || 0) * (t.duration || 0), 0);
+      // Streak: aufeinanderfolgende Tage mit mindestens einem Play (bis heute/gestern).
+      const daySet = new Set();
+      const hours = {};
+      for (const ts of log) {
+        const d = new Date(ts);
+        if (!Number.isFinite(d.getTime())) continue;
+        daySet.add(d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate());
+        hours[d.getHours()] = (hours[d.getHours()] || 0) + 1;
+      }
+      let streak = 0;
+      const dayStr = (d) => d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+      let cursor = new Date();
+      if (!daySet.has(dayStr(cursor))) cursor = new Date(Date.now() - 864e5); // heute oder gestern
+      while (daySet.has(dayStr(cursor))) { streak++; cursor = new Date(cursor.getTime() - 864e5); }
+      const busiest = Object.entries(hours).sort((a, b) => b[1] - a[1])[0];
+      return sendJson(res, 200, {
+        totalPlays,
+        totalTracks: tracks.length,
+        totalArtists: Object.keys(artistMap).length,
+        favorites: tracks.filter((t) => t.fav).length,
+        listenMinutes: Math.round(listenMs / 60000),
+        streak,
+        busiestHour: busiest ? Number(busiest[0]) : null,
+        topTracks,
+        topArtists,
+      });
+    }
+
     if (req.method === 'GET' && p === '/api/playlist-export') {
       const tracks = await scanLibrary();
       if (!tracks.length) return sendJson(res, 404, { error: 'no tracks' });
@@ -2804,6 +2936,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, r);
     }
 
+    // Mobiler Player („Dein eigenes Spotify“): URL zum LAN-Web-Player.
+    if (req.method === 'GET' && p === '/api/mobile-link') {
+      const ip = lanIPv4();
+      if (!ip) return sendJson(res, 400, { error: 'Keine LAN-IP gefunden — PC und Handy müssen im selben WLAN sein.' });
+      const port = sharePort || SHARE_PORT;
+      return sendJson(res, 200, { url: `http://${ip}:${port}/m` });
+    }
+
     serveStatic(req, res, p);
   } catch (err) {
     sendJson(res, 500, { error: String(err.message || err) });
@@ -2851,7 +2991,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
+module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, mobilePlayerPage, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
 
 if (require.main === module) {
   startServer();

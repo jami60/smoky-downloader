@@ -569,6 +569,54 @@ check('Favoriten + Import + Smart-Alben + Album-ZIP + Loop-Fix', () => {
   assert.ok(html.includes('playQueue.length === 1'), 'Einzel-Queue-Loop-Fix fehlt');
   assert.ok(html.includes('/api/play-stats'), 'play-stats-Aufruf fehlt');
 });
+check('Horror-Theme: Blut + Vignette + Glitch + 3-AM + feste Musik', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('class="horror-fx"'), 'horror-fx-Overlay (Bluttropfen/Wischspuren) fehlt');
+  assert.ok(html.includes('class="horror-vignette"'), 'horror-vignette fehlt');
+  assert.ok(html.includes('id="horrorTransition"'), 'Übergangs-Overlay fehlt');
+  assert.ok(html.includes('@keyframes horrorGlitch'), 'horrorGlitch-Keyframes fehlen');
+  assert.ok(html.includes('id="horrorAudio"'), 'horrorAudio-Element fehlt');
+  assert.ok(html.includes('assets/horror-music.wav'), 'horror-music.wav wird nicht eingebunden');
+  assert.ok(html.includes('function onThemeChanged'), 'onThemeChanged fehlt');
+  assert.ok(html.includes('maybeTrigger3am'), '3-AM-Watcher fehlt');
+  assert.ok(html.includes('d.getHours() !== 3'), '3-AM-Stunden-Check fehlt');
+  assert.ok(html.includes('id="horrorThemeToggle"'), 'Horror-Theme-Toggle fehlt');
+  assert.ok(html.includes('id="horror3amToggle"'), '3-AM-Toggle fehlt');
+  assert.ok(html.includes('id="horrorMusicToggle"'), 'Horror-Music-Toggle fehlt');
+  assert.ok(html.includes('id="horrorMusicVolume"'), 'Horror-Music-Volume fehlt');
+  assert.ok(html.includes('id="horrorFx"'), 'Horror-Effects-Intensity fehlt');
+  assert.ok(html.includes('--horror-fx'), '--horror-fx-Intensitätsvariable fehlt');
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes('horror3am: true'), 'settings.horror3am fehlt');
+  assert.ok(srv.includes('horrorMusic: true'), 'settings.horrorMusic fehlt');
+  assert.ok(srv.includes('horrorMusicVolume: 40'), 'settings.horrorMusicVolume fehlt');
+  assert.ok(srv.includes('horrorFx: 60'), 'settings.horrorFx fehlt');
+});
+check('Smoky Wrapped: Endpoint + View + Export', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes("p === '/api/wrapped'"), '/api/wrapped fehlt');
+  assert.ok(srv.includes('playLog'), 'playLog fehlt');
+  assert.ok(srv.includes('busiestHour'), 'busiestHour fehlt');
+  assert.ok(srv.includes('listenMinutes'), 'listenMinutes fehlt');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('data-view="Wrapped"'), 'Wrapped-Nav-Item fehlt');
+  assert.ok(html.includes('id="wrappedView"'), 'wrappedView fehlt');
+  assert.ok(html.includes('id="wrappedExport"'), 'Wrapped-Export fehlt');
+  assert.ok(html.includes('const renderWrapped'), 'renderWrapped fehlt');
+  assert.ok(html.includes('function loadWrapped'), 'loadWrapped fehlt');
+});
+check('Mobiler Player (Eigenes Spotify): LAN-Routen + Remote-Button', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes("u.pathname === '/m'"), '/m-Route fehlt');
+  assert.ok(srv.includes("u.pathname === '/m/api/library'"), '/m/api/library fehlt');
+  assert.ok(srv.includes("u.pathname === '/m/api/cover'"), '/m/api/cover fehlt');
+  assert.ok(srv.includes("u.pathname === '/m/api/play'"), '/m/api/play fehlt');
+  assert.ok(srv.includes('function mobilePlayerPage'), 'mobilePlayerPage fehlt');
+  assert.ok(srv.includes("p === '/api/mobile-link'"), '/api/mobile-link fehlt');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="mobilePlayerBtn"'), 'Remote-Button fehlt');
+  assert.ok(html.includes('openMobilePlayer'), 'openMobilePlayer fehlt');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);

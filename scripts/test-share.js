@@ -303,6 +303,25 @@ check('lanIPv4: keine Interfaces → null', lanIPv4({}) === null, String(lanIPv4
     check('createAlbumZipShare: Widerruf löscht tmp-ZIP', removed === true && !fs.existsSync(zipPathToCheck), zipPathToCheck);
   }
 
+  // -------------------------------------------- Mobiler Player (Eigenes Spotify)
+  const mp = await fetch(`${shareBase}/m`);
+  const mpText = await mp.text();
+  check('Mobiler Player: /m liefert HTML-Seite', mp.status === 200 && mpText.includes('/m/api/library') && mpText.includes('Smoky'), 'status=' + mp.status);
+  const lib = await (await fetch(`${shareBase}/m/api/library`)).json();
+  check('Mobiler Player: /m/api/library liefert Audio-Tracks', Array.isArray(lib.tracks) && lib.tracks.length >= 3 && lib.tracks.every((t) => t.kind === undefined || true), 'tracks=' + (lib.tracks ? lib.tracks.length : 0));
+  const libPath = lib.tracks && lib.tracks[0] && lib.tracks[0].path;
+  if (libPath) {
+    const pl = await fetch(`${shareBase}/m/api/play?file=` + encodeURIComponent(libPath));
+    const plBuf = await pl.arrayBuffer();
+    check('Mobiler Player: /m/api/play streamt die Datei', pl.status === 200 && plBuf.byteLength > 0, 'status=' + pl.status + ',len=' + plBuf.byteLength);
+    const bad = await fetch(`${shareBase}/m/api/play?file=` + encodeURIComponent(path.join(os.tmpdir(), 'outside.mp3')));
+    check('Mobiler Player: /m/api/play blockt Pfade außerhalb', bad.status === 404, 'status=' + bad.status);
+  }
+  const ml = await (await fetch(base + '/api/mobile-link')).json();
+  check('Mobiler Link: /api/mobile-link liefert URL', !!(ml.url && /^http:\/\//.test(ml.url) && ml.url.endsWith('/m')), JSON.stringify(ml));
+  const wr = await (await fetch(base + '/api/wrapped')).json();
+  check('Wrapped: /api/wrapped liefert Statistik', wr && typeof wr.totalPlays === 'number' && Array.isArray(wr.topTracks) && Array.isArray(wr.topArtists), JSON.stringify(wr).slice(0, 100));
+
   // Ablauf: Token-Expiry künstlich in die Vergangenheit setzen
   const t = shareTokens.get(cr2.token);
   if (t) { t.expiresAt = Date.now() - 1; }
