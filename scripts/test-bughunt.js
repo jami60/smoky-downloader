@@ -543,6 +543,32 @@ check('Polish: Kein Auto-Play beim App-Start (restoreLastPlayback)', () => {
   assert.ok(html.includes('// Kein Auto-Play beim App-Start'), 'Auto-Play-Hinweis fehlt in restoreLastPlayback');
   assert.ok(!html.includes('media.play().catch(() => {});'), 'Auto-Play (media.play) in restoreLastPlayback noch vorhanden');
 });
+check('Favoriten + Import + Smart-Alben + Album-ZIP + Loop-Fix', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes("p === '/api/import'"), '/api/import fehlt');
+  assert.ok(srv.includes("p === '/api/favorite'"), '/api/favorite fehlt');
+  assert.ok(srv.includes("p === '/api/play-stats'"), '/api/play-stats fehlt');
+  assert.ok(srv.includes("p === '/api/share/album'"), '/api/share/album fehlt');
+  assert.ok(srv.includes('function zipFromStaging'), 'zipFromStaging fehlt');
+  assert.ok(srv.includes('function createAlbumZipShare'), 'createAlbumZipShare fehlt');
+  assert.ok(srv.includes('favorites: []'), 'settings.favorites fehlt');
+  assert.ok(srv.includes('playStats: {}'), 'settings.playStats fehlt');
+  assert.ok(srv.includes('fav: favSet.has(f)'), 'fav im Library-Scan fehlt');
+  assert.ok(srv.includes('tmpFile: true'), 'tmpFile-Flag für Album-ZIP fehlt');
+  assert.ok(srv.includes('Compress-Archive -Path'), 'Windows-ZIP (Compress-Archive) fehlt');
+  assert.ok(srv.includes("spawn('zip'"), 'macOS/Linux-ZIP (zip) fehlt');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(html.includes('id="playerImport"'), 'Import-Button fehlt');
+  assert.ok(html.includes('data-fav='), 'Favorit-Stern (data-fav) fehlt');
+  assert.ok(html.includes('function toggleFavorite'), 'toggleFavorite fehlt');
+  assert.ok(html.includes("'__fav__'"), 'Smart-Album Favoriten fehlt');
+  assert.ok(html.includes("'__recent__'"), 'Smart-Album Zuletzt gespielt fehlt');
+  assert.ok(html.includes("'__top__'"), 'Smart-Album Meistgespielt fehlt');
+  assert.ok(html.includes('data-send-album'), 'Album-ZIP-Button fehlt');
+  assert.ok(html.includes('const openAlbumShare'), 'openAlbumShare fehlt');
+  assert.ok(html.includes('playQueue.length === 1'), 'Einzel-Queue-Loop-Fix fehlt');
+  assert.ok(html.includes('/api/play-stats'), 'play-stats-Aufruf fehlt');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);

@@ -260,6 +260,14 @@
     .album-open-count{font-size:10px;color:var(--muted-2);flex:none}
     .album-play-all{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent-2);font-size:11px;padding:7px 12px;border-radius:8px;cursor:pointer;flex:none;transition:background .2s}
     .album-play-all:hover{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+    .album-send{border:1px solid var(--border);background:var(--surface-3);color:var(--text);font-size:11px;padding:7px 12px;border-radius:8px;cursor:pointer;flex:none;transition:background .2s}
+    .album-send:hover{background:var(--accent-soft);color:var(--accent-2)}
+    .album-smart .album-cover{background:linear-gradient(145deg,var(--accent-soft),var(--surface-3))}
+    .album-smart-badge{position:absolute;left:8px;top:8px;font-size:15px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+    .pt-fav{border:0;background:transparent;color:var(--muted);font-size:15px;line-height:1;padding:6px 8px;cursor:pointer;flex:none;border-radius:8px;transition:color .15s,transform .15s}
+    .pt-fav:hover{color:var(--accent-2);transform:scale(1.12)}
+    .pt-fav.on{color:#ffc93c}
+    .pt-fav.on:hover{color:#ffd869}
     .player-now{border:1px solid var(--border-bright);background:linear-gradient(160deg,var(--surface-2),var(--surface));border-radius:var(--radius);padding:26px;display:flex;flex-direction:column;align-items:center;box-shadow:var(--shadow)}
     .player-cover{width:210px;height:210px;border-radius:20px;overflow:hidden;flex:none;background:linear-gradient(145deg,var(--accent-soft),var(--surface-3));display:grid;place-items:center;box-shadow:0 18px 50px color-mix(in srgb,var(--accent) 18%,transparent)}
     .player-cover img{width:100%;height:100%;object-fit:cover;display:block}
@@ -332,7 +340,7 @@
       </section>
       <section class="page-view" id="playerView">
         <div class="view-header"><div><div class="view-kicker" data-i18n="player.kicker">Player</div><h2 data-i18n="player.title">Your music, locally.</h2><p data-i18n="player.copy">Every audio download lives in your library — play it right here with cover, tags and a live waveform.</p></div><div style="display:flex;align-items:center;gap:12px"><span class="status progress" id="playerCount">0 tracks</span><button class="folder-btn" id="exportPlaylist" data-i18n="player.export">Export playlist</button></div></div>
-        <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px"><div class="view-toggle" id="mediaKindToggle"><button class="view-toggle-btn active" data-kind="audio" data-i18n="player.kindAudio">Musik</button><button class="view-toggle-btn" data-kind="video" data-i18n="player.kindVideo">Videos</button></div><div class="view-toggle" id="libraryViewToggle"><button class="view-toggle-btn active" data-mode="songs" data-i18n="player.viewSongs">Songs</button><button class="view-toggle-btn" data-mode="albums" data-i18n="player.viewAlbums">Alben</button></div><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--muted-2);fill:none;stroke-width:1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="playerSearch" type="text" placeholder="Search tracks…" aria-label="Search tracks" data-i18n-ph="player.searchPh" style="flex:1;max-width:320px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;font-size:12px"><span id="playerSearchCount" style="font-size:10px;color:var(--muted-2)"></span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin:0 0 16px"><div class="view-toggle" id="mediaKindToggle"><button class="view-toggle-btn active" data-kind="audio" data-i18n="player.kindAudio">Musik</button><button class="view-toggle-btn" data-kind="video" data-i18n="player.kindVideo">Videos</button></div><div class="view-toggle" id="libraryViewToggle"><button class="view-toggle-btn active" data-mode="songs" data-i18n="player.viewSongs">Songs</button><button class="view-toggle-btn" data-mode="albums" data-i18n="player.viewAlbums">Alben</button></div><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--muted-2);fill:none;stroke-width:1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="playerSearch" type="text" placeholder="Search tracks…" aria-label="Search tracks" data-i18n-ph="player.searchPh" style="flex:1;max-width:320px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);outline:none;font-size:12px"><span id="playerSearchCount" style="font-size:10px;color:var(--muted-2)"></span><button class="folder-btn" id="playerImport" title="Lokale Tracks importieren" style="flex:none" data-i18n="player.import">Import</button></div>
         <div class="player-layout">
           <div class="player-list" id="playerList"><div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8.5 6 3.5-6 3.5z"/></svg></div><span data-i18n="player.empty">Download some audio first — your tracks will appear here.</span></div></div>
           <div class="player-now">
@@ -460,7 +468,7 @@
         'url.ph':'Füge einen oder mehrere Video- / Audio-Links ein …','btn.paste':'Einfügen','btn.download':'Download','works.with':'Funktioniert mit','platforms.more':'+ 1.200 weitere ↗','folder.label':'Download-Ordner','folder.choose':'Ordner wählen','snow.toggle':'Ambient-Schnee',
         'queue.active':'Aktive Downloads','queue.count.empty':'Keine aktiven Downloads','queue.deleteFinished':'Fertige entfernen','queue.empty':'Deine Queue ist leer. Füge oben einen Link ein.','formats.title':'Ausgabeformate','formats.customize':'Anpassen','recent.title':'Zuletzt gespeichert','recent.viewall':'Alle anzeigen','recent.empty':'Noch keine lokalen Downloads.',
         'downloader.kicker':'Downloader','downloader.title':'Alles in einem ruhigen Ablauf.','downloader.copy':'Füge oben einen Link ein, wähle ein Format, einen lokalen Ordner — und Smoky übernimmt den Rest.','downloader.platforms':'Unterstützte Plattformen','downloader.platformsCopy':'Smoky nutzt yt-dlp für breite Plattform-Unterstützung.','downloader.stat1':'Video- & Audio-Seiten','downloader.stat2':'private Datei-Speicherung','downloader.stat3':'Live-Fortschrittsupdates','downloader.formats':'Formate auf einen Blick','downloader.video':'Video','downloader.audio':'Audio',
-        'player.kicker':'Player','player.title':'Deine Musik, lokal.','player.copy':'Jeder Audio-Download landet in deiner Bibliothek — hier abspielen mit Cover, Tags und Live-Waveform.','player.count':'Titel','player.empty':'Lade zuerst etwas Audio herunter — deine Tracks erscheinen hier.','player.emptyVideo':'Lade zuerst Videos herunter — sie erscheinen hier.','player.nothing':'Nichts läuft','player.pick':'Wähle einen Track aus deiner Bibliothek','player.unknown':'Unbekannter Künstler','player.export':'Playlist exportieren','player.searchPh':'Tracks suchen …','player.searchEmpty':'Keine Treffer','player.kindAudio':'Musik','player.kindVideo':'Videos','player.viewSongs':'Songs','player.viewAlbums':'Alben','player.albumTracks':'Tracks','player.singles':'Einzeltracks','player.backAlbums':'← Alle Alben','player.playAlbum':'Album abspielen','player.albumsEmpty':'Noch keine Alben — Songs mit Album-Tag erscheinen hier als Alben.','tags.title':'Tags bearbeiten','tags.titleLabel':'Titel','tags.artistLabel':'Künstler','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Bild wählen…','tags.coverClear':'Entfernen','tags.coverNone':'Kein eigenes Cover','tags.coverHint':'Wird direkt in die Datei eingebettet (MP3, M4A, FLAC).','tags.cancel':'Abbrechen','tags.save':'Tags speichern','tags.saved':'Tags gespeichert','tags.failed':'Tags konnten nicht gespeichert werden','player.ctx.open':'Im Ordner öffnen','player.ctx.tags':'Tags bearbeiten','player.ctx.copy':'Pfad kopieren','player.ctx.ambient':'Ambient-Modus','player.ctx.copied':'Pfad kopiert','ambient.hint':'Klicken oder ESC zum Beenden','share.title':'Aufs Handy senden','share.hint':'Mit der Handy-Kamera scannen — die Datei lädt direkt im Browser.','share.copy':'Kopieren','share.copied':'Link kopiert','share.copyFail':'Kopieren nicht möglich','share.revoke':'Link sperren','share.revoked':'Link gesperrt','share.done':'Fertig','share.expiresIn':'Läuft ab in','share.expired':'Link abgelaufen','share.nothing':'Spiele zuerst einen Track ab','share.failed':'Konnte nicht senden',
+        'player.kicker':'Player','player.title':'Deine Musik, lokal.','player.copy':'Jeder Audio-Download landet in deiner Bibliothek — hier abspielen mit Cover, Tags und Live-Waveform.','player.count':'Titel','player.empty':'Lade zuerst etwas Audio herunter — deine Tracks erscheinen hier.','player.emptyVideo':'Lade zuerst Videos herunter — sie erscheinen hier.','player.nothing':'Nichts läuft','player.pick':'Wähle einen Track aus deiner Bibliothek','player.unknown':'Unbekannter Künstler','player.export':'Playlist exportieren','player.searchPh':'Tracks suchen …','player.searchEmpty':'Keine Treffer','player.kindAudio':'Musik','player.kindVideo':'Videos','player.viewSongs':'Songs','player.viewAlbums':'Alben','player.albumTracks':'Tracks','player.singles':'Einzeltracks','player.backAlbums':'← Alle Alben','player.playAlbum':'Album abspielen','player.albumsEmpty':'Noch keine Alben — Songs mit Album-Tag erscheinen hier als Alben.','player.import':'Import','player.imported':'{n} Tracks importiert','player.importNoAudio':'Keine Audio-Dateien ausgewählt','player.importSkipped':'Keine neuen Dateien importiert','player.importFailed':'Import fehlgeschlagen','player.smartFav':'⭐ Favoriten','player.smartRecent':'🕘 Zuletzt gespielt','player.smartTop':'🔥 Meistgespielt','player.sendAlbum':'Album als ZIP senden','player.fav':'Favorit','tags.title':'Tags bearbeiten','tags.titleLabel':'Titel','tags.artistLabel':'Künstler','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Bild wählen…','tags.coverClear':'Entfernen','tags.coverNone':'Kein eigenes Cover','tags.coverHint':'Wird direkt in die Datei eingebettet (MP3, M4A, FLAC).','tags.cancel':'Abbrechen','tags.save':'Tags speichern','tags.saved':'Tags gespeichert','tags.failed':'Tags konnten nicht gespeichert werden','player.ctx.open':'Im Ordner öffnen','player.ctx.tags':'Tags bearbeiten','player.ctx.copy':'Pfad kopieren','player.ctx.ambient':'Ambient-Modus','player.ctx.copied':'Pfad kopiert','ambient.hint':'Klicken oder ESC zum Beenden','share.title':'Aufs Handy senden','share.hint':'Mit der Handy-Kamera scannen — die Datei lädt direkt im Browser.','share.copy':'Kopieren','share.copied':'Link kopiert','share.copyFail':'Kopieren nicht möglich','share.revoke':'Link sperren','share.revoked':'Link gesperrt','share.done':'Fertig','share.expiresIn':'Läuft ab in','share.expired':'Link abgelaufen','share.nothing':'Spiele zuerst einen Track ab','share.failed':'Konnte nicht senden',
         'converter.kicker':'Konverter','converter.title':'Forme deine Medien.','converter.copy':'Wandle eine lokale Video- oder Audiodatei mit FFmpeg um — alles bleibt auf deinem Gerät.','converter.head':'Lokaler Medien-Konverter','converter.hint':'💡 <b>MP3 → MP4:</b> Das Album-Cover wird zum Video, Titel / Künstler / Album bleiben in den Tags erhalten.','converter.pick':'Mediendateien wählen …','converter.convert':'Konvertieren','converter.ready':'Bereit zum Konvertieren','converter.converting':'Konvertiere lokal …','converter.files':'Dateien','converter.batchDone':'Dateien konvertiert','converter.countDone':'fertig','converter.ok':'erfolgreich','converter.failed':'fehlgeschlagen','converter.fail':'Konvertierung konnte nicht starten','converter.done':'Konvertierung fertig. Lokal gespeichert.','converter.err':'Konvertierung fehlgeschlagen',
         'clips.kicker':'Clips','clips.title':'Schneide den Moment.','clips.copy':'Füge eine YouTube-URL ein, wähle Start und Ende und lade nur den Teil, den du brauchst — bis 4K. Vertikale Clips (9:16) sind bereit für Shorts, TikTok und Reels.','clips.head':'Video-Clip-Schneider','clips.copy2':'Nur der gewählte Ausschnitt wird geladen — schnell und schlank.','clips.tip':'Tipp:','clips.tip2':'Im Player kannst du „Aktuelle Zeit übernehmen“ nutzen, um den exakten Moment zu erwischen.',        'clips.pick':'YouTube-Link einfügen …','clips.start':'Start','clips.end':'Ende','clips.cut':'Clip schneiden','clips.linkReady':'Link bereit — Start und Ende setzen, dann „Clip schneiden“.','clips.vertical':'Vertikal 9:16 (Shorts · TikTok · Reels)','clips.mode':'Modus','clips.crop':'Crop (ausfüllen)','clips.blur':'Blur-Hintergrund','clips.caption':'Caption','clips.captionPh':'Optionaler Text …','clips.preset15':'15s Short','clips.preset30':'30s Short','clips.preset60':'60s','clips.current':'⏱ Aktuelle Player-Zeit übernehmen','clips.empty':'Noch keine Clips — schneide oben deinen ersten Moment.','clips.nourl':'Klicke zuerst auf das Link-Feld und füge eine YouTube-URL ein.','clips.notime':'Setze Start- und Endzeit (z. B. 0:05 und 0:20).','clips.starting':'Starte Clip-Job …','clips.running':'Clip läuft — nur der gewählte Ausschnitt wird geladen.','clips.fail':'Konnte nicht starten:','clips.done':'Clip fertig. Lokal gespeichert.',
         'history.kicker':'Verlauf','stats.title':'Download-Statistiken','stats.total':'Downloads','stats.bytes':'Gesamtgröße','stats.week':'Diese Woche','stats.weekBytes':'Diese Woche · Größe','stats.topHost':'Top-Plattform','stats.avg':'Ø Dateigröße','history.title':'Deine lokale Bibliothek.','history.copy':'Zuletzt gespeicherte Dateien bleiben auf diesem Gerät. Kein Konto, kein Remote-Verlauf.',        'history.clear':'Verlauf leeren','history.repair':'Mit Bibliothek abgleichen','history.repaired':'History abgeglichen','history.removed':'Einträge entfernt (Datei fehlt)','history.kept':'behalten','history.allOk':'History ist aktuell — alle Dateien existieren.','history.repairFailed':'Abgleich fehlgeschlagen:','history.empty':'Dein lokaler Verlauf erscheint nach dem ersten Download hier.','history.cleared':'Lokaler Verlauf geleert. Deine Dateien liegen sicher in ihren Ordnern.',
@@ -507,7 +515,7 @@
         'url.ph':'Paste one or more video / audio links here…','btn.paste':'Paste','btn.download':'Download','works.with':'Works with','platforms.more':'+ 1,200 more ↗','folder.label':'Downloads folder','folder.choose':'Choose folder','snow.toggle':'Ambient snow',
         'queue.active':'Active downloads','queue.count.empty':'No active downloads','queue.deleteFinished':'Clear finished','queue.empty':'Your queue is clear. Paste a link above to begin.','formats.title':'Output formats','formats.customize':'Customize','recent.title':'Recently saved','recent.viewall':'View all','recent.empty':'No local downloads yet.',
         'downloader.kicker':'Downloader','downloader.title':'Everything in one calm flow.','downloader.copy':'Paste a link above, pick a format, choose a local folder, and let Smoky handle the rest.','downloader.platforms':'Supported platforms','downloader.platformsCopy':'Smoky uses yt-dlp for broad platform support.','downloader.stat1':'video & audio sites','downloader.stat2':'private file storage','downloader.stat3':'live progress updates','downloader.formats':'Formats at a glance','downloader.video':'Video','downloader.audio':'Audio',
-        'player.kicker':'Player','player.title':'Your music, locally.','player.copy':'Every audio download lives in your library — play it right here with cover, tags and a live waveform.','player.count':'tracks','player.empty':'Download some audio first — your tracks will appear here.','player.emptyVideo':'Download some videos first — they will appear here.','player.nothing':'Nothing playing','player.pick':'Pick a track from your library','player.unknown':'Unknown artist','player.export':'Export playlist','player.searchPh':'Search tracks…','player.searchEmpty':'No matches','player.kindAudio':'Music','player.kindVideo':'Videos','player.viewSongs':'Songs','player.viewAlbums':'Albums','player.albumTracks':'tracks','player.singles':'Singles','player.backAlbums':'← All albums','player.playAlbum':'Play album','player.albumsEmpty':'No albums yet — songs with an album tag appear here as albums.','tags.title':'Edit tags','tags.titleLabel':'Title','tags.artistLabel':'Artist','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Choose image…','tags.coverClear':'Remove','tags.coverNone':'No custom cover','tags.coverHint':'Embedded directly into the file (MP3, M4A, FLAC).','tags.cancel':'Cancel','tags.save':'Save tags','tags.saved':'Tags saved','tags.failed':'Could not save tags','player.ctx.open':'Open folder','player.ctx.tags':'Edit tags','player.ctx.copy':'Copy path','player.ctx.ambient':'Ambient mode','player.ctx.copied':'Path copied','ambient.hint':'Click or ESC to exit','share.title':'Send to phone','share.hint':'Scan with your phone camera — the file downloads right in the browser.','share.copy':'Copy','share.copied':'Link copied','share.copyFail':'Could not copy','share.revoke':'Revoke link','share.revoked':'Link revoked','share.done':'Done','share.expiresIn':'Expires in','share.expired':'Link expired','share.nothing':'Play a track first','share.failed':'Could not send',
+        'player.kicker':'Player','player.title':'Your music, locally.','player.copy':'Every audio download lives in your library — play it right here with cover, tags and a live waveform.','player.count':'tracks','player.empty':'Download some audio first — your tracks will appear here.','player.emptyVideo':'Download some videos first — they will appear here.','player.nothing':'Nothing playing','player.pick':'Pick a track from your library','player.unknown':'Unknown artist','player.export':'Export playlist','player.searchPh':'Search tracks…','player.searchEmpty':'No matches','player.kindAudio':'Music','player.kindVideo':'Videos','player.viewSongs':'Songs','player.viewAlbums':'Albums','player.albumTracks':'tracks','player.singles':'Singles','player.backAlbums':'← All albums','player.playAlbum':'Play album','player.albumsEmpty':'No albums yet — songs with an album tag appear here as albums.','player.import':'Import','player.imported':'Imported {n} tracks','player.importNoAudio':'No audio files selected','player.importSkipped':'No new files imported','player.importFailed':'Import failed','player.smartFav':'⭐ Favorites','player.smartRecent':'🕘 Recently played','player.smartTop':'🔥 Most played','player.sendAlbum':'Send album as ZIP','player.fav':'Favorite','tags.title':'Edit tags','tags.titleLabel':'Title','tags.artistLabel':'Artist','tags.albumLabel':'Album','tags.coverLabel':'Cover','tags.coverPick':'Choose image…','tags.coverClear':'Remove','tags.coverNone':'No custom cover','tags.coverHint':'Embedded directly into the file (MP3, M4A, FLAC).','tags.cancel':'Cancel','tags.save':'Save tags','tags.saved':'Tags saved','tags.failed':'Could not save tags','player.ctx.open':'Open folder','player.ctx.tags':'Edit tags','player.ctx.copy':'Copy path','player.ctx.ambient':'Ambient mode','player.ctx.copied':'Path copied','ambient.hint':'Click or ESC to exit','share.title':'Send to phone','share.hint':'Scan with your phone camera — the file downloads right in the browser.','share.copy':'Copy','share.copied':'Link copied','share.copyFail':'Could not copy','share.revoke':'Revoke link','share.revoked':'Link revoked','share.done':'Done','share.expiresIn':'Expires in','share.expired':'Link expired','share.nothing':'Play a track first','share.failed':'Could not send',
         'converter.kicker':'Converter','converter.title':'Shape your media.','converter.copy':'Convert a local video or audio file with FFmpeg while keeping everything on this device.','converter.head':'Local media converter','converter.hint':'💡 <b>MP3 → MP4:</b> The album cover becomes the video, and the title / artist / album tags are kept in the file.','converter.pick':'Choose media files…','converter.convert':'Convert','converter.ready':'Ready to convert','converter.converting':'Converting locally…','converter.files':'files','converter.batchDone':'files converted','converter.countDone':'done','converter.ok':'ok','converter.failed':'failed','converter.fail':'Conversion could not start','converter.done':'Conversion complete. Saved locally.','converter.err':'Conversion failed',
         'clips.kicker':'Clips','clips.title':'Cut the moment.','clips.copy':'Paste a YouTube URL, choose the start and end, and download only the part you need — up to 4K. Vertically styled clips (9:16) are ready for YouTube Shorts, TikTok and Reels.','clips.head':'Video clip cutter','clips.copy2':'Only the selected section is downloaded — fast and lean.','clips.tip':'Tip:','clips.tip2':'In the Player you can use “Use current time” to grab the exact moment.',        'clips.pick':'Paste a YouTube link…','clips.start':'Start','clips.end':'End','clips.cut':'Cut clip','clips.linkReady':'Link ready — set start and end, then hit “Cut clip”.','clips.vertical':'Vertical 9:16 (Shorts · TikTok · Reels)','clips.mode':'Mode','clips.crop':'Crop to fill','clips.blur':'Blurred background','clips.caption':'Caption','clips.captionPh':'Optional text overlay…','clips.preset15':'15s Short','clips.preset30':'30s Short','clips.preset60':'60s','clips.current':'⏱ Use current player time','clips.empty':'No clips yet — cut your first moment above.','clips.nourl':'Click the link field and paste a YouTube URL first.','clips.notime':'Set a start and end time (e.g. 0:05 and 0:20).','clips.starting':'Starting clip job…','clips.running':'Clip running — only the selected section is downloaded.','clips.fail':'Could not start:','clips.done':'Clip finished. Saved locally.',
         'history.kicker':'History','stats.title':'Download statistics','stats.total':'downloads','stats.bytes':'total size','stats.week':'this week','stats.weekBytes':'this week · size','stats.topHost':'top platform','stats.avg':'avg. file size','history.title':'Your local library.','history.copy':'Recently saved files stay on this device. No account or remote history is created.',        'history.clear':'Clear history','history.repair':'Match with library','history.repaired':'History matched','history.removed':'entries removed (file missing)','history.kept':'kept','history.allOk':'History is current — all files exist.','history.repairFailed':'Match failed:','history.empty':'Your local history will appear here after the first download.','history.cleared':'Local history cleared. Your files are still safe in their folders.',
@@ -1357,6 +1365,7 @@
       mediaKindToggle.querySelectorAll('.view-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
       if (mediaKind === 'video') { libraryView = 'songs'; const v = document.getElementById('libraryViewToggle'); if (v) v.style.display = 'none'; }
       else { const v = document.getElementById('libraryViewToggle'); if (v) v.style.display = ''; }
+      albumOpen = null; playQueue = null; playQueuePos = -1;
       renderLibrary();
     });
     let library = [];
@@ -1420,11 +1429,23 @@
         if (b.key === '__singles__') return -1;
         return (a.name || '').localeCompare(b.name || '');
       });
-      return groups;
+      // Smart-Alben (Favoriten / Zuletzt gespielt / Meistgespielt) als
+      // virtuelle Gruppen VOR die echten Alben stellen — gleicher Drill-Down.
+      const smart = [];
+      const base = filteredIndices();
+      const fav = base.filter((i) => library[i].fav);
+      const recent = base.filter((i) => (library[i].lastPlayed || 0) > 0)
+        .sort((a, b) => (library[b].lastPlayed || 0) - (library[a].lastPlayed || 0)).slice(0, 30);
+      const top = base.filter((i) => (library[i].plays || 0) > 0)
+        .sort((a, b) => (library[b].plays || 0) - (library[a].plays || 0)).slice(0, 30);
+      if (fav.length) smart.push({ key: '__fav__', name: t('player.smartFav'), indices: fav, smart: true });
+      if (recent.length) smart.push({ key: '__recent__', name: t('player.smartRecent'), indices: recent, smart: true });
+      if (top.length) smart.push({ key: '__top__', name: t('player.smartTop'), indices: top, smart: true });
+      return [...smart, ...groups];
     }
     function albumHeadHTML(group) {
       const name = group.key === '__singles__' ? t('player.singles') : escapeHtml(group.name);
-      return `<div class="album-back-row"><button class="album-back-btn">${t('player.backAlbums')}</button><b class="album-open-title">${name}</b><span class="album-open-count">${group.indices.length} ${t('player.albumTracks')}</span><button class="album-play-all">▶ ${t('player.playAlbum')}</button></div>`;
+      return `<div class="album-back-row"><button class="album-back-btn">${t('player.backAlbums')}</button><b class="album-open-title">${name}</b><span class="album-open-count">${group.indices.length} ${t('player.albumTracks')}</span><button class="album-play-all">▶ ${t('player.playAlbum')}</button><button class="album-send" data-send-album title="${t('player.sendAlbum')}">📱 ZIP</button></div>`;
     }
     function renderAlbumGrid() {
       currentAlbums = albumGroups();
@@ -1438,11 +1459,12 @@
       }
       playerList.innerHTML = '<div class="album-grid">' + currentAlbums.map((g, gi) => {
         const isSingles = g.key === '__singles__';
+        const isSmart = !!g.smart;
         const first = library[g.indices[0]];
         const cover = isSingles ? '' : coverUrl(first.path);
         const name = isSingles ? t('player.singles') : escapeHtml(g.name);
         const art = cover ? `<img src="${cover}" alt="" loading="lazy" onerror="this.remove()">` : '<span class="album-cover-fallback">♪</span>';
-        return `<div class="album-card" data-album="${gi}"><div class="album-cover">${art}<button class="album-play" data-play-album="${gi}" title="${t('player.playAlbum')}">${PLAY_ICON}</button></div><div class="album-card-info"><b>${name}</b><span>${g.indices.length} ${t('player.albumTracks')}</span></div></div>`;
+        return `<div class="album-card ${isSmart ? 'album-smart' : ''}" data-album="${gi}"><div class="album-cover">${art}<button class="album-play" data-play-album="${gi}" title="${t('player.playAlbum')}">${PLAY_ICON}</button></div><div class="album-card-info"><b>${name}</b><span>${g.indices.length} ${t('player.albumTracks')}</span></div></div>`;
       }).join('') + '</div>';
     }
     // Play-Album bzw. Track-Klick im Album-Drill-Down: Next/Prev bleiben im Album.
@@ -1463,6 +1485,15 @@
       }
       playQueue = null; playQueuePos = -1;
       playTrack(i);
+    }
+    // ★ Favorit setzen/entfernen — optimistisch im UI, persistiert am Server.
+    async function toggleFavorite(i) {
+      const tr = library[i];
+      if (!tr || !tr.path) return;
+      const fav = !tr.fav;
+      tr.fav = fav;
+      renderLibrary();
+      try { await fetch('/api/favorite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: tr.path, on: fav }) }); } catch {}
     }
     function renderLibrary() {
       if (libraryView === 'albums' && albumOpen === null) return renderAlbumGrid();
@@ -1493,6 +1524,7 @@
         <div class="player-track ${i === currentIndex ? 'playing' : ''}" data-index="${i}">
           <div class="pt-cover"><img src="${coverUrl(tr.path)}" alt="" loading="lazy" onerror="this.remove()"><span>${glyph}</span></div>
           <div class="pt-meta"><b>${escapeHtml(tr.title)}</b><span>${escapeHtml(tr.artist || t('player.unknown'))}${(tr.album && tr.album.trim().toLowerCase() !== String(tr.title || '').trim().toLowerCase()) ? ' · ' + escapeHtml(tr.album) : ''}</span></div>
+          <button class="pt-fav ${tr.fav ? 'on' : ''}" data-fav="${i}" aria-label="${t('player.fav')}" title="${t('player.fav')}">${tr.fav ? '★' : '☆'}</button>
           <span class="pt-dur">${tr.duration ? fmtDur(tr.duration) : ''}</span>
         </div>`;
       }).join('');
@@ -1672,6 +1704,12 @@
     function playTrack(i) {
       if (i < 0 || i >= library.length) return;
       currentIndex = i;
+      // Abspiel-Statistik (für die Smart-Alben „Meistgespielt“ / „Zuletzt
+      // gespielt“): lokal hochzählen und am Server persistieren.
+      const played = library[i];
+      played.plays = (played.plays || 0) + 1;
+      played.lastPlayed = Date.now();
+      try { fetch('/api/play-stats', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: played.path }) }).catch(() => {}); } catch {}
       // Nicht "t" nennen: das würde die globale Übersetzungsfunktion t()
       // überdecken — bei Tracks ohne Künstler warf t.artist || t('player.unknown')
       // einen TypeError und brach playTrack mitten ab (kein Render, kein Sync).
@@ -1714,12 +1752,20 @@
     function nextTrack() {
       if (!library.length) return;
       if (playQueue && playQueue.length) {
+        // Einzel-Queue (Album mit nur einem Track) nicht endlos im Kreis
+        // wiederholen — der Track stoppt am Ende.
+        if (playQueue.length === 1) return;
         playQueuePos = (playQueuePos + 1) % playQueue.length;
         playTrack(playQueue[playQueuePos]);
         return;
       }
       const list = filteredIndices();
       if (!list.length) return;
+      if (list.length === 1) {
+        // Einziger Treffer (Suche/Filter): nicht loopen, nur wechseln falls nötig.
+        if (list[0] !== currentIndex) playTrack(list[0]);
+        return;
+      }
       const pos = list.indexOf(currentIndex);
       if (shuffleOn && list.length > 1) {
         let n = list[Math.floor(Math.random() * list.length)];
@@ -1770,7 +1816,7 @@
     // Play/Pause umschalten — genutzt vom Play-Button, von den Medien-Keys
     // und von den Hotkeys (F5). Startet Track 0, wenn noch nichts geladen ist.
     function togglePlay() {
-      if (currentIndex < 0) { if (library.length) playTrack(0); }
+      if (currentIndex < 0) { if (library.length) { playQueue = null; playQueuePos = -1; playTrack(0); } }
       else { const m = currentMedia(); if (m.paused) m.play().catch(() => {}); else m.pause(); }
     }
     // Medien-Hotkeys wie in Spotify/Browsern: F4 = zurück, F5 = Play/Pause, F6 = weiter.
@@ -1825,6 +1871,10 @@
     playerList.addEventListener('click', (e) => {
       const backBtn = e.target.closest('.album-back-btn');
       if (backBtn) { albumOpen = null; renderLibrary(); return; }
+      const favBtn = e.target.closest('[data-fav]');
+      if (favBtn) { e.stopPropagation(); toggleFavorite(parseInt(favBtn.dataset.fav, 10)); return; }
+      const sendAlbum = e.target.closest('[data-send-album]');
+      if (sendAlbum && albumOpen) { const sg = currentAlbums && currentAlbums.find((g) => g.key === albumOpen); if (sg) openAlbumShare(sg); return; }
       const playAll = e.target.closest('.album-play-all');
       if (playAll && albumOpen) { playAlbumByKey(albumOpen); return; }
       const playCard = e.target.closest('[data-play-album]');
@@ -1904,6 +1954,14 @@
       if (shareCountdown) { clearInterval(shareCountdown); shareCountdown = null; }
       shareToken = null;
     };
+    const showShare = (data) => {
+      shareToken = data.token;
+      if (shareFileNameEl) shareFileNameEl.textContent = data.filename || '';
+      if (shareUrlInput) shareUrlInput.value = data.url || '';
+      renderQr(shareQrCanvas, data.url || '');
+      if (data.expiresAt) startShareCountdown(data.expiresAt);
+      if (shareOverlay) shareOverlay.classList.add('show');
+    };
     const openShare = async () => {
       const track = library[currentIndex];
       if (!track || !track.path) { toast(t('share.nothing')); return; }
@@ -1912,12 +1970,19 @@
       if (!res) { toast(t('share.failed')); return; }
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) { toast(data.error || t('share.failed')); return; }
-      shareToken = data.token;
-      if (shareFileNameEl) shareFileNameEl.textContent = data.filename || '';
-      if (shareUrlInput) shareUrlInput.value = data.url || '';
-      renderQr(shareQrCanvas, data.url || '');
-      if (data.expiresAt) startShareCountdown(data.expiresAt);
-      if (shareOverlay) shareOverlay.classList.add('show');
+      showShare(data);
+    };
+    // Album als ZIP ans Handy senden (Album-Drill-Down → „📱 ZIP“).
+    const openAlbumShare = async (group) => {
+      if (!group || !group.indices.length) return;
+      const paths = group.indices.map((i) => library[i].path);
+      const name = group.key === '__singles__' ? t('player.singles') : (group.name || 'Album');
+      let res = null;
+      try { res = await fetch('/api/share/album', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths, name }) }); } catch {}
+      if (!res) { toast(t('share.failed')); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) { toast(data.error || t('share.failed')); return; }
+      showShare(data);
     };
     const shareBtn = document.getElementById('shareToPhone');
     if (shareBtn) shareBtn.addEventListener('click', openShare);
@@ -2131,6 +2196,24 @@
     });
     const playerSearchEl = document.getElementById('playerSearch');
     if (playerSearchEl) playerSearchEl.addEventListener('input', () => { playerQuery = playerSearchEl.value; renderLibrary(); });
+    // Import: eigene Audio-Dateien (Beats o. Ä.) in die Library holen, damit
+    // sie im Player + Tag-Editor auftauchen und dort ihre Tags bekommen.
+    const playerImportBtn = document.getElementById('playerImport');
+    if (playerImportBtn) playerImportBtn.addEventListener('click', async () => {
+      if (!desktop || !desktop.chooseFiles) return toast(t('toast.convertDesktop'));
+      let files = [];
+      try { files = (await desktop.chooseFiles()) || []; } catch { files = []; }
+      if (!files.length) return;
+      const audio = files.filter((f) => /\.(mp3|m4a|flac|wav|ogg|opus|aac)$/i.test(String(f)));
+      if (!audio.length) return toast(t('player.importNoAudio'));
+      try {
+        const res = await fetch('/api/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paths: audio }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.imported > 0) toast(t('player.imported').replace('{n}', data.imported));
+        else toast(t('player.importSkipped'));
+        await loadLibrary();
+      } catch { toast(t('player.importFailed')); }
+    });
     // Toggle Songs/Alben: wechselt die Ansicht und setzt Drill-Down + Album-Queue zurück
     document.querySelectorAll('#libraryViewToggle .view-toggle-btn').forEach((btn) => {
       btn.addEventListener('click', () => {

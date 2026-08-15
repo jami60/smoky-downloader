@@ -62,6 +62,9 @@ let settings = {
   guideSeen: false,
   maxParallel: 3,
   organizeFolders: false,
+  // Favoriten + Abspiel-Statistik (für Smart-Alben „Favoriten / Zuletzt / Meist").
+  favorites: [],      // Datei-Pfade (absolut) der als Favorit markierten Tracks
+  playStats: {},      // { [path]: { plays, lastPlayed } }
   // Discord: RPC (Client-ID reicht) + optionaler Login (Client-ID + Secret).
   // NIE im /api/status oder im Settings-Export zurückgeben — Secret + Token
   // bleiben lokal auf diesem Gerät.
@@ -1753,7 +1756,13 @@ function lanIPv4(interfaces) {
 
 function pruneShareTokens() {
   const nowMs = Date.now();
-  for (const [t, s] of shareTokens) if (s.expiresAt <= nowMs) shareTokens.delete(t);
+  for (const [t, s] of shareTokens) {
+    if (s.expiresAt <= nowMs) {
+      // Temporäre ZIPs (Album-Send) nach Ablauf vom Datenträger räumen.
+      if (s.tmpFile) { try { fs.rmSync(s.path, { force: true }); } catch {} }
+      shareTokens.delete(t);
+    }
+  }
 }
 
 // Legt einen kurzlebigen Token für eine Datei im Download-Ordner an.
@@ -1777,8 +1786,88 @@ function createShareToken(filePath) {
 }
 
 function revokeShareToken(token) {
+  const share = shareTokens.get(String(token || ''));
+  if (share && share.tmpFile) { try { fs.rmSync(share.path, { force: true }); } catch {} }
   const existed = shareTokens.delete(String(token || ''));
   return existed;
+}
+
+// Zipft ein vorbereitetes Staging-Verzeichnis (Kollisionsfrei benannte
+// Track-Kopien) zu einem ZIP. Plattformgerecht: Windows Compress-Archive,
+// macOS/Linux das mitgelieferte zip (mit -j, damit keine Ordnerpfade im
+// Archiv landen — das Handy bekommt flache, sortierte Dateien).
+function zipFromStaging(staging, zipPath) {
+  return new Promise((resolve) => {
+    const onDone = (ok) => {
+      try { resolve(ok && fs.existsSync(zipPath) && fs.statSync(zipPath).size > 0); } catch { resolve(false); }
+    };
+    let p;
+    if (process.platform === 'win32') {
+      p = spawn('powershell', [
+        '-NoProfile', '-NonInteractive', '-Command',
+        `Compress-Archive -Path '${path.join(staging, '*')}' -DestinationPath '${zipPath}' -CompressionLevel Optimal -Force`,
+      ], { windowsHide: true });
+    } else {
+      let files = [];
+      try { files = fs.readdirSync(staging).filter((f) => !f.startsWith('.')).map((f) => path.join(staging, f)); } catch {}
+      if (!files.length) return onDone(false);
+      p = spawn('zip', ['-j', '-q', zipPath, ...files], { windowsHide: true });
+    }
+    p.on('error', () => onDone(false));
+    p.on('close', (code) => onDone(code === 0));
+  });
+}
+
+// Album/Playlist als ZIP ans Handy: staged die Tracks (fortlaufend nummeriert,
+// kollisionssicher), zippt sie in DATA_DIR/share-tmp und registriert einen
+// Token. Der ZIP ist temporär und wird bei Ablauf/Widerruf gelöscht.
+async function createAlbumZipShare(paths, name) {
+  const list = Array.isArray(paths) ? paths.map(String) : [];
+  const cleaned = [];
+  for (const raw of list) {
+    const full = path.resolve(raw);
+    if (!full || !isInsideFolder(full, settings.folder) || !fs.existsSync(full)) continue;
+    let st;
+    try { st = fs.statSync(full); } catch { continue; }
+    if (st.isFile()) cleaned.push(full);
+  }
+  if (!cleaned.length) return { error: 'Keine Tracks im Album gefunden.' };
+  const ip = lanIPv4();
+  if (!ip) return { error: 'Keine LAN-IP gefunden — PC und Handy müssen im selben WLAN sein.' };
+  const safeName = String(name || 'Album').replace(/[^\w\- ]+/g, '').trim() || 'Album';
+  const tmpDir = path.join(DATA_DIR, 'share-tmp');
+  try { fs.mkdirSync(tmpDir, { recursive: true }); } catch {}
+  const stamp = Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
+  const staging = path.join(tmpDir, stamp + '-stage');
+  const zipPath = path.join(tmpDir, stamp + '.zip');
+  try {
+    fs.mkdirSync(staging, { recursive: true });
+    const used = new Set();
+    cleaned.forEach((full, i) => {
+      const base = path.basename(full);
+      const ext = path.extname(base);
+      const stem = base.slice(0, base.length - ext.length);
+      let out = `${String(i + 1).padStart(2, '0')} ${base}`;
+      let n = 1;
+      while (used.has(out.toLowerCase())) {
+        out = `${String(i + 1).padStart(2, '0')} ${stem} (${n})${ext}`;
+        n++;
+      }
+      used.add(out.toLowerCase());
+      try { fs.copyFileSync(full, path.join(staging, out)); } catch {}
+    });
+    const ok = await zipFromStaging(staging, zipPath);
+    if (!ok) return { error: 'ZIP konnte nicht erstellt werden.' };
+    pruneShareTokens();
+    const token = crypto.randomBytes(8).toString('hex');
+    shareTokens.set(token, { path: zipPath, filename: `${safeName}.zip`, expiresAt: Date.now() + SHARE_TTL_MS, tmpFile: true });
+    const port = sharePort || SHARE_PORT;
+    return { token, filename: `${safeName}.zip`, url: `http://${ip}:${port}/share/${token}`, expiresAt: Date.now() + SHARE_TTL_MS };
+  } catch {
+    return { error: 'ZIP konnte nicht erstellt werden.' };
+  } finally {
+    try { fs.rmSync(staging, { recursive: true, force: true }); } catch {}
+  }
 }
 
 function shareLandingPage(share, token) {
@@ -1906,12 +1995,15 @@ async function scanLibrary() {
   await walk(settings.folder, 0);
   files.sort();
   const tracks = [];
+  const favSet = new Set(Array.isArray(settings.favorites) ? settings.favorites : []);
+  const stats = (settings.playStats && typeof settings.playStats === 'object') ? settings.playStats : {};
   for (const f of files) {
     const ext = path.extname(f).toLowerCase();
     const isVideo = VIDEO_EXTS.has(ext);
     const tags = await probeTags(f);
     let size = 0;
     try { size = fs.statSync(f).size; } catch {}
+    const s = stats[f] || {};
     tracks.push({
       path: f,
       kind: isVideo ? 'video' : 'audio',
@@ -1920,6 +2012,9 @@ async function scanLibrary() {
       album: tags.album || '',
       duration: tags.duration || 0,
       size,
+      fav: favSet.has(f),
+      plays: s.plays || 0,
+      lastPlayed: s.lastPlayed || 0,
     });
   }
   libraryCache = tracks;
@@ -2499,6 +2594,76 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { tracks: await scanLibrary() });
     }
 
+    // Eigene Audiodateien (Beats o. Ä.) in die Library holen — kopiert in den
+    // Download-Ordner, damit sie im Player + Tag-Editor verfügbar sind.
+    if (req.method === 'POST' && p === '/api/import') {
+      const body = await readBody(req);
+      const list = Array.isArray(body.paths) ? body.paths.map(String) : [];
+      let imported = 0, skipped = 0;
+      const names = [];
+      for (const srcRaw of list) {
+        const src = path.resolve(srcRaw);
+        let st;
+        try { st = fs.statSync(src); } catch { skipped++; continue; }
+        if (!st.isFile()) { skipped++; continue; }
+        const ext = path.extname(src).toLowerCase();
+        if (!AUDIO_EXTS.has(ext)) { skipped++; continue; }
+        if (isInsideFolder(src, settings.folder)) { skipped++; continue; } // schon in der Library
+        try {
+          fs.mkdirSync(settings.folder, { recursive: true });
+          const base = path.basename(src);
+          const stem = base.slice(0, base.length - ext.length);
+          let dest = path.join(settings.folder, base);
+          let n = 1;
+          while (fs.existsSync(dest)) {
+            dest = path.join(settings.folder, `${stem} (${n})${ext}`);
+            n++;
+          }
+          fs.copyFileSync(src, dest);
+          imported++;
+          names.push(path.basename(dest));
+        } catch { skipped++; }
+      }
+      if (imported) invalidateLibraryCache();
+      return sendJson(res, 200, { ok: true, imported, skipped, names });
+    }
+
+    // Favorit setzen/entfernen (★ im Player). Persistiert in settings.json.
+    if (req.method === 'POST' && p === '/api/favorite') {
+      const body = await readBody(req);
+      const file = body && path.resolve(String(body.path || ''));
+      if (!body || !body.path || !isInsideFolder(file, settings.folder) || !fs.existsSync(file)) {
+        return sendJson(res, 400, { error: 'not found' });
+      }
+      if (!Array.isArray(settings.favorites)) settings.favorites = [];
+      const idx = settings.favorites.indexOf(file);
+      let fav = false;
+      if (body.on === false || (body.on == null && idx >= 0)) {
+        if (idx >= 0) settings.favorites.splice(idx, 1);
+        fav = false;
+      } else {
+        if (idx < 0) settings.favorites.push(file);
+        fav = true;
+      }
+      saveJson(SETTINGS_FILE, settings);
+      invalidateLibraryCache();
+      return sendJson(res, 200, { ok: true, fav });
+    }
+
+    // Abspiel-Statistik (plays/lastPlayed) für die Smart-Alben.
+    if (req.method === 'POST' && p === '/api/play-stats') {
+      const body = await readBody(req);
+      const file = body && path.resolve(String(body.path || ''));
+      if (!body || !body.path || !isInsideFolder(file, settings.folder)) {
+        return sendJson(res, 400, { error: 'not found' });
+      }
+      if (!settings.playStats || typeof settings.playStats !== 'object') settings.playStats = {};
+      const cur = settings.playStats[file] || { plays: 0, lastPlayed: 0 };
+      settings.playStats[file] = { plays: (cur.plays || 0) + 1, lastPlayed: Date.now() };
+      saveJson(SETTINGS_FILE, settings);
+      return sendJson(res, 200, { ok: true, plays: settings.playStats[file].plays, lastPlayed: settings.playStats[file].lastPlayed });
+    }
+
     if (req.method === 'POST' && p === '/api/edit-tags') {
       const body = await readBody(req);
       const file = body && body.file;
@@ -2631,6 +2796,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, removed: revokeShareToken(token) });
     }
 
+    // Album/Playlist als ZIP ans Handy senden.
+    if (req.method === 'POST' && p === '/api/share/album') {
+      const body = await readBody(req);
+      const r = await createAlbumZipShare(body.paths, body.name);
+      if (r.error) return sendJson(res, 400, r);
+      return sendJson(res, 200, r);
+    }
+
     serveStatic(req, res, p);
   } catch (err) {
     sendJson(res, 500, { error: String(err.message || err) });
@@ -2678,7 +2851,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
+module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
 
 if (require.main === module) {
   startServer();

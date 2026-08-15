@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 process.env.SMOKY_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smoky-share-data-'));
 const qr = require('../public/qrcode.js');
-const { startServer, settings, server, shareServer: _shareServerRef, shareTokens, createShareToken, revokeShareToken, lanIPv4, SHARE_TTL_MS } = require('../server.js');
+const { startServer, settings, server, shareServer: _shareServerRef, shareTokens, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, lanIPv4, SHARE_TTL_MS } = require('../server.js');
 
 let failed = 0;
 const check = (name, ok, extra) => { console.log((ok ? '✅' : '❌') + ' ' + name + (extra ? ' — ' + extra : '')); if (!ok) failed += 1; };
@@ -266,6 +266,42 @@ check('lanIPv4: keine Interfaces → null', lanIPv4({}) === null, String(lanIPv4
 
   const invalid = await fetch(`${shareBase}/share/deadbeefdeadbeef`);
   check('Unbekannter Token → 404', invalid.status === 404, 'status=' + invalid.status);
+
+  // ---------------------------------------------------- Album-ZIP-Send ----
+  const albumA = path.join(tmpDir, 'album-a.mp3');
+  const albumB = path.join(tmpDir, 'album-b.flac');
+  fs.writeFileSync(albumA, Buffer.from('track-one'));
+  fs.writeFileSync(albumB, Buffer.from('track-two'));
+
+  // ZIP-Erstellung plattformunabhängig (Windows Compress-Archive, sonst zip).
+  const stageDir = path.join(os.tmpdir(), 'smoky-zip-stage-' + Date.now());
+  fs.mkdirSync(stageDir, { recursive: true });
+  fs.writeFileSync(path.join(stageDir, '01 first.mp3'), 'aa');
+  fs.writeFileSync(path.join(stageDir, '02 second.mp3'), 'bb');
+  const zipOut = path.join(os.tmpdir(), 'smoky-zip-' + Date.now() + '.zip');
+  const zipped = await zipFromStaging(stageDir, zipOut);
+  const zipMagic = zipped ? fs.readFileSync(zipOut).subarray(0, 4).toString('latin1') : '';
+  check('zipFromStaging: erzeugt gültiges ZIP (PK-Magic)', zipped === true && zipMagic === 'PK\u0003\u0004', JSON.stringify(zipMagic));
+  try { fs.rmSync(stageDir, { recursive: true, force: true }); fs.rmSync(zipOut, { force: true }); } catch {}
+
+  // Validierung: leere/ungültige Pfade → klarer Fehler.
+  const emptyZip = await createAlbumZipShare([], 'Leer');
+  check('createAlbumZipShare: leere Liste → error', !!emptyZip.error, JSON.stringify(emptyZip));
+
+  // Gültige Tracks → Token + ZIP-Dateiname (oder klare LAN-Fehlermeldung).
+  const albRes = await createAlbumZipShare([albumA, albumB], 'Test Album');
+  if (albRes.error) {
+    check('createAlbumZipShare: gültige Tracks (ohne LAN → klare Meldung)', /LAN-IP/i.test(albRes.error), JSON.stringify(albRes));
+  } else {
+    const albOk = !!albRes.token && /^[0-9a-f]{16}$/.test(albRes.token) && albRes.filename === 'Test Album.zip' && /^http:\/\//.test(albRes.url) && albRes.url.endsWith('/share/' + albRes.token);
+    check('createAlbumZipShare: Token + Dateiname + URL', albOk, JSON.stringify(albRes));
+    const shareEntry = shareTokens.get(albRes.token);
+    const tmpOk = !!shareEntry && shareEntry.tmpFile === true && fs.existsSync(shareEntry.path);
+    check('createAlbumZipShare: tmp-ZIP auf Platte + tmpFile-Flag', tmpOk, shareEntry ? shareEntry.path : 'no entry');
+    const zipPathToCheck = shareEntry && shareEntry.path;
+    const removed = revokeShareToken(albRes.token);
+    check('createAlbumZipShare: Widerruf löscht tmp-ZIP', removed === true && !fs.existsSync(zipPathToCheck), zipPathToCheck);
+  }
 
   // Ablauf: Token-Expiry künstlich in die Vergangenheit setzen
   const t = shareTokens.get(cr2.token);
