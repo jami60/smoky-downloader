@@ -571,8 +571,15 @@ check('Favoriten + Import + Smart-Alben + Album-ZIP + Loop-Fix', () => {
 });
 check('Horror-Theme: Blut + Vignette + Glitch + 3-AM + feste Musik', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
-  assert.ok(html.includes('class="horror-fx"'), 'horror-fx-Overlay (Bluttropfen/Wischspuren) fehlt');
-  assert.ok(html.includes('class="horror-vignette"'), 'horror-vignette fehlt');
+  assert.ok(html.includes('id="horrorFx"'), 'horrorFx-Overlay (Blut-SVG) fehlt');
+  assert.ok(html.includes('buildHorrorArt'), 'buildHorrorArt (SVG-Blut-Generator) fehlt');
+  assert.ok(html.includes('hb-drips'), 'Bluttropfen an der Oberkante fehlen');
+  assert.ok(html.includes('hb-splats'), 'Blutspritzer fehlen');
+  assert.ok(html.includes('id="horrorVignette"'), 'horrorVignette fehlt');
+  assert.ok(html.includes('runHorrorTransition'), 'runHorrorTransition fehlt');
+  assert.ok(html.includes('runHorrorExit'), 'runHorrorExit fehlt');
+  assert.ok(html.includes('hbDripIn'), 'hbDripIn-Keyframes (Tropfen-Animation) fehlen');
+  assert.ok(html.includes('hbWell'), 'hbWell-Keyframes (Blut-Lache) fehlen');
   assert.ok(html.includes('id="horrorTransition"'), 'Übergangs-Overlay fehlt');
   assert.ok(html.includes('@keyframes horrorGlitch'), 'horrorGlitch-Keyframes fehlen');
   assert.ok(html.includes('id="horrorAudio"'), 'horrorAudio-Element fehlt');
