@@ -94,11 +94,6 @@
     [data-theme="horror"] .theme-dot[data-set="horror"] i { box-shadow:0 0 10px #c62243; }
     [data-theme="horror"] .status.progress { border-color:rgba(198,34,67,.5); color:#ff7183; }
     [data-theme="horror"] .wrapped-bar i { background:linear-gradient(90deg,#c62243,#d9a1a8); }
-    #horrorTransition { position:fixed; inset:0; z-index:90; pointer-events:none; background:#040104; opacity:0; visibility:hidden; transition:opacity 1s ease; }
-    #horrorTransition.active { visibility:visible; opacity:1; }
-    #horrorTransition::after { content:''; position:absolute; inset:0; opacity:0; background:radial-gradient(130% 95% at 50% 0%, rgba(122,12,30,.95), rgba(24,2,7,.96) 58%, #040104 100%); }
-    #horrorTransition.flash::after { animation:horrorFlash .55s ease both; }
-    #horrorTransition.glitch { animation:horrorGlitch .35s steps(2,end) 3; }
     .sidebar { width:var(--sidebar); flex:0 0 var(--sidebar); border-right:1px solid var(--border); padding:26px 16px 18px; background:rgba(10,12,18,.85); backdrop-filter:blur(24px); position:relative; z-index:2; display:flex; flex-direction:column; }
     .brand { display:flex; align-items:center; gap:11px; padding:0 13px 40px; }
     .brand-mark { width:32px; height:32px; display:grid; place-items:center; border-radius:10px; color:#fff; background:linear-gradient(135deg,var(--accent),#5d53c9); box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 25%,transparent); font-family:'Space Grotesk'; font-weight:700; font-size:16px; transition:background .6s ease; }
@@ -178,8 +173,6 @@
     .guide-art { position:relative; z-index:1; width:210px; min-height:190px; padding:16px; border:1px solid var(--border-bright); border-radius:18px; background:color-mix(in srgb,var(--surface) 88%,transparent); box-shadow:0 18px 50px rgba(0,0,0,.25); }.guide-art-top{display:flex;align-items:center;gap:6px;margin-bottom:18px}.guide-art-top i{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}.guide-art-top span{width:68px;height:5px;border-radius:99px;background:var(--surface-3)}.guide-art-line{height:7px;border-radius:99px;background:var(--surface-3);margin:10px 0}.guide-art-line.short{width:60%}.guide-art-line.accent{width:82%;background:linear-gradient(90deg,var(--accent),var(--mint))}.guide-art-thumb{height:66px;border-radius:10px;margin:13px 0;background:linear-gradient(135deg,var(--accent),var(--surface-3));display:grid;place-items:center;color:#fff;font:600 22px 'Space Grotesk';box-shadow:0 10px 24px color-mix(in srgb,var(--accent) 20%,transparent)}.guide-art-check{width:58px;height:58px;margin:16px auto;display:grid;place-items:center;border-radius:50%;color:var(--mint);border:2px solid var(--mint);font-size:28px;box-shadow:0 0 28px color-mix(in srgb,var(--mint) 30%,transparent)}.guide-art-alert{padding:12px;border-radius:10px;color:var(--warning);background:color-mix(in srgb,var(--warning) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning) 30%,transparent);font-size:11px;line-height:1.45}.guide-art-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}.guide-art-pills span{padding:6px 8px;border-radius:7px;color:var(--accent-2);background:var(--accent-soft);font-size:9px}.guide-content{display:flex;flex-direction:column;justify-content:center;padding:52px 58px 42px}.guide-kicker{color:var(--accent-2);font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:12px}.guide-content h2{font:600 31px/1.08 'Space Grotesk';letter-spacing:-.045em;margin:0 0 13px}.guide-content p{max-width:440px;color:var(--muted);font-size:13px;line-height:1.7}.guide-list{display:grid;gap:9px;margin:22px 0 0;padding:0;list-style:none}.guide-list li{display:flex;align-items:flex-start;gap:9px;color:var(--muted);font-size:12px;line-height:1.45}.guide-list li::before{content:'✓';flex:none;width:17px;height:17px;display:grid;place-items:center;border-radius:50%;color:var(--mint);background:var(--accent-soft);font-size:10px}.guide-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:30px}.guide-progress{display:flex;align-items:center;gap:6px}.guide-progress i{width:7px;height:7px;border-radius:50%;background:var(--surface-3);transition:all .2s}.guide-progress i.active{width:22px;border-radius:99px;background:var(--accent)}.guide-actions{display:flex;align-items:center;gap:9px}.guide-skip{padding:10px 9px;color:var(--muted);background:none;font-size:11px}.guide-skip:hover{color:var(--text)}.guide-next{padding:11px 16px;border-radius:10px;color:#fff;background:var(--accent);font-weight:600;box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 26%,transparent);transition:all .2s}.guide-next:hover{transform:translateY(-2px);filter:brightness(1.08)}
     body.guide-open { overflow:hidden; }
     @keyframes horrorFlicker{0%,90%,100%{opacity:1;filter:none}91%{opacity:.72}93%{opacity:1;filter:contrast(1.18) saturate(1.3)}95%{opacity:.85}97%{opacity:1}}
-    @keyframes horrorGlitch{0%{transform:none;filter:none}25%{transform:translateX(-2px);filter:contrast(1.4) hue-rotate(-12deg)}50%{transform:translateX(2px) skewX(1deg);filter:contrast(1.6) saturate(1.5)}75%{transform:translateX(-1px);filter:contrast(1.3)}100%{transform:none;filter:none}}
-    @keyframes horrorFlash{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
     @keyframes guideFade{from{opacity:0}to{opacity:1}} @keyframes guideRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
     @media(max-width:720px){.guide-step{grid-template-columns:1fr}.guide-visual{display:none}.guide-content{padding:48px 28px 30px}.guide-content h2{font-size:26px}.credits-card{grid-template-columns:1fr}.credits-photo{min-height:260px}.credits-photo img{min-height:260px}.credits-content{padding:28px}}
     .toast { position:fixed; right:25px; bottom:25px; z-index:10; padding:13px 16px; border-radius:11px; background:var(--surface-3); border:1px solid var(--border-bright); box-shadow:var(--shadow); transform:translateY(100px); opacity:0; transition:all .4s cubic-bezier(.22,1,.36,1); font-size:12px }.toast.show{transform:translateY(0);opacity:1}.toast b{color:var(--accent-2)}
@@ -313,7 +306,7 @@
 <body data-theme="midnight" data-view="Home">
 <div id="splash" aria-hidden="true"><div class="splash-inner"><div class="splash-mark">S</div><div class="splash-name">Smoky</div><div class="splash-tag">multi media downloader</div><div class="splash-welcome" id="splashWelcome"></div><div class="splash-bar"><i></i></div></div></div>
   <div class="titlebar"><div class="titlebar-brand"><i>S</i> Smoky</div><div class="window-actions"><button class="window-action" id="windowMinimize" aria-label="Minimize"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button><button class="window-action" id="windowMaximize" aria-label="Maximize"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1"/></svg></button><button class="window-action close" id="windowClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
-  <canvas id="snow" aria-hidden="true"></canvas><canvas id="confetti" aria-hidden="true"></canvas><div class="glow"></div><div id="horrorVignette" aria-hidden="true"></div><div id="horrorTransition" aria-hidden="true"></div>
+  <canvas id="snow" aria-hidden="true"></canvas><canvas id="confetti" aria-hidden="true"></canvas><div class="glow"></div><div id="horrorVignette" aria-hidden="true"></div>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand"><div class="brand-mark">S</div><div><div class="brand-name">Smoky</div></div></div>
@@ -888,7 +881,6 @@
     let horror3am = true, horrorMusic = true, horrorMusicVolume = 40, horrorFx = 60;
     let horrorBgWasPlaying = false, horrorLast3amDay = '';
     const horrorAudio = document.getElementById('horrorAudio');
-    const horrorTransition = document.getElementById('horrorTransition');
     const horrorSetting = (obj) => { try { localStorage.setItem('smoky-horror', JSON.stringify(obj)); } catch {} try { fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) }).catch(() => {}); } catch {} };
     (() => { try { const s = JSON.parse(localStorage.getItem('smoky-horror') || '{}'); if (typeof s.horror3am === 'boolean') horror3am = s.horror3am; if (typeof s.horrorMusic === 'boolean') horrorMusic = s.horrorMusic; if (Number.isFinite(s.horrorMusicVolume)) horrorMusicVolume = Math.max(0, Math.min(100, s.horrorMusicVolume)); if (Number.isFinite(s.horrorFx)) horrorFx = Math.max(0, Math.min(100, s.horrorFx)); } catch {} })();
     (async () => { try { const s = await fetch('/api/status').then(r => r.json()); if (s.settings) { if (typeof s.settings.horror3am === 'boolean') horror3am = s.settings.horror3am; if (typeof s.settings.horrorMusic === 'boolean') horrorMusic = s.settings.horrorMusic; if (Number.isFinite(s.settings.horrorMusicVolume)) horrorMusicVolume = Math.max(0, Math.min(100, s.settings.horrorMusicVolume)); if (Number.isFinite(s.settings.horrorFx)) horrorFx = Math.max(0, Math.min(100, s.settings.horrorFx)); syncHorrorSettings(); } } catch {} })();
@@ -915,24 +907,6 @@
       if (horrorAudio.paused) { if (resumeBg && horrorBgWasPlaying) { try { bgAudio.play().catch(() => {}); } catch {} } horrorBgWasPlaying = false; return; }
       fadeHorrorVolume(0, () => { try { horrorAudio.pause(); } catch {} horrorAudio.volume = 0; if (resumeBg && horrorBgWasPlaying) { try { bgAudio.play().catch(() => {}); } catch {} } horrorBgWasPlaying = false; });
     };
-    const runHorrorTransition = () => {
-      if (!horrorTransition) return;
-      horrorTransition.classList.remove('glitch', 'flash');
-      void horrorTransition.offsetWidth;
-      horrorTransition.classList.add('active');
-      setTimeout(() => horrorTransition.classList.add('flash'), 700);
-      setTimeout(() => { horrorTransition.classList.remove('flash'); horrorTransition.classList.add('glitch'); }, 1100);
-      setTimeout(() => horrorTransition.classList.remove('glitch'), 1500);
-      setTimeout(() => horrorTransition.classList.remove('active'), 1900);
-    };
-    const runHorrorExit = () => {
-      if (!horrorTransition) return;
-      horrorTransition.classList.remove('glitch', 'flash');
-      void horrorTransition.offsetWidth;
-      horrorTransition.classList.add('active');
-      setTimeout(() => horrorTransition.classList.add('glitch'), 160);
-      setTimeout(() => { horrorTransition.classList.remove('glitch'); horrorTransition.classList.remove('active'); }, 620);
-    };
     let prevHorrorTheme = root.dataset.theme;
     function onThemeChanged(theme) {
       applyHorrorFx();
@@ -940,8 +914,8 @@
       const left = theme !== 'horror' && prevHorrorTheme === 'horror';
       prevHorrorTheme = theme;
       const toggle = document.getElementById('horrorThemeToggle'); if (toggle) toggle.checked = theme === 'horror';
-      if (entered) { runHorrorTransition(); playHorrorMusic(); }
-      else if (left) { runHorrorExit(); stopHorrorMusic(true); }
+      if (entered) { playHorrorMusic(); }
+      else if (left) { stopHorrorMusic(true); }
     }
     // 3-AM-Watcher: prüft die lokale Uhrzeit — einmal pro Tag auslösen.
     const maybeTrigger3am = () => {

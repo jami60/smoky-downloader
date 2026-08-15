@@ -576,12 +576,11 @@ check('Horror-Theme: Vignette + Glitch + 3-AM + feste Musik (ohne Blut)', () => 
   assert.ok(!html.includes('hb-splats'), 'Blutspritzer dürfen nicht mehr existieren');
   assert.ok(!html.includes('hbWell'), 'Blut-Lache darf nicht mehr existieren');
   assert.ok(html.includes('id="horrorVignette"'), 'horrorVignette fehlt');
-  assert.ok(html.includes('runHorrorTransition'), 'runHorrorTransition fehlt');
-  assert.ok(html.includes('runHorrorExit'), 'runHorrorExit fehlt');
-  assert.ok(html.includes('@keyframes horrorFlash'), 'horrorFlash-Keyframes fehlen');
+  assert.ok(!html.includes('horrorTransition'), 'Übergangs-Overlay darf nicht mehr existieren');
+  assert.ok(!html.includes('runHorrorTransition'), 'runHorrorTransition darf nicht mehr existieren');
+  assert.ok(!html.includes('runHorrorExit'), 'runHorrorExit darf nicht mehr existieren');
+  assert.ok(!html.includes('@keyframes horrorFlash'), 'horrorFlash-Keyframes dürfen nicht mehr existieren');
   assert.ok(html.includes('horrorFlicker'), 'horrorFlicker (Scanline-Glitch) fehlt');
-  assert.ok(html.includes('id="horrorTransition"'), 'Übergangs-Overlay fehlt');
-  assert.ok(html.includes('@keyframes horrorGlitch'), 'horrorGlitch-Keyframes fehlen');
   assert.ok(html.includes('id="horrorAudio"'), 'horrorAudio-Element fehlt');
   assert.ok(html.includes('assets/horror-music.wav'), 'horror-music.wav wird nicht eingebunden');
   assert.ok(html.includes('function onThemeChanged'), 'onThemeChanged fehlt');
