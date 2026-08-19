@@ -706,6 +706,10 @@ function launchItem(item) {
       ...fmt.args(item.quality),
       ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
       ...browserFlag(item.browserName),
+      // PO-Token-Fallback: war der erste Versuch ein YT-403 (GVS-PO-Token),
+      // wird der Retry mit dem web_embedded-Client gefahren, der keinen
+      // PO-Token braucht.
+      ...(item._ytPoFallback && !isSpot ? ['--extractor-args', 'youtube:player_client=web_embedded'] : []),
       ...(picked || [item.url]),
     ];
     if (playlist && !picked) item.title = 'Playlist…';
@@ -805,10 +809,29 @@ function launchItem(item) {
       item.status = 'failed';
       const last = tail.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ');
       item.error = last || `yt-dlp exited with code ${code}`;
+      // YouTube-PO-Token-Fix: 403 auf den Videodaten → einmalig mit dem
+      // web_embedded-Client wiederholen (kein PO-Token nötig).
+      if (!item._ytPoFallback && !isSpot && isYtPo403(last)) {
+        item._ytPoFallback = true;
+        scheduleRetry(item);
+        return;
+      }
       if (canAutoRetry(item)) { scheduleRetry(item); return; }
     }
     finish(item);
   });
+}
+
+// YouTube-PO-Token-Fix: YouTube rollt derzeit (2026) GVS-PO-Tokens aus, die an
+// die Video-ID gebunden sind. Videos unter dem Experiment liefern beim Download
+// „unable to download video data: HTTP Error 403“ — auch mit aktuellem yt-dlp,
+// und unabhängig von der IP. Der `web_embedded`-Client braucht (noch) keinen
+// PO-Token und lädt solche Videos zuverlässig. Daher: Beim 403-Fehler wird der
+// betroffene Download einmalig mit `--extractor-args youtube:player_client=
+// web_embedded` wiederholt statt den Fehler direkt anzuzeigen.
+const YT_PO_403_RE = /unable to download video data[^\n]*HTTP Error 403/i;
+function isYtPo403(msg) {
+  return !!(msg && YT_PO_403_RE.test(String(msg)));
 }
 
 // Auto-Retry: fehlgeschlagene Downloads bis zu 2× automatisch erneut starten
@@ -1186,13 +1209,24 @@ function startClipJob(body) {
         ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
         item.url,
       ];
-      await new Promise((resolve, reject) => {
-        const child = spawn(ytdlp.cmd, dlArgs, { windowsHide: true, env: TOOL_ENV });
-        child.stdout.on('data', () => {});
-        child.stderr.on('data', () => {});
+      // YouTube-PO-Token-Fix: 403 auf den Videodaten → einmalig mit dem
+      // web_embedded-Client wiederholen (kein PO-Token nötig).
+      let clipOut = '';
+      const clipRun = (poFallback) => new Promise((resolve, reject) => {
+        const a = [...dlArgs];
+        if (poFallback) a.splice(a.indexOf(item.url), 0, '--extractor-args', 'youtube:player_client=web_embedded');
+        const child = spawn(ytdlp.cmd, a, { windowsHide: true, env: TOOL_ENV });
+        child.stdout.on('data', (d) => { clipOut = (clipOut + d.toString()).slice(-4000); });
+        child.stderr.on('data', (d) => { clipOut = (clipOut + d.toString()).slice(-4000); });
         child.on('error', reject);
         child.on('close', (code) => (code === 0 ? resolve() : reject(new Error('Could not fetch the video section (yt-dlp exited ' + code + ').'))));
       });
+      try {
+        await clipRun(false);
+      } catch (e) {
+        if (isYtPo403(clipOut)) await clipRun(true);
+        else throw e;
+      }
       try {
         const t = fs.readFileSync(titleFile, 'utf8').trim();
         if (t) item.title = t;
@@ -2991,7 +3025,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, mobilePlayerPage, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar };
+module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, mobilePlayerPage, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar, isYtPo403 };
 
 if (require.main === module) {
   startServer();

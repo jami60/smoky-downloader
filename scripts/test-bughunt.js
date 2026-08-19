@@ -624,5 +624,33 @@ check('Mobiler Player (Eigenes Spotify): LAN-Routen + Remote-Button', () => {
   assert.ok(html.includes('openMobilePlayer'), 'openMobilePlayer fehlt');
 });
 
+// ------------------------------------------- YouTube-PO-Token-Fix (403) --
+// Regression: YouTube rollt GVS-PO-Tokens aus (video-ID-gebunden). Videos unter
+// dem Experiment liefern beim Download „unable to download video data: HTTP
+// Error 403“ — auch mit aktuellem yt-dlp. Fix: 403 erkennen → Retry mit dem
+// web_embedded-Client (kein PO-Token nötig).
+check('server.js: YT-403 (PO-Token) wird erkannt (isYtPo403)', () => {
+  const { isYtPo403 } = require('../server.js');
+  assert.ok(isYtPo403('ERROR: unable to download video data: HTTP Error 403: Forbidden'), '403-Text wird nicht erkannt');
+  assert.ok(isYtPo403('[download] ERROR: unable to download video data: HTTP Error 403'), '403 ohne Suffix wird nicht erkannt');
+  assert.ok(!isYtPo403('ERROR: [youtube] abc: Sign in to confirm your age.'), 'Alters-Login fälschlich als PO-403 erkannt');
+  assert.ok(!isYtPo403('unable to download video data: HTTP Error 404'), '404 fälschlich als PO-403 erkannt');
+  assert.ok(!isYtPo403(null) && !isYtPo403(''), 'leere Meldung fälschlich erkannt');
+});
+check('server.js: YT-403 führt zum web_embedded-Retry (Download)', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes("youtube:player_client=web_embedded"), 'web_embedded-Fallback fehlt');
+  assert.ok(srv.includes('isYtPo403(last)'), '403-Erkennung fehlt im Download-Fehlerpfad');
+  assert.ok(srv.includes('item._ytPoFallback = true'), 'Fallback-Flag wird nicht gesetzt');
+  assert.ok(srv.includes('!item._ytPoFallback'), 'einmaliger Fallback fehlt (kein Endlos-Loop)');
+  assert.ok(srv.includes('!isSpot'), 'Spotify-Downloads dürfen nicht umgeleitet werden');
+});
+check('server.js: YT-403 → web_embedded-Retry auch bei Clips', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes('clipRun(false)'), 'Clip-Erstversuch fehlt');
+  assert.ok(srv.includes('clipRun(true)'), 'Clip-PO-Fallback fehlt');
+  assert.ok(srv.includes('isYtPo403(clipOut)'), 'Clip-403-Erkennung fehlt');
+});
+
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);
