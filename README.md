@@ -14,7 +14,7 @@ Ein ruhiger, lokaler Multi-Media-Downloader für Windows. Videos, Musik, Playlis
 
 ### macOS (Apple Silicon)
 
-1. **`Smoky-1.15.4-arm64.dmg`** herunterladen und Smoky nach `/Applications` ziehen
+1. **`Smoky-1.15.5-arm64.dmg`** herunterladen und Smoky nach `/Applications` ziehen
 2. Einmal im Terminal ausführen (der Build ist nicht notarized, Gatekeeper blockt sonst den Start):
 
    ```
