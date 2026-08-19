@@ -651,6 +651,23 @@ check('server.js: YT-403 → web_embedded-Retry auch bei Clips', () => {
   assert.ok(srv.includes('clipRun(true)'), 'Clip-PO-Fallback fehlt');
   assert.ok(srv.includes('isYtPo403(clipOut)'), 'Clip-403-Erkennung fehlt');
 });
+check('server.js: „Requested format is not available“ wird erkannt (isYtFormatUnavailable)', () => {
+  const { isYtFormatUnavailable } = require('../server.js');
+  assert.ok(isYtFormatUnavailable('ERROR: [youtube] MvBSDX7h5dk: Requested format is not available. Use --list-formats for a list of available formats'), 'Format-Fehler wird nicht erkannt');
+  assert.ok(isYtFormatUnavailable('[youtube] abc: Requested format is not available'), 'Format-Fehler ohne Suffix wird nicht erkannt');
+  assert.ok(!isYtFormatUnavailable('ERROR: unable to download video data: HTTP Error 403'), '403 fälschlich als Format-Fehler erkannt');
+  assert.ok(!isYtFormatUnavailable(null) && !isYtFormatUnavailable(''), 'leere Meldung fälschlich erkannt');
+});
+check('server.js: Format-Fehler lockert den -f-Selektor im Fallback (relaxedVideoArgs)', () => {
+  const srv = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(srv.includes('function relaxedVideoArgs'), 'relaxedVideoArgs fehlt');
+  assert.ok(srv.includes("bv*[height<="), 'lockerer Höhen-Selektor fehlt');
+  assert.ok(srv.includes("bv*+ba/b"), '/b-Fallback im Selektor fehlt');
+  assert.ok(srv.includes('relaxedVideoArgs(item.quality, fmt.ext)'), 'relaxedVideoArgs wird im Download-Pfad nicht genutzt');
+  assert.ok(srv.includes('isYtFormatUnavailable(last)'), 'Format-Fehler-Erkennung fehlt im Download-Fehlerpfad');
+  assert.ok(srv.includes("a.splice(a.indexOf('-f'), 2, '-f', 'bv*+ba/b')"), 'Clip-Fallback lockert die Formatwahl nicht');
+  assert.ok(srv.includes('isYtFormatUnavailable(clipOut)'), 'Clip-Format-Fehler-Erkennung fehlt');
+});
 
 console.log(failures ? `\n✗ ${failures} Test(s) fehlgeschlagen` : '\nAlle Bug-Hunt-Unit-Tests bestanden ✅');
 process.exit(failures ? 1 : 0);

@@ -117,6 +117,19 @@ function videoArgs(quality, ext) {
   return ['-f', sel, '--merge-output-format', ext];
 }
 
+// Lockere Formatwahl für den web_embedded-Fallback: Der web_embedded-Client
+// liefert je nach yt-dlp-Build eine begrenzte Formatliste (oft nur kombinierte
+// Streams ohne getrennte Video-/Audio-DASH-Formate, manchmal ohne Höhen-Info).
+// Der strikte „bestvideo[height<=H]+bestaudio/best[height<=H]“-Selektor findet
+// dann nichts → „Requested format is not available“. Mit bv*+ba/b (bzw. dem
+// /b-Fallback) nimmt yt-dlp das Beste, was die Liste hergibt — es schlägt nur
+// fehl, wenn GAR KEIN Format verfügbar ist.
+function relaxedVideoArgs(quality, ext) {
+  const h = HEIGHTS[String(quality).trim()] || 1080;
+  const sel = h >= 9999 ? 'bv*+ba/b' : `bv*[height<=${h}]+ba/b[height<=${h}]/b`;
+  return ['-f', sel, '--merge-output-format', ext];
+}
+
 // Audio downloads always carry automatic tags (title, artist) and, where the
 // container supports it, the cover art — via yt-dlp's embed flags. (WAV and
 // raw AAC have no standard cover-art slot, so they get tags only.)
@@ -703,7 +716,10 @@ function launchItem(item) {
       // they happen to belong to a playlist
       playlist ? '--yes-playlist' : '--no-playlist',
       '-o', outTpl,
-      ...fmt.args(item.quality),
+      // Beim web_embedded-Fallback auch die Formatwahl lockern — der Client
+      // liefert je nach yt-dlp-Build nur begrenzte Listen, auf denen der
+      // strikte Höhen-Selektor sonst „Requested format is not available“ wirft.
+      ...((item._ytPoFallback && !isSpot && fmt.kind === 'video') ? relaxedVideoArgs(item.quality, fmt.ext) : fmt.args(item.quality)),
       ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
       ...browserFlag(item.browserName),
       // PO-Token-Fallback: war der erste Versuch ein YT-403 (GVS-PO-Token),
@@ -810,8 +826,11 @@ function launchItem(item) {
       const last = tail.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ');
       item.error = last || `yt-dlp exited with code ${code}`;
       // YouTube-PO-Token-Fix: 403 auf den Videodaten → einmalig mit dem
-      // web_embedded-Client wiederholen (kein PO-Token nötig).
-      if (!item._ytPoFallback && !isSpot && isYtPo403(last)) {
+      // web_embedded-Client wiederholen (kein PO-Token nötig). Genauso, wenn
+      // die strikte Formatwahl auf der begrenzten Formatliste nichts findet
+      // („Requested format is not available“) — der Fallback lockert dann
+      // zusätzlich den -f-Selektor.
+      if (!item._ytPoFallback && !isSpot && (isYtPo403(last) || isYtFormatUnavailable(last))) {
         item._ytPoFallback = true;
         scheduleRetry(item);
         return;
@@ -832,6 +851,14 @@ function launchItem(item) {
 const YT_PO_403_RE = /unable to download video data[^\n]*HTTP Error 403/i;
 function isYtPo403(msg) {
   return !!(msg && YT_PO_403_RE.test(String(msg)));
+}
+
+// „Requested format is not available“ — die strikte Formatwahl (bestvideo[height
+// <=H]+bestaudio/best[height<=H]) findet auf der begrenzten Formatliste des
+// web_embedded-Clients nichts. Wird wie der 403 als Fallback-Trigger behandelt.
+const YT_FMT_UNAVAIL_RE = /requested format is not available/i;
+function isYtFormatUnavailable(msg) {
+  return !!(msg && YT_FMT_UNAVAIL_RE.test(String(msg)));
 }
 
 // Auto-Retry: fehlgeschlagene Downloads bis zu 2× automatisch erneut starten
@@ -1214,7 +1241,13 @@ function startClipJob(body) {
       let clipOut = '';
       const clipRun = (poFallback) => new Promise((resolve, reject) => {
         const a = [...dlArgs];
-        if (poFallback) a.splice(a.indexOf(item.url), 0, '--extractor-args', 'youtube:player_client=web_embedded');
+        if (poFallback) {
+          // Beim Fallback zusätzlich die Formatwahl lockern (bestvideo+
+          // bestaudio ist auf begrenzten web_embedded-Listen oft nicht
+          // verfügbar — bv*+ba/b nimmt das Beste, was es gibt).
+          a.splice(a.indexOf('-f'), 2, '-f', 'bv*+ba/b');
+          a.splice(a.indexOf(item.url), 0, '--extractor-args', 'youtube:player_client=web_embedded');
+        }
         const child = spawn(ytdlp.cmd, a, { windowsHide: true, env: TOOL_ENV });
         child.stdout.on('data', (d) => { clipOut = (clipOut + d.toString()).slice(-4000); });
         child.stderr.on('data', (d) => { clipOut = (clipOut + d.toString()).slice(-4000); });
@@ -1224,7 +1257,7 @@ function startClipJob(body) {
       try {
         await clipRun(false);
       } catch (e) {
-        if (isYtPo403(clipOut)) await clipRun(true);
+        if (isYtPo403(clipOut) || isYtFormatUnavailable(clipOut)) await clipRun(true);
         else throw e;
       }
       try {
@@ -3025,7 +3058,7 @@ function clipOutPath(outDir, base, t1, t2, format) {
   return out;
 }
 
-module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, mobilePlayerPage, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar, isYtPo403 };
+module.exports = { startServer, startShareServer, settings, queue, history, conversions, server, shareTokens, sharePort, SHARE_PORT, SHARE_TTL_MS, createShareToken, revokeShareToken, createAlbumZipShare, zipFromStaging, mobilePlayerPage, lanIPv4, lanIPv4Candidates, isPrivateIPv4, isCgnatIPv4, resolveOrganizePath, findExistingSpotFiles, displayTitle, spotFormatFor, moveFile, findFileRecursive, clipOutPath, recommendationSeeds, buildRecommendations, recSearch, librarySeeds, mergeSeedLists, buildSimilar, isYtPo403, isYtFormatUnavailable };
 
 if (require.main === module) {
   startServer();
